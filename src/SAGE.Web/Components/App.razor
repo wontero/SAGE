@@ -1,0 +1,41 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["SAGE.Web.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" href="@Assets["favicon.png"]" type="image/png" sizes="32x32" />
+    <link rel="icon" href="@Assets["brand/sage-mark.svg"]" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="@Assets["brand/apple-touch-icon.png"]" />
+    <meta name="theme-color" content="#1565C0" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <HeadOutlet @rendermode="PageRenderMode" />
+</head>
+
+<body>
+    <Routes @rendermode="PageRenderMode" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
+    <script src="@Assets["js/login.js"]"></script>
+    <script src="@Assets["js/dashboard-enter.js"]"></script>
+    <script src="@Assets["js/history-guard.js"]"></script>
+</body>
+
+</html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+}

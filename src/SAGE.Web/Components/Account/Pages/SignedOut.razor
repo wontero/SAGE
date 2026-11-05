@@ -1,0 +1,19 @@
+@page "/Account/SignedOut"
+@layout SAGE.Web.Components.Layout.AccountLayout
+@using SAGE.Web.Components.Shared
+
+<PageTitle>Sesión cerrada — SAGE</PageTitle>
+
+<div class="login-entering is-active" aria-live="polite">
+    <div class="login-entering__card">
+        <div class="login-entering__ring"></div>
+        <SageMark Size="88" White="true" Class="login-entering__mark" />
+        <p class="login-entering__title">Sesión cerrada</p>
+        <p class="login-entering__sub">Redirigiendo al acceso…</p>
+    </div>
+</div>
+
+<script>
+    // Saca del historial la app autenticada: Atrás no debe reabrir un dashboard en caché.
+    window.location.replace("/Account/Login");
+</script>

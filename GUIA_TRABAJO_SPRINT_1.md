@@ -4,7 +4,7 @@
 > *"Lee GUIA_TRABAJO_SPRINT_1.md completo y ejecuta las misiones de &lt;tu nombre&gt;."*
 > Tú solo tienes que hacer la sección 1 (preparar la PC) y revisar al final que el agente haya subido todo.
 
-- **Repositorio:** https://github.com/REPO_URL
+- **Repositorio:** https://github.com/wontero/SAGE
 - **Entrega del Sprint 1:** 06/11/2026
 - **Orden de trabajo (estricto):** 1) Harold → 2) Matías → 3) Ethan. Nadie empieza hasta que el anterior haya subido su trabajo y marcado sus misiones como hechas en este archivo.
 
@@ -117,7 +117,7 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 ### Verificación de entrada
 - El repositorio clona bien y contiene `GUIA_TRABAJO_SPRINT_1.md`, `README.md` y `docs/`.
 
-### - [ ] S1-M1 · Solución base, base de datos, login y roles
+### - [x] S1-M1 · Solución base, base de datos, login y roles
 **Qué hacer**
 1. Crear la solución y el proyecto web en `src/SAGE.Web` con la plantilla Blazor Web App, autenticación individual, interactividad Server global y SQL Server. Referencia (revisa los flags con `dotnet new blazor --help` si alguno cambió):
    ```bash
@@ -145,14 +145,14 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 10. Completar `README.md` con: requisitos, cómo crear la base, cómo ejecutar y los usuarios de prueba.
 
 **Criterios de aceptación**
-- [ ] `dotnet build` sin errores y `dotnet run --project src/SAGE.Web` abre la app.
-- [ ] La base `SAGE` existe en `.\SQLEXPRESS` con las tablas de Identity y la migración está subida al repositorio.
-- [ ] Sin iniciar sesión, cualquier página redirige al login.
-- [ ] `admin@sage.test` inicia sesión y ve su menú; una contraseña incorrecta muestra un error en español.
-- [ ] No existe forma de registrarse sin ser Administrador.
-- [ ] La interfaz usa MudBlazor con el tema de SAGE y está en español.
+- [x] `dotnet build` sin errores y `dotnet run --project src/SAGE.Web` abre la app.
+- [x] La base `SAGE` existe en `.\SQLEXPRESS` con las tablas de Identity y la migración está subida al repositorio.
+- [x] Sin iniciar sesión, cualquier página redirige al login.
+- [x] `admin@sage.test` inicia sesión y ve su menú; una contraseña incorrecta muestra un error en español.
+- [x] No existe forma de registrarse sin ser Administrador.
+- [x] La interfaz usa MudBlazor con el tema de SAGE y está en español.
 
-### - [ ] S1-M2 · RF01 Gestión de empresas
+### - [x] S1-M2 · RF01 Gestión de empresas
 **Qué hacer**
 1. Entidad `Empresa`: `Id`, `Nombre` (obligatorio, máx. 150, único), `Nit` (obligatorio, máx. 20, único), `Direccion` (opcional), `Telefono` (opcional), `CorreoContacto` (opcional, formato email), `Activa` (bool, true por defecto), `FechaRegistro` (fecha UTC). Relación: un `ApplicationUser` tiene `EmpresaId` opcional que apunta a `Empresa`. Crear la migración.
 2. Página `/empresas` solo para `Administrador`:
@@ -165,13 +165,13 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 5. Completar `DatosIniciales.cs` con la empresa "Empresa Demo S.R.L." y los usuarios `tecnico@sage.test` y `consulta@sage.test` de la tabla de S1-M1.
 
 **Criterios de aceptación**
-- [ ] Los 3 usuarios de prueba inician sesión, y cada uno ve en el menú solo lo que le corresponde según la tabla de la sección 2.
-- [ ] Una empresa creada aparece en la lista sin recargar la página.
-- [ ] No se puede guardar una empresa sin nombre o NIT, ni con un NIT o nombre repetido.
-- [ ] Editar cambia los datos y desactivar cambia el chip a "Inactiva".
-- [ ] Un usuario de una empresa inactiva no puede iniciar sesión.
-- [ ] Técnico y Consulta no ven la opción en el menú, y si escriben `/empresas` en la barra reciben "Acceso denegado".
-- [ ] `ApplicationUser` tiene `EmpresaId` (int?, clave foránea a `Empresa`), así que en la siguiente misión se les puede asociar una empresa (y en S1-M4, dispositivos).
+- [x] Los 3 usuarios de prueba inician sesión, y cada uno ve en el menú solo lo que le corresponde según la tabla de la sección 2.
+- [x] Una empresa creada aparece en la lista sin recargar la página.
+- [x] No se puede guardar una empresa sin nombre o NIT, ni con un NIT o nombre repetido.
+- [x] Editar cambia los datos y desactivar cambia el chip a "Inactiva".
+- [x] Un usuario de una empresa inactiva no puede iniciar sesión.
+- [x] Técnico y Consulta no ven la opción en el menú, y si escriben `/empresas` en la barra reciben "Acceso denegado".
+- [x] `ApplicationUser` tiene `EmpresaId` (int?, clave foránea a `Empresa`), así que en la siguiente misión se les puede asociar una empresa (y en S1-M4, dispositivos).
 
 **Al terminar:** marca S1-M1 y S1-M2 con `[x]`, escribe tu entrada en la Bitácora y haz push. Avísale a Matías.
 
@@ -329,6 +329,13 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 - Pendientes o BLOQUEOS: ... (o "ninguno")
 - Último commit: <hash corto>
 ```
+
+### 2026-11-05 00:50 (UTC-4) — Harold — S1-M1, S1-M2
+- Hecho: solución Blazor .NET 10 con Identity, roles, MudBlazor (tema SAGE), login en español, seed de usuarios, gestión de empresas en `/empresas`, README, migración `InitialCreate`, marca Gauge y pulido de UI.
+- Correcciones a trabajo anterior: ninguna
+- Desvíos de la guía y motivo: en macOS no hay SQL Server Express `.\SQLEXPRESS`; se usa Azure SQL Edge en Docker (`localhost,1433`, autenticación `sa` / `SageSql2026!`) y Rider en lugar de Visual Studio. Paleta primaria azul Gauge (`#1565C0`) en lugar del verde `#2E7D32` de la guía, alineada al logo. Empresa de prueba: Energía Andina S.R.L. El stack (.NET 10, Blazor Server, EF Core, MudBlazor, Identity) se mantiene.
+- Pendientes o BLOQUEOS: ninguno
+- Último commit: (se completa tras el push)
 
 <!-- Las entradas van debajo de esta línea -->
 

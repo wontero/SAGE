@@ -1,0 +1,99 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager NavigationManager
+
+<MudThemeProvider Theme="_temaSage" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout Class="sage-shell">
+    <MudAppBar Elevation="0" Dense="true" Class="sage-toolbar" Color="Color.Transparent">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" aria-label="Menú" />
+        <a class="sage-toolbar__brand" href="/" aria-label="SAGE inicio">
+            <SageMark Size="34" Class="sage-toolbar__mark" />
+            <span class="sage-toolbar__word">SAGE</span>
+        </a>
+        <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <span class="sage-toolbar__user">@context.User.Identity?.Name</span>
+                <form action="Account/Logout" method="post" class="sage-toolbar__logout">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="@_currentUrl" />
+                    <button type="submit" class="sage-toolbar__btn">Cerrar sesión</button>
+                </form>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Class="sage-sidebar" Variant="DrawerVariant.Persistent">
+        <div class="sage-sidebar__head">
+            <a class="sage-sidebar__brand" href="/" aria-label="SAGE">
+                <SageMark Size="40" />
+                <span>
+                    <span class="sage-sidebar__word">SAGE</span>
+                    <span class="sage-sidebar__caption">Menú</span>
+                </span>
+            </a>
+        </div>
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent Class="sage-main">
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Ha ocurrido un error inesperado.
+    <a href="." class="reload">Recargar</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool _drawerOpen = true;
+    private string? _currentUrl;
+
+    private readonly MudTheme _temaSage = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#1565C0",
+            Secondary = "#00ACC1",
+            AppbarBackground = "rgba(255,255,255,0.72)",
+            AppbarText = "#1C2430",
+            DrawerBackground = "#F2F4F7",
+            Background = "#F2F4F7",
+            Surface = "#FFFFFF",
+            TextPrimary = "#1C2430",
+            TextSecondary = "#5B6775"
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI", "system-ui", "sans-serif"]
+            }
+        }
+    };
+
+    protected override void OnInitialized()
+    {
+        _currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

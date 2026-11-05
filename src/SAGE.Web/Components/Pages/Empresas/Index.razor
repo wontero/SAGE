@@ -1,0 +1,175 @@
+@page "/empresas"
+@attribute [Authorize(Roles = "Administrador")]
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Empresas — SAGE</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4">Empresas</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNueva">
+            Nueva empresa
+        </MudButton>
+    </MudStack>
+
+    <MudTextField @bind-Value="_busqueda"
+                  Label="Buscar por nombre o NIT"
+                  Variant="Variant.Outlined"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true"
+                  DebounceInterval="300"
+                  OnDebounceIntervalElapsed="Recargar" />
+
+    <MudTable Items="_empresas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Nombre</MudTh>
+            <MudTh>NIT</MudTh>
+            <MudTh>Teléfono</MudTh>
+            <MudTh>Usuarios</MudTh>
+            <MudTh>Estado</MudTh>
+            <MudTh>Acciones</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+            <MudTd DataLabel="NIT">@context.Nit</MudTd>
+            <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
+            <MudTd DataLabel="Usuarios">@context.CantidadUsuarios</MudTd>
+            <MudTd DataLabel="Estado">
+                <MudChip T="string" Size="Size.Small" Color="@(context.Activa ? Color.Success : Color.Default)">
+                    @(context.Activa ? "Activa" : "Inactiva")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Acciones">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => AbrirEditar(context))" />
+                <MudIconButton Icon="@(context.Activa ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                               Color="@(context.Activa ? Color.Warning : Color.Success)"
+                               OnClick="@(() => CambiarEstado(context))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No hay empresas para mostrar.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+</MudStack>
+
+@code {
+    private List<EmpresaListaItem> _empresas = new();
+    private string _busqueda = string.Empty;
+    private bool _cargando;
+
+    protected override async Task OnInitializedAsync() => await Recargar();
+
+    private async Task Recargar()
+    {
+        _cargando = true;
+        try
+        {
+            var query = Db.Empresas.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(_busqueda))
+            {
+                var termino = _busqueda.Trim();
+                query = query.Where(e => e.Nombre.Contains(termino) || e.Nit.Contains(termino));
+            }
+
+            _empresas = await query
+                .OrderBy(e => e.Nombre)
+                .Select(e => new EmpresaListaItem
+                {
+                    Id = e.Id,
+                    Nombre = e.Nombre,
+                    Nit = e.Nit,
+                    Telefono = e.Telefono,
+                    Activa = e.Activa,
+                    Direccion = e.Direccion,
+                    CorreoContacto = e.CorreoContacto,
+                    CantidadUsuarios = e.Usuarios.Count
+                })
+                .ToListAsync();
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task AbrirNueva()
+    {
+        var parameters = new DialogParameters<EmpresaDialog>
+        {
+            { x => x.Modelo, new EmpresaFormModel() }
+        };
+        var dialog = await DialogService.ShowAsync<EmpresaDialog>("Nueva empresa", parameters);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await Recargar();
+        }
+    }
+
+    private async Task AbrirEditar(EmpresaListaItem item)
+    {
+        var parameters = new DialogParameters<EmpresaDialog>
+        {
+            {
+                x => x.Modelo, new EmpresaFormModel
+                {
+                    Id = item.Id,
+                    Nombre = item.Nombre,
+                    Nit = item.Nit,
+                    Telefono = item.Telefono,
+                    Direccion = item.Direccion,
+                    CorreoContacto = item.CorreoContacto
+                }
+            }
+        };
+        var dialog = await DialogService.ShowAsync<EmpresaDialog>("Editar empresa", parameters);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            await Recargar();
+        }
+    }
+
+    private async Task CambiarEstado(EmpresaListaItem item)
+    {
+        var accion = item.Activa ? "desactivar" : "activar";
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Contenido, $"¿Seguro que deseas {accion} la empresa \"{item.Nombre}\"?" }
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar", parameters);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled)
+        {
+            return;
+        }
+
+        var empresa = await Db.Empresas.FindAsync(item.Id);
+        if (empresa is null)
+        {
+            Snackbar.Add("La empresa ya no existe.", Severity.Error);
+            return;
+        }
+
+        empresa.Activa = !empresa.Activa;
+        await Db.SaveChangesAsync();
+        Snackbar.Add(empresa.Activa ? "Empresa activada." : "Empresa desactivada.", Severity.Success);
+        await Recargar();
+    }
+
+    private sealed class EmpresaListaItem
+    {
+        public int Id { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Nit { get; set; } = string.Empty;
+        public string? Telefono { get; set; }
+        public string? Direccion { get; set; }
+        public string? CorreoContacto { get; set; }
+        public bool Activa { get; set; }
+        public int CantidadUsuarios { get; set; }
+    }
+}

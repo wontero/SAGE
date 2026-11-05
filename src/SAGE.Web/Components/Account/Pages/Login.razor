@@ -1,0 +1,302 @@
+﻿@page "/Account/Login"
+@layout SAGE.Web.Components.Layout.AccountLayout
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Components.Shared
+@using SAGE.Web.Data
+
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject ApplicationDbContext DbContext
+@inject ILogger<Login> Logger
+@inject IdentityRedirectManager RedirectManager
+@inject IJSRuntime JS
+
+<PageTitle>Iniciar sesión — SAGE</PageTitle>
+
+@if (_leaveLogin)
+{
+    <div class="login-entering is-active" aria-live="polite">
+        <div class="login-entering__card">
+            <div class="login-entering__ring"></div>
+            <SageMark Size="88" White="true" Class="login-entering__mark" />
+            <p class="login-entering__title">Volviendo a SAGE</p>
+            <p class="login-entering__sub">Ya tienes una sesión activa…</p>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var dest = @((MarkupString)System.Text.Json.JsonSerializer.Serialize(_leaveDest));
+            // Reemplaza esta entrada (login) para no dejar rebote login ↔ dashboard.
+            window.location.replace(dest);
+        })();
+    </script>
+}
+else
+{
+<div class="login-stage">
+    <section class="account-hero" aria-label="Presentación SAGE">
+        <div class="energy-reel" aria-hidden="true">
+            <article class="energy-scene energy-scene--1">
+                <svg viewBox="0 0 120 120" class="energy-icon" aria-hidden="true">
+                    <circle cx="60" cy="60" r="22" fill="#FFD54F"/>
+                    <g stroke="#FFE082" stroke-width="4" stroke-linecap="round">
+                        <path d="M60 14v14M60 92v14M14 60h14M92 60h14M28 28l10 10M82 82l10 10M92 28L82 38M38 82L28 92"/>
+                    </g>
+                </svg>
+                <p class="energy-label">Energía solar</p>
+            </article>
+            <article class="energy-scene energy-scene--2">
+                <svg viewBox="0 0 120 120" class="energy-icon" aria-hidden="true">
+                    <rect x="18" y="38" width="84" height="52" rx="4" fill="none" stroke="#B3E5FC" stroke-width="3"/>
+                    <path d="M18 64h84M46 38v52M74 38v52" stroke="#81D4FA" stroke-width="2.5"/>
+                    <path d="M30 90h60" stroke="#E1F5FE" stroke-width="4" stroke-linecap="round"/>
+                </svg>
+                <p class="energy-label">Paneles solares</p>
+            </article>
+            <article class="energy-scene energy-scene--3">
+                <svg viewBox="0 0 120 120" class="energy-icon" aria-hidden="true">
+                    <circle cx="60" cy="62" r="34" fill="none" stroke="#80DEEA" stroke-width="6"/>
+                    <circle cx="60" cy="62" r="6" fill="#00ACC1"/>
+                    <path d="M60 62 L60 36" stroke="#E0F7FA" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M34 88c8 8 44 8 52 0" fill="none" stroke="#B2EBF2" stroke-width="4" stroke-linecap="round"/>
+                </svg>
+                <p class="energy-label">Medidores</p>
+            </article>
+            <article class="energy-scene energy-scene--4">
+                <svg viewBox="0 0 120 120" class="energy-icon" aria-hidden="true">
+                    <path d="M58 70 V104" stroke="#E1F5FE" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M58 70 L88 42" fill="#B3E5FC"/>
+                    <path d="M58 70 L28 48" fill="#81D4FA"/>
+                    <path d="M58 70 L72 92" fill="#4FC3F7"/>
+                    <circle cx="58" cy="70" r="7" fill="#E0F7FA"/>
+                </svg>
+                <p class="energy-label">Eólica</p>
+            </article>
+            <article class="energy-scene energy-scene--5">
+                <svg viewBox="0 0 120 120" class="energy-icon" aria-hidden="true">
+                    <path d="M24 78c16-28 56-28 72 0" fill="none" stroke="#90CAF9" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M34 62c12-18 40-18 52 0" fill="none" stroke="#64B5F6" stroke-width="4" stroke-linecap="round"/>
+                    <path d="M44 48c8-12 24-12 32 0" fill="none" stroke="#BBDEFB" stroke-width="3.5" stroke-linecap="round"/>
+                    <circle cx="88" cy="36" r="8" fill="#FFD54F"/>
+                </svg>
+                <p class="energy-label">Red eléctrica</p>
+            </article>
+        </div>
+
+        <div class="account-hero__content">
+            <SageMark Size="96" White="true" Class="account-hero__mark" />
+            <p class="account-hero__eyebrow">SAGE</p>
+            <h1>Sistema de Análisis y Gestión Energética</h1>
+            <p class="account-hero__lead">Monitorea solar y red, gestiona empresas y dispositivos, y toma decisiones con datos claros.</p>
+            <div class="account-hero__chips">
+                <span class="account-chip">Solar</span>
+                <span class="account-chip">Red</span>
+                <span class="account-chip">IoT</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="account-card-wrap">
+        <div class="account-card">
+            <div class="sage-brand-row">
+                <SageMark Size="52" />
+                <div>
+                    <h1 class="sage-brand">SAGE</h1>
+                    <p class="sage-brand-sub">Acceso a la plataforma</p>
+                </div>
+            </div>
+
+            <h2 class="account-card__title">Iniciar sesión</h2>
+
+            <StatusMessage Message="@errorMessage" />
+
+            <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login" Enhance="false">
+                <DataAnnotationsValidator />
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="correo@ejemplo.com" />
+                    <label for="Input.Email">Correo electrónico</label>
+                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="contraseña" />
+                    <label for="Input.Password">Contraseña</label>
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+                <div class="checkbox mb-3">
+                    <label>
+                        <InputCheckbox @bind-Value="Input.RememberMe" class="form-check-input" />
+                        Recordarme
+                    </label>
+                </div>
+                <button type="submit" class="w-100 btn btn-lg btn-sage">Iniciar sesión</button>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+<div id="login-entering" class="login-entering" aria-hidden="true">
+    <div class="login-entering__card">
+        <div class="login-entering__ring"></div>
+        <SageMark Size="88" White="true" Class="login-entering__mark" />
+        <p class="login-entering__title">Entrando a SAGE</p>
+        <p class="login-entering__sub">Preparando tu espacio…</p>
+    </div>
+</div>
+}
+
+@code {
+    private string? errorMessage;
+    private EditContext editContext = default!;
+    private bool _leaveLogin;
+    private string _leaveDest = "/";
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+        editContext = new EditContext(Input);
+
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            if (SignInManager.IsSignedIn(HttpContext.User))
+            {
+                _leaveLogin = true;
+                var normalized = NormalizeReturnUrl(ReturnUrl);
+                _leaveDest = string.IsNullOrEmpty(normalized)
+                    ? "/"
+                    : (normalized.StartsWith('/') ? normalized : "/" + normalized);
+                return;
+            }
+
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        }
+    }
+
+    public async Task LoginUser()
+    {
+        if (!editContext.Validate())
+        {
+            await HideEnteringAsync();
+            return;
+        }
+
+        var user = await UserManager.FindByEmailAsync(Input.Email);
+        if (user is not null)
+        {
+            if (!user.Activo)
+            {
+                errorMessage = "Error: Tu cuenta está desactivada. Contacta al administrador.";
+                await HideEnteringAsync();
+                return;
+            }
+
+            if (user.EmpresaId is not null)
+            {
+                var empresa = await DbContext.Empresas.AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.Id == user.EmpresaId);
+                if (empresa is not null && !empresa.Activa)
+                {
+                    errorMessage = "Error: Tu empresa está inactiva. No puedes iniciar sesión.";
+                    await HideEnteringAsync();
+                    return;
+                }
+            }
+        }
+
+        var result = await SignInManager.PasswordSignInAsync(
+            Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
+
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("Usuario inició sesión.");
+            // Misma respuesta del POST: location.replace saca el login del historial.
+            var dest = NormalizeReturnUrl(ReturnUrl);
+            if (string.IsNullOrEmpty(dest)) dest = "/";
+            if (!dest.StartsWith('/')) dest = "/" + dest;
+            _leaveLogin = true;
+            _leaveDest = dest;
+        }
+        else if (result.RequiresTwoFactor)
+        {
+            await HideEnteringAsync();
+            RedirectManager.RedirectTo(
+                "Account/LoginWith2fa",
+                new() { ["returnUrl"] = NormalizeReturnUrl(ReturnUrl), ["rememberMe"] = Input.RememberMe });
+        }
+        else if (result.IsLockedOut)
+        {
+            Logger.LogWarning("Cuenta bloqueada.");
+            RedirectManager.RedirectTo("Account/Lockout");
+        }
+        else
+        {
+            errorMessage = "Error: Correo o contraseña incorrectos.";
+            await HideEnteringAsync();
+        }
+    }
+
+    private async Task HideEnteringAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "window.__sageHideLoginEntering && window.__sageHideLoginEntering()");
+        }
+        catch (JSException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+            // Prerender / circuito no disponible.
+        }
+    }
+
+    private static string NormalizeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return "";
+        }
+
+        var value = returnUrl.Trim();
+        if (value.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            && Uri.TryCreate(value, UriKind.Absolute, out var absolute))
+        {
+            value = absolute.PathAndQuery;
+        }
+
+        if (value.StartsWith("/Account/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("Account/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        return value;
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "El correo es obligatorio.")]
+        [EmailAddress(ErrorMessage = "El correo no es válido.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        public bool RememberMe { get; set; }
+
+        public PasskeyInputModel? Passkey { get; set; }
+    }
+}

@@ -1,0 +1,16 @@
+﻿@page "/Account/Register"
+
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Registro deshabilitado</PageTitle>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // El registro público está deshabilitado: los usuarios los crea el Administrador.
+        RedirectManager.RedirectTo("Account/Login", new() { ["returnUrl"] = ReturnUrl });
+    }
+}

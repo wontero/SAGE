@@ -1,0 +1,132 @@
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="_modelo" OnValidSubmit="Guardar">
+            <DataAnnotationsValidator />
+            <MudStack Spacing="2">
+                <MudTextField @bind-Value="_modelo.Nombre" Label="Nombre" Variant="Variant.Outlined" Required="true" For="@(() => _modelo.Nombre)" />
+                <MudTextField @bind-Value="_modelo.Nit" Label="NIT" Variant="Variant.Outlined" Required="true" For="@(() => _modelo.Nit)" />
+                <MudTextField @bind-Value="_modelo.Direccion" Label="Dirección" Variant="Variant.Outlined" For="@(() => _modelo.Direccion)" />
+                <MudTextField @bind-Value="_modelo.Telefono" Label="Teléfono" Variant="Variant.Outlined" For="@(() => _modelo.Telefono)" />
+                <MudTextField @bind-Value="_modelo.CorreoContacto" Label="Correo de contacto" Variant="Variant.Outlined" For="@(() => _modelo.CorreoContacto)" />
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+                }
+            </MudStack>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancelar">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Guardar" Disabled="_guardando">
+            Guardar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public EmpresaFormModel Modelo { get; set; } = new();
+
+    private EmpresaFormModel _modelo = new();
+    private string? _error;
+    private bool _guardando;
+
+    protected override void OnParametersSet()
+    {
+        _modelo = new EmpresaFormModel
+        {
+            Id = Modelo.Id,
+            Nombre = Modelo.Nombre,
+            Nit = Modelo.Nit,
+            Direccion = Modelo.Direccion,
+            Telefono = Modelo.Telefono,
+            CorreoContacto = Modelo.CorreoContacto
+        };
+    }
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    private async Task Guardar()
+    {
+        _error = null;
+        _guardando = true;
+        try
+        {
+            var nombre = _modelo.Nombre.Trim();
+            var nit = _modelo.Nit.Trim();
+
+            if (string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(nit))
+            {
+                _error = "El nombre y el NIT son obligatorios.";
+                return;
+            }
+
+            var nombreDuplicado = await Db.Empresas.AnyAsync(e =>
+                e.Nombre == nombre && (!_modelo.Id.HasValue || e.Id != _modelo.Id.Value));
+            if (nombreDuplicado)
+            {
+                _error = "Ya existe una empresa con ese nombre.";
+                return;
+            }
+
+            var nitDuplicado = await Db.Empresas.AnyAsync(e =>
+                e.Nit == nit && (!_modelo.Id.HasValue || e.Id != _modelo.Id.Value));
+            if (nitDuplicado)
+            {
+                _error = "Ya existe una empresa con ese NIT.";
+                return;
+            }
+
+            if (_modelo.Id is null)
+            {
+                Db.Empresas.Add(new Empresa
+                {
+                    Nombre = nombre,
+                    Nit = nit,
+                    Direccion = string.IsNullOrWhiteSpace(_modelo.Direccion) ? null : _modelo.Direccion.Trim(),
+                    Telefono = string.IsNullOrWhiteSpace(_modelo.Telefono) ? null : _modelo.Telefono.Trim(),
+                    CorreoContacto = string.IsNullOrWhiteSpace(_modelo.CorreoContacto) ? null : _modelo.CorreoContacto.Trim(),
+                    Activa = true,
+                    FechaRegistro = DateTime.UtcNow
+                });
+                await Db.SaveChangesAsync();
+                Snackbar.Add("Empresa creada correctamente.", Severity.Success);
+            }
+            else
+            {
+                var empresa = await Db.Empresas.FindAsync(_modelo.Id.Value);
+                if (empresa is null)
+                {
+                    _error = "La empresa ya no existe.";
+                    return;
+                }
+
+                empresa.Nombre = nombre;
+                empresa.Nit = nit;
+                empresa.Direccion = string.IsNullOrWhiteSpace(_modelo.Direccion) ? null : _modelo.Direccion.Trim();
+                empresa.Telefono = string.IsNullOrWhiteSpace(_modelo.Telefono) ? null : _modelo.Telefono.Trim();
+                empresa.CorreoContacto = string.IsNullOrWhiteSpace(_modelo.CorreoContacto) ? null : _modelo.CorreoContacto.Trim();
+                await Db.SaveChangesAsync();
+                Snackbar.Add("Empresa actualizada correctamente.", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (DbUpdateException)
+        {
+            _error = "No se pudo guardar. Revisa que el nombre y el NIT no estén repetidos.";
+            Snackbar.Add(_error, Severity.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+}

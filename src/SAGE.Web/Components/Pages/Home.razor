@@ -1,0 +1,120 @@
+﻿@page "/"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext Db
+
+<PageTitle>Inicio — SAGE</PageTitle>
+
+<div class="home">
+    <header class="home-intro">
+        <h1 class="home-title">@_nombre</h1>
+        <p class="home-meta">@_saludo · @_fraseRol</p>
+    </header>
+
+    <section class="home-group" aria-label="Resumen">
+        <h2 class="home-group__title">Resumen</h2>
+        <div class="home-list">
+            @if (_esAdmin)
+            {
+                <div class="home-row">
+                    <span class="home-row__label">Empresas activas</span>
+                    <span class="home-row__value">@_empresasActivas</span>
+                </div>
+                <div class="home-row">
+                    <span class="home-row__label">Usuarios</span>
+                    <span class="home-row__value">@_usuarios</span>
+                </div>
+                <a class="home-action" href="/empresas">
+                    <span>Empresas</span>
+                    <span class="home-action__chev" aria-hidden="true">›</span>
+                </a>
+            }
+            else
+            {
+                <div class="home-row">
+                    <span class="home-row__label">Empresa</span>
+                    <span class="home-row__value">@_empresaNombre</span>
+                </div>
+                <div class="home-row">
+                    <span class="home-row__label">Rol</span>
+                    <span class="home-row__value">@_rol</span>
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    private string _nombre = "usuario";
+    private string _rol = "Sin rol";
+    private string _saludo = "Hola";
+    private string _fraseRol = "";
+    private string _empresaNombre = "—";
+    private bool _esAdmin;
+    private int _empresasActivas;
+    private int _usuarios;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _saludo = SaludoLocal();
+
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var principal = auth.User;
+        var user = await UserManager.GetUserAsync(principal);
+        _nombre = user?.NombreCompleto ?? principal.Identity?.Name ?? "usuario";
+
+        var roles = user is null
+            ? Array.Empty<string>()
+            : await UserManager.GetRolesAsync(user);
+        _rol = roles.FirstOrDefault() ?? "Sin rol";
+        _esAdmin = roles.Contains("Administrador");
+
+        if (_esAdmin)
+        {
+            _fraseRol = "Administrador";
+            _empresasActivas = await Db.Empresas.CountAsync(e => e.Activa);
+            _usuarios = await Db.Users.CountAsync();
+        }
+        else
+        {
+            _fraseRol = _rol == "Tecnico" ? "Técnico" : "Consulta";
+
+            if (user?.EmpresaId is int empresaId)
+            {
+                var empresa = await Db.Empresas.AsNoTracking()
+                    .Where(e => e.Id == empresaId)
+                    .Select(e => e.Nombre)
+                    .FirstOrDefaultAsync();
+                _empresaNombre = string.IsNullOrWhiteSpace(empresa) ? "—" : empresa;
+            }
+        }
+    }
+
+    private static string SaludoLocal()
+    {
+        var tz = ResolveTz();
+        var hora = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Hour;
+        return hora switch
+        {
+            >= 5 and < 12 => "Buenos días",
+            >= 12 and < 19 => "Buenas tardes",
+            _ => "Buenas noches"
+        };
+    }
+
+    private static TimeZoneInfo ResolveTz()
+    {
+        foreach (var id in new[] { "America/La_Paz", "SA Western Standard Time" })
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+            catch (TimeZoneNotFoundException) { }
+            catch (InvalidTimeZoneException) { }
+        }
+
+        return TimeZoneInfo.Local;
+    }
+}

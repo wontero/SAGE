@@ -1,0 +1,23 @@
+﻿@using SAGE.Web.Components.Account.Shared
+<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated == true)
+                {
+                    <MudPaper Class="pa-6" Elevation="2">
+                        <MudText Typo="Typo.h4" Color="Color.Error">Acceso denegado</MudText>
+                        <MudText Class="mt-2">No tienes permiso para ver este recurso.</MudText>
+                        <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">
+                            Volver al inicio
+                        </MudButton>
+                    </MudPaper>
+                }
+                else
+                {
+                    <RedirectToLogin />
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
+    </Found>
+</Router>

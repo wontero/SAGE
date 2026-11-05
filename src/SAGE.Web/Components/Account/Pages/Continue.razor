@@ -1,0 +1,44 @@
+@page "/Account/Continue"
+@layout SAGE.Web.Components.Layout.AccountLayout
+@using SAGE.Web.Components.Shared
+
+<PageTitle>Entrando — SAGE</PageTitle>
+
+<div class="login-entering is-active" aria-live="polite">
+    <div class="login-entering__card">
+        <div class="login-entering__ring"></div>
+        <SageMark Size="88" White="true" Class="login-entering__mark" />
+        <p class="login-entering__title">Entrando a SAGE</p>
+        <p class="login-entering__sub">Preparando tu espacio…</p>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var dest = @((MarkupString)System.Text.Json.JsonSerializer.Serialize(_dest));
+        window.location.replace(dest);
+    })();
+</script>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    private string _dest = "/";
+
+    protected override void OnInitialized() => _dest = Normalize(ReturnUrl);
+
+    private static string Normalize(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl)) return "/";
+        var value = returnUrl.Trim();
+        if (value.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            && Uri.TryCreate(value, UriKind.Absolute, out var absolute))
+        {
+            value = absolute.PathAndQuery;
+        }
+        if (!value.StartsWith('/')) value = "/" + value;
+        if (value.StartsWith("/Account/", StringComparison.OrdinalIgnoreCase)) return "/";
+        return value;
+    }
+}
