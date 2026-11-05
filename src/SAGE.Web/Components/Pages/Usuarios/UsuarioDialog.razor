@@ -1,0 +1,371 @@
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceScopeFactory ScopeFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_cargando)
+        {
+            <MudProgressLinear Indeterminate="true"
+                               Color="Color.Primary" />
+        }
+        else
+        {
+            <EditForm EditContext="_editContext">
+                <DataAnnotationsValidator />
+
+                <MudStack Spacing="3">
+                    <MudTextField T="string"
+                                  @bind-Value="_modelo.NombreCompleto"
+                                  Label="Nombre completo"
+                                  Variant="Variant.Outlined"
+                                  For="@(() => _modelo.NombreCompleto)" />
+
+                    <MudTextField T="string"
+                                  @bind-Value="_modelo.Correo"
+                                  Label="Correo electrónico"
+                                  Variant="Variant.Outlined"
+                                  Disabled="@(_modelo.Id is not null)"
+                                  For="@(() => _modelo.Correo)" />
+
+                    @if (_modelo.Id is null)
+                    {
+                        <MudTextField T="string"
+                                      @bind-Value="_modelo.ContrasenaInicial"
+                                      Label="Contraseña inicial"
+                                      InputType="InputType.Password"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo."
+                                      For="@(() => _modelo.ContrasenaInicial)" />
+                    }
+
+                    <MudSelect T="string"
+                               @bind-Value="_modelo.Rol"
+                               Label="Rol"
+                               Variant="Variant.Outlined"
+                               For="@(() => _modelo.Rol)">
+                        <MudSelectItem T="string" Value="@("Administrador")">
+                            Administrador
+                        </MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Tecnico")">
+                            Técnico
+                        </MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Consulta")">
+                            Consulta
+                        </MudSelectItem>
+                    </MudSelect>
+
+                    @if (_modelo.Rol != "Administrador")
+                    {
+                        <MudSelect T="int?"
+                                   @bind-Value="_modelo.EmpresaId"
+                                   Label="Empresa"
+                                   Variant="Variant.Outlined"
+                                   For="@(() => _modelo.EmpresaId)">
+                            @foreach (var empresa in _empresas)
+                            {
+                                <MudSelectItem T="int?"
+                                               Value="@((int?)empresa.Id)">
+                                    @empresa.Nombre
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+
+                    <ValidationSummary />
+
+                    @if (!string.IsNullOrWhiteSpace(_error))
+                    {
+                        <MudAlert Severity="Severity.Error">
+                            @_error
+                        </MudAlert>
+                    }
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancelar" Disabled="_guardando">
+            Cancelar
+        </MudButton>
+
+        <MudButton OnClick="Guardar"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="@(_guardando || _cargando)">
+            @(_guardando ? "Guardando..." : "Guardar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public UsuarioFormModel Modelo { get; set; } = new();
+
+    private UsuarioFormModel _modelo = new();
+    private EditContext _editContext = default!;
+    private List<Empresa> _empresas = new();
+
+    private bool _cargando = true;
+    private bool _guardando;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _modelo = new UsuarioFormModel
+        {
+            Id = Modelo.Id,
+            NombreCompleto = Modelo.NombreCompleto,
+            Correo = Modelo.Correo,
+            Rol = Modelo.Rol,
+            EmpresaId = Modelo.EmpresaId
+        };
+
+        _editContext = new EditContext(_modelo);
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            _empresas = await db.Empresas
+                .AsNoTracking()
+                .Where(e => e.Activa)
+                .OrderBy(e => e.Nombre)
+                .ToListAsync();
+        }
+        catch
+        {
+            _error = "No se pudieron cargar las empresas. Cerrá y volvé a abrir el formulario.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    private async Task Guardar()
+    {
+        if (_guardando)
+            return;
+
+        _error = null;
+        _modelo.NombreCompleto = _modelo.NombreCompleto.Trim();
+        _modelo.Correo = _modelo.Correo.Trim();
+
+        if (_modelo.Rol == "Administrador")
+            _modelo.EmpresaId = null;
+
+        if (!_editContext.Validate())
+            return;
+
+        _guardando = true;
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var usuarios = scope.ServiceProvider
+                .GetRequiredService<UserManager<ApplicationUser>>();
+
+            var estado = await AuthStateProvider.GetAuthenticationStateAsync();
+            var administradorId = estado.User
+                .FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var administrador = administradorId is null
+                ? null
+                : await usuarios.FindByIdAsync(administradorId);
+
+            if (administrador is null ||
+                !administrador.Activo ||
+                !await usuarios.IsInRoleAsync(administrador, "Administrador"))
+            {
+                _error = "No tenés permiso para administrar usuarios.";
+                return;
+            }
+
+            if (_modelo.Rol != "Administrador")
+            {
+                var empresaValida = await db.Empresas.AnyAsync(e =>
+                    e.Id == _modelo.EmpresaId && e.Activa);
+
+                if (!empresaValida)
+                {
+                    _error = "Seleccioná una empresa activa.";
+                    return;
+                }
+            }
+
+            // Todas las operaciones se confirman juntas.
+            await using var transaccion =
+                await db.Database.BeginTransactionAsync();
+
+            if (_modelo.Id is null)
+            {
+                var existente = await usuarios.FindByEmailAsync(_modelo.Correo);
+
+                if (existente is not null)
+                {
+                    _error = "Ya existe un usuario con ese correo.";
+                    return;
+                }
+
+                var nuevo = new ApplicationUser
+                {
+                    UserName = _modelo.Correo,
+                    Email = _modelo.Correo,
+                    EmailConfirmed = true,
+                    NombreCompleto = _modelo.NombreCompleto,
+                    EmpresaId = _modelo.EmpresaId,
+                    Activo = true
+                };
+
+                var creacion = await usuarios.CreateAsync(
+                    nuevo, _modelo.ContrasenaInicial!);
+
+                if (!Comprobar(creacion))
+                    return;
+
+                var asignacion = await usuarios.AddToRoleAsync(
+                    nuevo, _modelo.Rol);
+
+                if (!Comprobar(asignacion))
+                    return;
+            }
+            else
+            {
+                var usuario = await usuarios.FindByIdAsync(_modelo.Id);
+
+                if (usuario is null)
+                {
+                    _error = "El usuario ya no existe.";
+                    return;
+                }
+
+                if (usuario.Id == administradorId &&
+                    _modelo.Rol != "Administrador")
+                {
+                    _error = "No podés quitarte el rol de Administrador.";
+                    return;
+                }
+
+                var rolesActuales = await usuarios.GetRolesAsync(usuario);
+                var cambioRol = rolesActuales.Count != 1 ||
+                                !rolesActuales.Contains(_modelo.Rol);
+                var cambioEmpresa = usuario.EmpresaId != _modelo.EmpresaId;
+
+                usuario.NombreCompleto = _modelo.NombreCompleto;
+                usuario.EmpresaId = _modelo.EmpresaId;
+
+                if (!Comprobar(await usuarios.UpdateAsync(usuario)))
+                    return;
+
+                if (cambioRol)
+                {
+                    if (rolesActuales.Count > 0)
+                    {
+                        var quitar = await usuarios.RemoveFromRolesAsync(
+                            usuario, rolesActuales);
+
+                        if (!Comprobar(quitar))
+                            return;
+                    }
+
+                    var asignar = await usuarios.AddToRoleAsync(
+                        usuario, _modelo.Rol);
+
+                    if (!Comprobar(asignar))
+                        return;
+                }
+
+                if (cambioRol || cambioEmpresa)
+                {
+                    var actualizarSesion =
+                        await usuarios.UpdateSecurityStampAsync(usuario);
+
+                    if (!Comprobar(actualizarSesion))
+                        return;
+                }
+            }
+
+            await transaccion.CommitAsync();
+
+            Snackbar.Add(
+                _modelo.Id is null
+                    ? "Usuario creado correctamente."
+                    : "Usuario actualizado correctamente.",
+                Severity.Success);
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch
+        {
+            _error = "No se pudo guardar el usuario. Verificá la conexión e intentá nuevamente.";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private bool Comprobar(IdentityResult resultado)
+    {
+        if (resultado.Succeeded)
+            return true;
+
+        _error = string.Join(" ", resultado.Errors
+            .Select(TraducirError)
+            .Distinct());
+
+        return false;
+    }
+
+    private static string TraducirError(IdentityError error)
+    {
+        return error.Code switch
+        {
+            "DuplicateEmail" or "DuplicateUserName" =>
+                "Ya existe un usuario con ese correo.",
+
+            "InvalidEmail" or "InvalidUserName" =>
+                "El correo ingresado no es válido.",
+
+            "PasswordTooShort" =>
+                "La contraseña debe tener al menos 8 caracteres.",
+
+            "PasswordRequiresDigit" =>
+                "La contraseña debe incluir un número.",
+
+            "PasswordRequiresLower" =>
+                "La contraseña debe incluir una minúscula.",
+
+            "PasswordRequiresUpper" =>
+                "La contraseña debe incluir una mayúscula.",
+
+            "PasswordRequiresNonAlphanumeric" =>
+                "La contraseña debe incluir un símbolo.",
+
+            "PasswordRequiresUniqueChars" =>
+                "La contraseña debe incluir más caracteres diferentes.",
+
+            "ConcurrencyFailure" =>
+                "El usuario fue modificado. Cerrá y volvé a abrir el formulario.",
+
+            _ => "No se pudo completar la operación del usuario."
+        };
+    }
+}

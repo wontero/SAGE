@@ -1,9 +1,21 @@
 ﻿<MudNavMenu Class="sage-nav" Color="Color.Default" Bordered="false">
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Home">Inicio</MudNavLink>
+    <MudNavLink Href="/"
+                Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Outlined.Home">
+        Inicio
+    </MudNavLink>
 
     <AuthorizeView Roles="Administrador">
         <Authorized>
-            <MudNavLink Href="/empresas" Icon="@Icons.Material.Outlined.Apartment">Empresas</MudNavLink>
+            <MudNavLink Href="/empresas"
+                        Icon="@Icons.Material.Outlined.Apartment">
+                Empresas
+            </MudNavLink>
+
+            <MudNavLink Href="/usuarios"
+                        Icon="@Icons.Material.Outlined.People">
+                Usuarios
+            </MudNavLink>
         </Authorized>
     </AuthorizeView>
 </MudNavMenu>

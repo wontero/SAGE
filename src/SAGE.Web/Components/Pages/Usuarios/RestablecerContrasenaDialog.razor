@@ -1,0 +1,205 @@
+﻿@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceScopeFactory ScopeFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm EditContext="_editContext">
+            <DataAnnotationsValidator />
+
+            <MudStack Spacing="3">
+                <MudText>
+                    Nueva contraseña para: @Correo
+                </MudText>
+
+                <MudTextField T="string"
+                              @bind-Value="_modelo.NuevaContrasena"
+                              Label="Nueva contraseña"
+                              InputType="InputType.Password"
+                              Variant="Variant.Outlined"
+                              HelperText="Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo."
+                              For="@(() => _modelo.NuevaContrasena)" />
+
+                <MudTextField T="string"
+                              @bind-Value="_modelo.Confirmacion"
+                              Label="Confirmar contraseña"
+                              InputType="InputType.Password"
+                              Variant="Variant.Outlined"
+                              For="@(() => _modelo.Confirmacion)" />
+
+                <ValidationSummary />
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <MudAlert Severity="Severity.Error">
+                        @_error
+                    </MudAlert>
+                }
+            </MudStack>
+        </EditForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancelar" Disabled="_guardando">
+            Cancelar
+        </MudButton>
+
+        <MudButton OnClick="Guardar"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="_guardando">
+            @(_guardando ? "Guardando..." : "Restablecer contraseña")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string UsuarioId { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Correo { get; set; } = string.Empty;
+
+    private readonly ContrasenaModel _modelo = new();
+    private EditContext _editContext = default!;
+    private bool _guardando;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _editContext = new EditContext(_modelo);
+    }
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    private async Task Guardar()
+    {
+        if (_guardando)
+            return;
+
+        _error = null;
+
+        if (!_editContext.Validate())
+            return;
+
+        _guardando = true;
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+
+            var userManager = scope.ServiceProvider
+                .GetRequiredService<UserManager<ApplicationUser>>();
+
+            var estado = await AuthStateProvider.GetAuthenticationStateAsync();
+
+            var administradorId = estado.User
+                .FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var administrador = administradorId is null
+                ? null
+                : await userManager.FindByIdAsync(administradorId);
+
+            if (administrador is null ||
+                !administrador.Activo ||
+                !await userManager.IsInRoleAsync(administrador, "Administrador"))
+            {
+                _error = "No tenés permiso para restablecer contraseñas.";
+                return;
+            }
+
+            var usuario = await userManager.FindByIdAsync(UsuarioId);
+
+            if (usuario is null)
+            {
+                _error = "El usuario ya no existe.";
+                return;
+            }
+
+            var token = await userManager
+                .GeneratePasswordResetTokenAsync(usuario);
+
+            var resultado = await userManager.ResetPasswordAsync(
+                usuario,
+                token,
+                _modelo.NuevaContrasena);
+
+            if (!resultado.Succeeded)
+            {
+                _error = string.Join(" ", resultado.Errors
+                    .Select(TraducirError)
+                    .Distinct());
+
+                return;
+            }
+
+            _modelo.NuevaContrasena = string.Empty;
+            _modelo.Confirmacion = string.Empty;
+
+            Snackbar.Add(
+                "Contraseña restablecida correctamente.",
+                Severity.Success);
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch
+        {
+            _error = "No se pudo restablecer la contraseña. Intentá nuevamente.";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private static string TraducirError(IdentityError error)
+    {
+        return error.Code switch
+        {
+            "PasswordTooShort" =>
+                "La contraseña debe tener al menos 8 caracteres.",
+
+            "PasswordRequiresDigit" =>
+                "La contraseña debe incluir un número.",
+
+            "PasswordRequiresLower" =>
+                "La contraseña debe incluir una minúscula.",
+
+            "PasswordRequiresUpper" =>
+                "La contraseña debe incluir una mayúscula.",
+
+            "PasswordRequiresNonAlphanumeric" =>
+                "La contraseña debe incluir un símbolo.",
+
+            "PasswordRequiresUniqueChars" =>
+                "La contraseña debe incluir más caracteres diferentes.",
+
+            "InvalidToken" =>
+                "La solicitud venció. Cerrá y volvé a abrir el formulario.",
+
+            "ConcurrencyFailure" =>
+                "El usuario fue modificado. Cerrá y volvé a intentarlo.",
+
+            _ => "No se pudo actualizar la contraseña."
+        };
+    }
+
+    private sealed class ContrasenaModel
+    {
+        [Required(ErrorMessage = "Ingresá la nueva contraseña.")]
+        [MinLength(8, ErrorMessage = "La contraseña debe tener al menos 8 caracteres.")]
+        public string NuevaContrasena { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Confirmá la nueva contraseña.")]
+        [Compare(nameof(NuevaContrasena),
+            ErrorMessage = "Las contraseñas no coinciden.")]
+        public string Confirmacion { get; set; } = string.Empty;
+    }
+}
