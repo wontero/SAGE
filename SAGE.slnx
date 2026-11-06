@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/SAGE.Simulador/SAGE.Simulador.csproj" />
     <Project Path="src/SAGE.Web/SAGE.Web.csproj" />
   </Folder>
 </Solution>
