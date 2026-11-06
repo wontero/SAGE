@@ -364,6 +364,53 @@ namespace SAGE.Web.Data.Migrations
                     b.ToTable("Empresas");
                 });
 
+            modelBuilder.Entity("SAGE.Web.Data.Factura", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Anio")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ConsumoKwh")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("EmpresaId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FechaRegistro")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Mes")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("MontoBs")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("RegistradaPorId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RegistradaPorId");
+
+                    b.HasIndex("EmpresaId", "Anio", "Mes")
+                        .IsUnique();
+
+                    b.ToTable("Facturas");
+                });
+
             modelBuilder.Entity("SAGE.Web.Data.Medicion", b =>
                 {
                     b.Property<long>("Id")
@@ -569,6 +616,25 @@ namespace SAGE.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("SAGE.Web.Data.Factura", b =>
+                {
+                    b.HasOne("SAGE.Web.Data.Empresa", "Empresa")
+                        .WithMany()
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SAGE.Web.Data.ApplicationUser", "RegistradaPor")
+                        .WithMany()
+                        .HasForeignKey("RegistradaPorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Empresa");
+
+                    b.Navigation("RegistradaPor");
                 });
 
             modelBuilder.Entity("SAGE.Web.Data.Medicion", b =>
