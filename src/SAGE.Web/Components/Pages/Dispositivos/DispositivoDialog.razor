@@ -1,0 +1,286 @@
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceScopeFactory ScopeFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_cargando)
+        {
+            <MudProgressLinear Indeterminate="true"
+                               Color="Color.Primary" />
+        }
+        else
+        {
+            <EditForm EditContext="_editContext">
+                <DataAnnotationsValidator />
+
+                <MudStack Spacing="3">
+                    <MudSelect T="int?"
+                               @bind-Value="_modelo.EmpresaId"
+                               Label="Empresa"
+                               Variant="Variant.Outlined"
+                               For="@(() => _modelo.EmpresaId)">
+                        @foreach (var empresa in _empresas)
+                        {
+                            <MudSelectItem T="int?"
+                                           Value="@((int?)empresa.Id)">
+                                @empresa.Nombre
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudTextField T="string"
+                                  @bind-Value="_modelo.Nombre"
+                                  Label="Nombre del dispositivo"
+                                  Variant="Variant.Outlined"
+                                  For="@(() => _modelo.Nombre)" />
+
+                    <MudTextField T="string"
+                                  @bind-Value="_modelo.Descripcion"
+                                  Label="Descripción"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  For="@(() => _modelo.Descripcion)" />
+
+                    <MudCheckBox T="bool"
+                                 @bind-Value="_modelo.EsSimulado"
+                                 Label="Es un dispositivo simulado"
+                                 Color="Color.Primary" />
+
+                    <MudAlert Severity="Severity.Info">
+                        @(_modelo.EsSimulado
+                            ? "Se identificará como SIMULADO."
+                            : "Se identificará como REAL.")
+                    </MudAlert>
+
+                    @if (_modelo.Id is null)
+                    {
+                        <MudText Typo="Typo.body2">
+                            Al crear el dispositivo se generará un token
+                            que podrás copiar una sola vez.
+                        </MudText>
+                    }
+
+                    <ValidationSummary />
+
+                    @if (!string.IsNullOrWhiteSpace(_error))
+                    {
+                        <MudAlert Severity="Severity.Error">
+                            @_error
+                        </MudAlert>
+                    }
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancelar" Disabled="_guardando">
+            Cancelar
+        </MudButton>
+
+        <MudButton OnClick="Guardar"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="@(_cargando || _guardando || _falloCarga)">
+            @(_guardando ? "Guardando..." : "Guardar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public DispositivoFormModel Modelo { get; set; } = new();
+
+    private DispositivoFormModel _modelo = new();
+    private EditContext _editContext = default!;
+    private List<Empresa> _empresas = new();
+
+    private bool _cargando = true;
+    private bool _guardando;
+    private bool _falloCarga;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _modelo = new DispositivoFormModel
+        {
+            Id = Modelo.Id,
+            EmpresaId = Modelo.EmpresaId,
+            Nombre = Modelo.Nombre,
+            Descripcion = Modelo.Descripcion,
+            EsSimulado = Modelo.EsSimulado
+        };
+
+        _editContext = new EditContext(_modelo);
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var userManager = scope.ServiceProvider
+                .GetRequiredService<UserManager<ApplicationUser>>();
+
+            if (!await EsAdministrador(userManager))
+            {
+                _falloCarga = true;
+                _error = "No tenés permiso para administrar dispositivos.";
+                return;
+            }
+
+            _empresas = await db.Empresas
+                .AsNoTracking()
+                .Where(e => e.Activa)
+                .OrderBy(e => e.Nombre)
+                .ToListAsync();
+
+            if (_empresas.Count == 0)
+            {
+                _falloCarga = true;
+                _error = "Primero necesitás crear o activar una empresa.";
+            }
+        }
+        catch
+        {
+            _falloCarga = true;
+            _error = "No se pudieron cargar las empresas. Cerrá y volvé a abrir el formulario.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    private async Task<bool> EsAdministrador(
+        UserManager<ApplicationUser> userManager)
+    {
+        var estado = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        var usuarioId = estado.User
+            .FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (usuarioId is null)
+            return false;
+
+        var usuario = await userManager.FindByIdAsync(usuarioId);
+
+        return usuario is not null &&
+               usuario.Activo &&
+               await userManager.IsInRoleAsync(usuario, "Administrador");
+    }
+
+    private async Task Guardar()
+    {
+        if (_guardando || _cargando || _falloCarga)
+            return;
+
+        _error = null;
+        _modelo.Nombre = _modelo.Nombre.Trim();
+
+        if (!_editContext.Validate())
+            return;
+
+        _guardando = true;
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var userManager = scope.ServiceProvider
+                .GetRequiredService<UserManager<ApplicationUser>>();
+
+            if (!await EsAdministrador(userManager))
+            {
+                _error = "No tenés permiso para administrar dispositivos.";
+                return;
+            }
+
+            var empresaActiva = await db.Empresas.AnyAsync(e =>
+                e.Id == _modelo.EmpresaId && e.Activa);
+
+            if (!empresaActiva)
+            {
+                _error = "Seleccioná una empresa activa.";
+                return;
+            }
+
+            string? tokenGenerado = null;
+
+            if (_modelo.Id is null)
+            {
+                tokenGenerado = TokenDispositivo.Generar();
+
+                var dispositivo = new Dispositivo
+                {
+                    EmpresaId = _modelo.EmpresaId!.Value,
+                    Nombre = _modelo.Nombre,
+                    Descripcion = string.IsNullOrWhiteSpace(_modelo.Descripcion)
+                        ? null
+                        : _modelo.Descripcion.Trim(),
+                    EsSimulado = _modelo.EsSimulado,
+                    TokenHash = TokenDispositivo.CalcularHash(tokenGenerado),
+                    Activo = true,
+                    FechaRegistro = DateTime.UtcNow
+                };
+
+                db.Dispositivos.Add(dispositivo);
+            }
+            else
+            {
+                var dispositivo = await db.Dispositivos
+                    .FindAsync(_modelo.Id.Value);
+
+                if (dispositivo is null)
+                {
+                    _error = "El dispositivo ya no existe.";
+                    return;
+                }
+
+                dispositivo.EmpresaId = _modelo.EmpresaId!.Value;
+                dispositivo.Nombre = _modelo.Nombre;
+                dispositivo.Descripcion =
+                    string.IsNullOrWhiteSpace(_modelo.Descripcion)
+                        ? null
+                        : _modelo.Descripcion.Trim();
+                dispositivo.EsSimulado = _modelo.EsSimulado;
+
+                // Editar los datos no cambia el token existente.
+            }
+
+            await db.SaveChangesAsync();
+
+            Snackbar.Add(
+                _modelo.Id is null
+                    ? "Dispositivo creado correctamente."
+                    : "Dispositivo actualizado correctamente.",
+                Severity.Success);
+
+            // La pantalla recibirá el token para mostrarlo una sola vez.
+            // Al editar, el resultado no contiene un token.
+            MudDialog.Close(DialogResult.Ok(tokenGenerado));
+        }
+        catch
+        {
+            _error = "No se pudo guardar el dispositivo. Verificá la conexión e intentá nuevamente.";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+}

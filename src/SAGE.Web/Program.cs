@@ -5,6 +5,7 @@ using MudBlazor.Services;
 using SAGE.Web.Components;
 using SAGE.Web.Components.Account;
 using SAGE.Web.Data;
+using SAGE.Web.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,8 +63,14 @@ else
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api"),
+    branch =>
+    {
+        branch.UseStatusCodePagesWithReExecute(
+            "/not-found",
+            createScopeForStatusCodePages: true);
+    }); app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -74,5 +81,6 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.MapAdditionalIdentityEndpoints();
+app.MapTelemetriaEndpoints();
 
 app.Run();

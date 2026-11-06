@@ -1,0 +1,71 @@
+﻿@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudAlert Severity="Severity.Warning">
+                Guárdalo ahora: no se podrá volver a ver.
+            </MudAlert>
+
+            <MudText>
+                Usá este token para autenticar el dispositivo o el simulador.
+            </MudText>
+
+            <MudTextField T="string"
+                          Value="@Token"
+                          Label="Token del dispositivo"
+                          Variant="Variant.Outlined"
+                          ReadOnly="true"
+                          Lines="3" />
+
+            <MudButton OnClick="Copiar"
+                       Color="Color.Primary"
+                       Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.ContentCopy">
+                Copiar token
+            </MudButton>
+
+            <MudText Typo="Typo.body2">
+                Si lo perdés, deberás generar uno nuevo.
+                Al regenerarlo, el anterior dejará de funcionar.
+            </MudText>
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cerrar"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled">
+            Ya lo guardé
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string Token { get; set; } = string.Empty;
+
+    private async Task Copiar()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "navigator.clipboard.writeText",
+                Token);
+
+            Snackbar.Add("Token copiado.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add(
+                "No se pudo copiar automáticamente. Seleccioná el token y copialo con Ctrl + C.",
+                Severity.Warning);
+        }
+    }
+
+    private void Cerrar() => MudDialog.Close();
+}

@@ -1,0 +1,589 @@
+﻿@page "/dispositivos"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceScopeFactory ScopeFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Dispositivos — SAGE</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h4">Dispositivos</MudText>
+
+    <MudStack Row="true" Spacing="2">
+        @if (_esAdministrador)
+        {
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="NuevoDispositivo"
+                       Disabled="@(_cargando || _ocupado)">
+                Nuevo dispositivo
+            </MudButton>
+        }
+
+        <MudButton Variant="Variant.Outlined"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="CargarDispositivos"
+                   Disabled="@(_cargando || _ocupado)">
+            Actualizar
+        </MudButton>
+    </MudStack>
+
+    @if (_esAdministrador)
+    {
+        <MudSelect T="int"
+                   Value="_empresaFiltro"
+                   ValueChanged="CambiarFiltro"
+                   Label="Filtrar por empresa"
+                   Variant="Variant.Outlined"
+                   Disabled="@(_cargando || _ocupado)">
+            <MudSelectItem T="int" Value="0">
+                Todas las empresas
+            </MudSelectItem>
+
+            @foreach (var empresa in _empresas)
+            {
+                <MudSelectItem T="int" Value="@empresa.Id">
+                    @empresa.Nombre
+                </MudSelectItem>
+            }
+        </MudSelect>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error">
+            @_error
+        </MudAlert>
+    }
+
+    <MudTable T="DispositivoFila"
+              Items="_dispositivos"
+              Loading="_cargando"
+              Hover="true"
+              Striped="true"
+              Breakpoint="Breakpoint.Sm"
+              Elevation="1">
+        <HeaderContent>
+            <MudTh>Nombre</MudTh>
+            <MudTh>Empresa</MudTh>
+            <MudTh>Tipo</MudTh>
+            <MudTh>Estado</MudTh>
+            <MudTh>Última conexión</MudTh>
+
+            @if (_esAdministrador)
+            {
+                <MudTh>Acciones</MudTh>
+            }
+        </HeaderContent>
+
+        <RowTemplate>
+            <MudTd DataLabel="Nombre">
+                @context.Nombre
+            </MudTd>
+
+            <MudTd DataLabel="Empresa">
+                @context.EmpresaNombre
+            </MudTd>
+
+            <MudTd DataLabel="Tipo">
+                <MudChip T="string"
+                         Size="Size.Small"
+                         Color="@(context.EsSimulado ? Color.Warning : Color.Info)">
+                    @(context.EsSimulado ? "SIMULADO" : "REAL")
+                </MudChip>
+            </MudTd>
+
+            <MudTd DataLabel="Estado">
+                <MudChip T="string"
+                         Size="Size.Small"
+                         Color="@(context.Activo ? Color.Success : Color.Default)">
+                    @(context.Activo ? "Activo" : "Inactivo")
+                </MudChip>
+            </MudTd>
+
+            <MudTd DataLabel="Última conexión">
+                <MudStack Row="true"
+                          AlignItems="AlignItems.Center"
+                          Spacing="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Circle"
+                             Size="Size.Small"
+                             Color="@(EstaEnLinea(context.UltimoContacto)
+                                                     ? Color.Success
+                                                     : Color.Error)" />
+
+                    <MudText Typo="Typo.body2">
+                        @TiempoDesde(context.UltimoContacto)
+                    </MudText>
+                </MudStack>
+            </MudTd>
+
+            @if (_esAdministrador)
+            {
+                <MudTd DataLabel="Acciones">
+                    <MudStack Spacing="1">
+                        <MudButton Color="Color.Primary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   OnClick="@(() => EditarDispositivo(context))"
+                                   Disabled="@(_cargando || _ocupado)">
+                            Editar
+                        </MudButton>
+
+                        <MudButton Color="@(context.Activo ? Color.Warning : Color.Success)"
+                                   Size="Size.Small"
+                                   OnClick="@(() => CambiarEstado(context))"
+                                   Disabled="@(_cargando || _ocupado)">
+                            @(context.Activo ? "Desactivar" : "Activar")
+                        </MudButton>
+
+                        <MudButton Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Refresh"
+                                   OnClick="@(() => RegenerarToken(context))"
+                                   Disabled="@(_cargando || _ocupado)">
+                            Regenerar token
+                        </MudButton>
+                    </MudStack>
+                </MudTd>
+            }
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText>No hay dispositivos para mostrar.</MudText>
+        </NoRecordsContent>
+
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Filas por página"
+                           InfoFormat="{first_item}-{last_item} de {all_items}" />
+        </PagerContent>
+    </MudTable>
+</MudStack>
+
+@code {
+    private List<DispositivoFila> _dispositivos = new();
+    private List<Empresa> _empresas = new();
+
+    private int _empresaFiltro;
+    private bool _esAdministrador;
+    private bool _cargando = true;
+    private bool _ocupado;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDispositivos();
+    }
+
+    private async Task<ApplicationUser?> ObtenerUsuarioActual(
+        UserManager<ApplicationUser> userManager)
+    {
+        var estado = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        var usuarioId = estado.User
+            .FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return usuarioId is null
+            ? null
+            : await userManager.FindByIdAsync(usuarioId);
+    }
+
+    private async Task<bool> EsAdministradorActual(
+        UserManager<ApplicationUser> userManager)
+    {
+        var usuario = await ObtenerUsuarioActual(userManager);
+
+        return usuario is not null &&
+               usuario.Activo &&
+               await userManager.IsInRoleAsync(usuario, "Administrador");
+    }
+
+    private async Task CargarDispositivos()
+    {
+        _cargando = true;
+        _error = null;
+        _esAdministrador = false;
+        _dispositivos.Clear();
+        _empresas.Clear();
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var userManager = scope.ServiceProvider
+                .GetRequiredService<UserManager<ApplicationUser>>();
+
+            var usuario = await ObtenerUsuarioActual(userManager);
+
+            if (usuario is null || !usuario.Activo)
+            {
+                _error = "No tenés acceso a los dispositivos.";
+                return;
+            }
+
+            var roles = await userManager.GetRolesAsync(usuario);
+            _esAdministrador = roles.Contains("Administrador");
+
+            var consulta = db.Dispositivos.AsNoTracking();
+
+            if (_esAdministrador)
+            {
+                _empresas = await db.Empresas
+                    .AsNoTracking()
+                    .OrderBy(e => e.Nombre)
+                    .ToListAsync();
+
+                if (_empresaFiltro > 0)
+                {
+                    consulta = consulta.Where(d =>
+                        d.EmpresaId == _empresaFiltro);
+                }
+            }
+            else
+            {
+                if ((!roles.Contains("Tecnico") &&
+                     !roles.Contains("Consulta")) ||
+                    usuario.EmpresaId is null)
+                {
+                    _error = "No tenés una empresa o un rol válido.";
+                    return;
+                }
+
+                var empresaActiva = await db.Empresas.AnyAsync(e =>
+                    e.Id == usuario.EmpresaId && e.Activa);
+
+                if (!empresaActiva)
+                {
+                    _error = "Tu empresa está inactiva.";
+                    return;
+                }
+
+                // El filtro se aplica en SQL, antes de traer los datos.
+                consulta = consulta.Where(d =>
+                    d.EmpresaId == usuario.EmpresaId);
+            }
+
+            _dispositivos = await consulta
+                .OrderBy(d => d.Nombre)
+                .Select(d => new DispositivoFila
+                {
+                    Id = d.Id,
+                    EmpresaId = d.EmpresaId,
+                    EmpresaNombre = d.Empresa.Nombre,
+                    Nombre = d.Nombre,
+                    Descripcion = d.Descripcion,
+                    EsSimulado = d.EsSimulado,
+                    Activo = d.Activo,
+                    UltimoContacto = d.UltimoContacto
+                })
+                .ToListAsync();
+        }
+        catch
+        {
+            _error = "No se pudieron cargar los dispositivos.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task CambiarFiltro(int empresaId)
+    {
+        _empresaFiltro = empresaId;
+        await CargarDispositivos();
+    }
+
+    private Task NuevoDispositivo()
+    {
+        return AbrirFormulario(
+            new DispositivoFormModel(),
+            "Nuevo dispositivo");
+    }
+
+    private Task EditarDispositivo(DispositivoFila dispositivo)
+    {
+        var modelo = new DispositivoFormModel
+        {
+            Id = dispositivo.Id,
+            EmpresaId = dispositivo.EmpresaId,
+            Nombre = dispositivo.Nombre,
+            Descripcion = dispositivo.Descripcion,
+            EsSimulado = dispositivo.EsSimulado
+        };
+
+        return AbrirFormulario(modelo, "Editar dispositivo");
+    }
+
+    private async Task AbrirFormulario(
+        DispositivoFormModel modelo, string titulo)
+    {
+        if (_ocupado)
+            return;
+
+        _ocupado = true;
+
+        try
+        {
+            var parametros = new DialogParameters
+            {
+                [nameof(DispositivoDialog.Modelo)] = modelo
+            };
+
+            var opciones = new DialogOptions
+            {
+                FullWidth = true,
+                MaxWidth = MaxWidth.Small,
+                CloseButton = true
+            };
+
+            var dialogo = await DialogService
+                .ShowAsync<DispositivoDialog>(
+                    titulo, parametros, opciones);
+
+            var resultado = await dialogo.Result;
+
+            if (resultado is null || resultado.Canceled)
+                return;
+
+            if (resultado.Data is string token &&
+                !string.IsNullOrWhiteSpace(token))
+            {
+                await MostrarToken(token);
+            }
+
+            await CargarDispositivos();
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+
+    private async Task MostrarToken(string token)
+    {
+        var parametros = new DialogParameters
+        {
+            [nameof(TokenDialog.Token)] = token
+        };
+
+        var opciones = new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small,
+            CloseButton = false
+        };
+
+        var dialogo = await DialogService.ShowAsync<TokenDialog>(
+            "Token del dispositivo",
+            parametros,
+            opciones);
+
+        await dialogo.Result;
+    }
+
+    private async Task<bool> Confirmar(string mensaje)
+    {
+        var parametros = new DialogParameters
+        {
+            ["Contenido"] = mensaje
+        };
+
+        var dialogo = await DialogService.ShowAsync<
+            SAGE.Web.Components.Pages.Empresas.ConfirmDialog>(
+                "Confirmar",
+                parametros);
+
+        var resultado = await dialogo.Result;
+
+        return resultado is not null &&
+               !resultado.Canceled &&
+               resultado.Data is true;
+    }
+
+    private async Task CambiarEstado(DispositivoFila fila)
+    {
+        if (_ocupado)
+            return;
+
+        _ocupado = true;
+
+        try
+        {
+            var nuevoEstado = !fila.Activo;
+            var accion = nuevoEstado ? "activar" : "desactivar";
+
+            if (!await Confirmar(
+                $"¿Querés {accion} el dispositivo {fila.Nombre}?"))
+            {
+                return;
+            }
+
+            using var scope = ScopeFactory.CreateScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var userManager = scope.ServiceProvider
+                .GetRequiredService<UserManager<ApplicationUser>>();
+
+            if (!await EsAdministradorActual(userManager))
+            {
+                Snackbar.Add(
+                    "No tenés permiso para modificar dispositivos.",
+                    Severity.Error);
+                return;
+            }
+
+            var dispositivo = await db.Dispositivos.FindAsync(fila.Id);
+
+            if (dispositivo is null)
+            {
+                Snackbar.Add(
+                    "El dispositivo ya no existe.",
+                    Severity.Error);
+                return;
+            }
+
+            dispositivo.Activo = nuevoEstado;
+            await db.SaveChangesAsync();
+
+            Snackbar.Add(
+                nuevoEstado
+                    ? "Dispositivo activado."
+                    : "Dispositivo desactivado.",
+                Severity.Success);
+
+            await CargarDispositivos();
+        }
+        catch
+        {
+            Snackbar.Add(
+                "No se pudo cambiar el estado del dispositivo.",
+                Severity.Error);
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+
+    private async Task RegenerarToken(DispositivoFila fila)
+    {
+        if (_ocupado)
+            return;
+
+        _ocupado = true;
+
+        try
+        {
+            if (!await Confirmar(
+                $"¿Querés regenerar el token de {fila.Nombre}? " +
+                "El token anterior dejará de funcionar."))
+            {
+                return;
+            }
+
+            string token;
+
+            using (var scope = ScopeFactory.CreateScope())
+            {
+                var db = scope.ServiceProvider
+                    .GetRequiredService<ApplicationDbContext>();
+
+                var userManager = scope.ServiceProvider
+                    .GetRequiredService<UserManager<ApplicationUser>>();
+
+                if (!await EsAdministradorActual(userManager))
+                {
+                    Snackbar.Add(
+                        "No tenés permiso para regenerar tokens.",
+                        Severity.Error);
+                    return;
+                }
+
+                var dispositivo = await db.Dispositivos.FindAsync(fila.Id);
+
+                if (dispositivo is null)
+                {
+                    Snackbar.Add(
+                        "El dispositivo ya no existe.",
+                        Severity.Error);
+                    return;
+                }
+
+                token = TokenDispositivo.Generar();
+                dispositivo.TokenHash = TokenDispositivo.CalcularHash(token);
+
+                await db.SaveChangesAsync();
+            }
+
+            Snackbar.Add(
+                "Token regenerado correctamente.",
+                Severity.Success);
+
+            await MostrarToken(token);
+        }
+        catch
+        {
+            Snackbar.Add(
+                "No se pudo completar la regeneración o mostrar el token. " +
+                "Si no lo recibiste, generá uno nuevo.",
+                Severity.Error);
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+
+    private static bool EstaEnLinea(DateTime? ultimoContacto)
+    {
+        if (!ultimoContacto.HasValue)
+            return false;
+
+        var segundos = (DateTime.UtcNow - ultimoContacto.Value).TotalSeconds;
+        return segundos >= 0 && segundos < 30;
+    }
+
+    private static string TiempoDesde(DateTime? ultimoContacto)
+    {
+        if (!ultimoContacto.HasValue)
+            return "Nunca";
+
+        var segundos = Math.Max(
+            0,
+            (DateTime.UtcNow - ultimoContacto.Value).TotalSeconds);
+
+        if (segundos < 60)
+            return $"hace {(int)segundos} s";
+
+        if (segundos < 3600)
+            return $"hace {(int)(segundos / 60)} min";
+
+        if (segundos < 86400)
+            return $"hace {(int)(segundos / 3600)} h";
+
+        return $"hace {(int)(segundos / 86400)} días";
+    }
+
+    private sealed class DispositivoFila
+    {
+        public int Id { get; set; }
+        public int EmpresaId { get; set; }
+        public string EmpresaNombre { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string? Descripcion { get; set; }
+        public bool EsSimulado { get; set; }
+        public bool Activo { get; set; }
+        public DateTime? UltimoContacto { get; set; }
+    }
+}

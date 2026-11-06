@@ -1,4 +1,8 @@
-﻿<MudNavMenu Class="sage-nav" Color="Color.Default" Bordered="false">
+﻿
+<MudNavMenu Class="sage-nav"
+            Color="Color.Default"
+            Bordered="false">
+
     <MudNavLink Href="/"
                 Match="NavLinkMatch.All"
                 Icon="@Icons.Material.Outlined.Home">
@@ -18,4 +22,19 @@
             </MudNavLink>
         </Authorized>
     </AuthorizeView>
+
+    <AuthorizeView Roles="Administrador,Tecnico,Consulta">
+        <Authorized>
+            <MudNavLink Href="/dispositivos"
+                        Icon="@Icons.Material.Outlined.Devices">
+                Dispositivos
+            </MudNavLink>
+
+            <MudNavLink Href="/mediciones"
+                        Icon="@Icons.Material.Outlined.ShowChart">
+                Mediciones
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
 </MudNavMenu>
