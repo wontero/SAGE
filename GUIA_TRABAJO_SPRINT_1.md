@@ -200,11 +200,11 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 5. Activar "Usuarios" en el menú del Administrador.
 
 **Criterios de aceptación**
-- [ ] El Administrador crea un usuario Técnico de una empresa nueva; ese usuario inicia sesión y ve solo el menú de Técnico.
-- [ ] No se puede crear un Técnico o Consulta sin empresa, ni un usuario con un correo repetido.
-- [ ] Un usuario desactivado no puede iniciar sesión.
-- [ ] Técnico y Consulta reciben "Acceso denegado" en `/usuarios`.
-- [ ] Cada rol accede solo a las funciones de la tabla de la sección 2 (probado con los 3 roles).
+- [x] El Administrador crea un usuario Técnico de una empresa nueva; ese usuario inicia sesión y ve solo el menú de Técnico.
+- [x] No se puede crear un Técnico o Consulta sin empresa, ni un usuario con un correo repetido.
+- [x] Un usuario desactivado no puede iniciar sesión.
+- [x] Técnico y Consulta reciben "Acceso denegado" en `/usuarios`.
+- [x] Cada rol accede solo a las funciones de la tabla de la sección 2 (probado con los 3 roles).
 
 ### - [ ] S1-M4 · RF09 Registro de dispositivos y token
 **Qué hacer**
@@ -219,10 +219,10 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 4. Activar "Dispositivos" en el menú de los 3 roles.
 
 **Criterios de aceptación**
-- [ ] El Administrador crea un dispositivo asociado a una empresa y ve su token una sola vez.
-- [ ] En la tabla `Dispositivos` de la base solo hay un hash, no el token.
-- [ ] Técnico y Consulta ven solo los dispositivos de su empresa y no tienen botones de acción.
-- [ ] Regenerar el token hace que el token anterior deje de servir (se comprueba en S1-M5).
+- [x] El Administrador crea un dispositivo asociado a una empresa y ve su token una sola vez.
+- [x] En la tabla `Dispositivos` de la base solo hay un hash, no el token.
+- [x] Técnico y Consulta ven solo los dispositivos de su empresa y no tienen botones de acción.
+- [x] Regenerar el token hace que el token anterior deje de servir (se comprueba en S1-M5).
 
 ### - [ ] S1-M5 · API de telemetría del dispositivo
 **Qué hacer**
@@ -238,11 +238,11 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 3. Dejar en `docs/api_telemetria.http` (o una colección de Postman) un ejemplo de petición válida, para que Ethan pueda probarla.
 
 **Criterios de aceptación**
-- [ ] Con el token correcto y el JSON de ejemplo de `docs/SAGE_IoT_diseno_v1.md` (sección 6.2), la API responde 200 y aparece una fila en `Mediciones`.
-- [ ] Sin token, o con un token falso o regenerado, responde 401 y no guarda nada.
-- [ ] Con un dispositivo desactivado responde 401.
-- [ ] Mandar dos veces el mismo `seq` deja una sola fila.
-- [ ] La columna "Última conexión" de `/dispositivos` muestra "hace X s" después de una petición.
+- [x] Con el token correcto y el JSON de ejemplo de `docs/SAGE_IoT_diseno_v1.md` (sección 6.2), la API responde 200 y aparece una fila en `Mediciones`.
+- [x] Sin token, o con un token falso o regenerado, responde 401 y no guarda nada.
+- [x] Con un dispositivo desactivado responde 401.
+- [x] Mandar dos veces el mismo `seq` deja una sola fila.
+- [x] La columna "Última conexión" de `/dispositivos` muestra "hace X s" después de una petición.
 
 **Al terminar:** marca S1-M3, S1-M4 y S1-M5 con `[x]`, escribe tu entrada en la Bitácora y haz push. Avísale a Ethan.
 
@@ -338,6 +338,12 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 - Último commit: 55c772e
 
 <!-- Las entradas van debajo de esta línea -->
+
+### Verificación de S1-M3, S1-M4 y S1-M5 — hecha por Ethan (no es la entrada de Matías)
+- Fecha: 06/11/2026, de madrugada. Quién: Ethan (Alejandro Rojas), con la plataforma local y el simulador de S1-M6 corriendo.
+- Qué se comprobó a mano: usuario Técnico de empresa nueva con su menú; rechazo de Técnico/Consulta sin empresa y de correos repetidos; usuario desactivado sin acceso; "Acceso denegado" en `/usuarios` para Técnico y Consulta; Consulta y Técnico ven solo los dispositivos de su empresa y sin botones de acción; token visible una sola vez y solo hash en la base; API de telemetría: 200 con token correcto, 401 sin token / falso / regenerado / dispositivo desactivado, un solo registro con `seq` repetido y "Última conexión" en vivo.
+- Importante: esto NO reemplaza la entrada de Matías en la Bitácora ni la fusión de la PR #1. Las casillas de criterios quedan marcadas por esta verificación; los títulos de las misiones S1-M3 a S1-M5 los marca Matías al cerrar su parte.
+
 
 ### 2026-11-06 00:55 (UTC-4) — Ethan — S1-M6, S1-M7 (S1-M8: casi completa)
 - Hecho: S1-M6 simulador (`src/SAGE.Simulador`, con README); S1-M7 facturas (`/facturas`, entidad `Factura` con índice único por empresa y mes, registro manual, importación desde Excel todo-o-nada con ClosedXML, plantilla descargable en `/facturas/plantilla`, ejemplos en `docs/ejemplos/`, migración `AgregarFacturas`); S1-M8 tablero de Inicio (tarjetas de resumen y "Última medición" que se refresca cada 5 s). Probado a mano con Administrador, Técnico de otra empresa (Hotel Las Palmas) y Consulta.
