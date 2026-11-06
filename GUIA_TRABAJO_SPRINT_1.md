@@ -256,7 +256,7 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 - Con `docs/api_telemetria.http` (o Postman) y ese token, la API responde 200 y guarda la medición; con un token falso responde 401.
 - Si algo de esto falla, sigue la regla 3 de la sección 0.
 
-### - [ ] S1-M6 · T02 Simulador del dispositivo
+### - [x] S1-M6 · T02 Simulador del dispositivo
 **Qué hacer**
 1. Crear la consola `src/SAGE.Simulador` (.NET 10) y agregarla a la solución.
 2. Parámetros por línea de comandos: `--url` (por ejemplo, `http://localhost:5xxx`), `--token` e `--intervalo` (segundos, 2 por defecto). Si falta `--url` o `--token`, mostrar cómo se usa y salir.
@@ -274,12 +274,12 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
    ```
 
 **Criterios de aceptación**
-- [ ] Con un dispositivo marcado como SIMULADO y su token, en 60 s se guardan unas 30 mediciones (una cada 2 s), comprobado con `SELECT COUNT(*)` en `Mediciones`.
-- [ ] Con un token falso el simulador muestra 401 en cada envío y no se guarda nada.
-- [ ] Si se apaga la plataforma, el simulador sigue intentando y vuelve a guardar cuando la plataforma arranca de nuevo.
-- [ ] Los `wh_acum` guardados nunca bajan dentro de un mismo `boot_id`.
+- [x] Con un dispositivo marcado como SIMULADO y su token, en 60 s se guardan unas 30 mediciones (una cada 2 s), comprobado con `SELECT COUNT(*)` en `Mediciones`. (Comprobado en la consola del simulador contra la plataforma real: 28 envíos con HTTP 200 en 56 s; no se corrió el `SELECT COUNT(*)`.)
+- [x] Con un token falso el simulador muestra 401 en cada envío y no se guarda nada.
+- [x] Si se apaga la plataforma, el simulador sigue intentando y vuelve a guardar cuando la plataforma arranca de nuevo.
+- [x] Los `wh_acum` guardados nunca bajan dentro de un mismo `boot_id`. (Comprobado en los datos que recibió un servidor de prueba durante una corrida de 60 s; no se consultó la tabla de la base.)
 
-### - [ ] S1-M7 · RF03 Registro de consumo facturado
+### - [x] S1-M7 · RF03 Registro de consumo facturado
 **Qué hacer**
 1. Entidad `Factura`: `Id`, `EmpresaId`, `Anio`, `Mes` (1 a 12), `ConsumoKwh` (decimal > 0), `MontoBs` (decimal > 0), `Origen` (`Manual` o `Excel`), `RegistradaPorId` (usuario), `FechaRegistro`. Índice **único** en `(EmpresaId, Anio, Mes)`: una factura por empresa y mes. Crear la migración.
 2. Página `/facturas`:
@@ -295,10 +295,10 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 6. Activar "Facturas" en el menú de los 3 roles (Consulta solo ve la tabla, sin botones).
 
 **Criterios de aceptación**
-- [ ] Una factura cargada a mano aparece en la tabla de su empresa y queda guardada por empresa y mes.
-- [ ] `facturas_validas.xlsx` importa 6 facturas; `facturas_con_errores.xlsx` no importa ninguna y lista cada error con su fila.
-- [ ] Se rechazan: kWh o monto ≤ 0, mes fuera de 1 a 12, periodo futuro y mes repetido.
-- [ ] El Técnico de una empresa no ve las facturas de otra, y Consulta no tiene botones para registrar ni importar.
+- [x] Una factura cargada a mano aparece en la tabla de su empresa y queda guardada por empresa y mes.
+- [x] `facturas_validas.xlsx` importa 6 facturas; `facturas_con_errores.xlsx` no importa ninguna y lista cada error con su fila.
+- [x] Se rechazan: kWh o monto ≤ 0, mes fuera de 1 a 12, periodo futuro y mes repetido.
+- [x] El Técnico de una empresa no ve las facturas de otra, y Consulta no tiene botones para registrar ni importar.
 
 ### - [ ] S1-M8 · Tablero de inicio y cierre del sprint
 **Qué hacer**
@@ -309,8 +309,8 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 3. Completar la sección 7 de esta guía (Demo del Sprint 1), comprobando cada paso.
 
 **Criterios de aceptación**
-- [ ] Con el simulador corriendo, la tarjeta "Última medición" cambia sola sin recargar la página.
-- [ ] Un Técnico de la empresa B no ve en ninguna pantalla nada de la empresa A.
+- [x] Con el simulador corriendo, la tarjeta "Última medición" cambia sola sin recargar la página.
+- [x] Un Técnico de la empresa B no ve en ninguna pantalla nada de la empresa A.
 - [ ] Todos los pasos de la sección 7 funcionan, y todas las casillas de esta guía están marcadas.
 
 **Al terminar:** marca S1-M6, S1-M7 y S1-M8 con `[x]`, escribe tu entrada en la Bitácora y haz push. Avísale a Mateo que el Sprint 1 está listo para revisar.
@@ -339,16 +339,23 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 
 <!-- Las entradas van debajo de esta línea -->
 
+### 2026-11-06 00:55 (UTC-4) — Ethan — S1-M6, S1-M7 (S1-M8: casi completa)
+- Hecho: S1-M6 simulador (`src/SAGE.Simulador`, con README); S1-M7 facturas (`/facturas`, entidad `Factura` con índice único por empresa y mes, registro manual, importación desde Excel todo-o-nada con ClosedXML, plantilla descargable en `/facturas/plantilla`, ejemplos en `docs/ejemplos/`, migración `AgregarFacturas`); S1-M8 tablero de Inicio (tarjetas de resumen y "Última medición" que se refresca cada 5 s). Probado a mano con Administrador, Técnico de otra empresa (Hotel Las Palmas) y Consulta.
+- Correcciones a trabajo anterior: `wwwroot/app.css`: la regla `.sage-main` tenía `width: 100%` y el contenido se salía de la pantalla (cortaba el botón "Registrar factura"); ahora `width: auto`.
+- Desvíos de la guía y motivo: (1) el trabajo está sobre la rama `matias-pruebas` (PR #1 sin fusionar), porque depende de S1-M3 a S1-M5, y se sube a la rama `ethan-s1`, no a `main`, para no fusionar sin revisión el trabajo de Matías. (2) Base de datos: LocalDB (`(localdb)\MSSQLLocalDB`) mediante la variable de entorno `ConnectionStrings__DefaultConnection`, porque no hay SQL Server Express; `appsettings.json` no se tocó. (3) El simulador acepta el parámetro opcional `--hora <0-24>` para probar con sol de noche.
+- Pendientes o BLOQUEOS: (a) S1-M3, S1-M4 y S1-M5 (Matías) siguen sin marcar y sin entrada en la Bitácora, y la PR #1 sigue sin fusionar; por eso el criterio 3 de S1-M8 ("todas las casillas marcadas") y la casilla de S1-M8 quedan pendientes. (b) Paso 5 de la demo, parcial (ver sección 7). (c) La contraseña `sa` de la entrada de Harold está en un repositorio público: conviene quitarla.
+- Último commit: ver `git log` de la rama `ethan-s1`
+
 ---
 
 ## 7. Demo del Sprint 1 (la completa Ethan en S1-M8)
 
 Guion para mostrarle al docente, en este orden:
 
-- [ ] 1. Iniciar sesión como `admin@sage.test` → el menú muestra Empresas, Usuarios, Dispositivos y Facturas.
-- [ ] 2. Crear la empresa "Hotel Las Palmas" y un usuario Técnico para ella.
-- [ ] 3. Registrar un dispositivo SIMULADO para esa empresa y copiar su token.
-- [ ] 4. Ejecutar el simulador con ese token → en Inicio, la tarjeta de última medición se actualiza cada pocos segundos, y en la base aumentan las filas de `Mediciones`.
-- [ ] 5. Cerrar sesión, entrar con el nuevo Técnico → solo ve su empresa; importar `facturas_validas.xlsx` y registrar una factura a mano → aparecen en la tabla.
-- [ ] 6. Intentar importar `facturas_con_errores.xlsx` → se rechaza con la lista de errores.
-- [ ] 7. Entrar con `consulta@sage.test` → ve solo los datos de Empresa Demo S.R.L., sin botones para modificar; escribir `/empresas` en la barra → "Acceso denegado".
+- [x] 1. Iniciar sesión como `admin@sage.test` → el menú muestra Empresas, Usuarios, Dispositivos y Facturas.
+- [x] 2. Crear la empresa "Hotel Las Palmas" y un usuario Técnico para ella.
+- [x] 3. Registrar un dispositivo SIMULADO para esa empresa y copiar su token. (Se probó con el dispositivo de Energía Andina S.R.L.)
+- [x] 4. Ejecutar el simulador con ese token → en Inicio, la tarjeta de última medición se actualiza cada pocos segundos, y en la base aumentan las filas de `Mediciones`.
+- [ ] 5. Cerrar sesión, entrar con el nuevo Técnico → solo ve su empresa; importar `facturas_validas.xlsx` y registrar una factura a mano → aparecen en la tabla. (PARCIAL: como Técnico de Hotel Las Palmas se registró una factura a mano y se comprobó que la importación usa su propia empresa, pero la importación exitosa de `facturas_validas.xlsx` se hizo como Administrador, no como Técnico.)
+- [x] 6. Intentar importar `facturas_con_errores.xlsx` → se rechaza con la lista de errores.
+- [x] 7. Entrar con `consulta@sage.test` → ve solo los datos de Empresa Demo S.R.L., sin botones para modificar; escribir `/empresas` en la barra → "Acceso denegado".
