@@ -344,7 +344,7 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 - Correcciones a trabajo anterior: ninguna funcional bloqueante; se completó lo que quedó parcial en la demo.
 - Desvíos de la guía y motivo: ninguno nuevo.
 - Pendientes o BLOQUEOS: ninguno.
-- Último commit: (tras el push)
+- Último commit: 9b95baa
 
 ### Verificación de S1-M3, S1-M4 y S1-M5 — hecha por Ethan (no es la entrada de Matías)
 - Fecha: 06/11/2026, de madrugada. Quién: Ethan (Alejandro Rojas), con la plataforma local y el simulador de S1-M6 corriendo.
