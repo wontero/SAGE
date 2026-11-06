@@ -20,7 +20,7 @@
 
             <MudStack Row="true" Spacing="2">
                 <MudSelect T="int" @bind-Value="_mes" Label="Mes" Variant="Variant.Outlined" Required="true">
-                    @for (var m = 1; m <= 12; m++)
+                    @foreach (var m in Enumerable.Range(1, 12))
                     {
                         <MudSelectItem T="int" Value="@m">@FacturaReglas.NombreMes(m)</MudSelectItem>
                     }

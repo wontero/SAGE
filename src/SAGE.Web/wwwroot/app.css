@@ -494,7 +494,10 @@ html.sage-logging-in .login-entering {
 .sage-main {
   padding: 1.5rem clamp(1.25rem, 3vw, 2.75rem) 2.5rem;
   max-width: none;
-  width: 100%;
+  /* Sin width:100%: el contenido ya está desplazado por el menú lateral y se salía de la pantalla. */
+  width: auto;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* ——— Home (Settings-like, no metric cards) ——— */
