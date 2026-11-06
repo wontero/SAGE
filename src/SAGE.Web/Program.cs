@@ -53,6 +53,43 @@ var app = builder.Build();
 
 await DatosIniciales.InicializarAsync(app.Services);
 
+// Uso: dotnet run --project src/SAGE.Web -- --importar-demo-tecnico
+// Importa docs/ejemplos/facturas_validas.xlsx como técnico.palmas@sage.test (solo Development).
+if (app.Environment.IsDevelopment() && args.Contains("--importar-demo-tecnico"))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    var tecnico = await users.FindByEmailAsync("tecnico.palmas@sage.test")
+        ?? throw new InvalidOperationException("Falta tecnico.palmas@sage.test en el seed.");
+    if (tecnico.EmpresaId is null)
+    {
+        throw new InvalidOperationException("El técnico de Las Palmas no tiene empresa.");
+    }
+
+    // Limpia facturas previas del hotel para poder reimportar el ejemplo.
+    var previas = db.Facturas.Where(f => f.EmpresaId == tecnico.EmpresaId);
+    db.Facturas.RemoveRange(previas);
+    await db.SaveChangesAsync();
+
+    var ruta = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "docs", "ejemplos", "facturas_validas.xlsx"));
+    await using var stream = File.OpenRead(ruta);
+    var resultado = await FacturaExcelImporter.ImportarAsync(stream, tecnico.EmpresaId.Value, tecnico.Id, db);
+    if (resultado.Errores.Count > 0)
+    {
+        Console.Error.WriteLine("Importación falló:");
+        foreach (var e in resultado.Errores)
+        {
+            Console.Error.WriteLine(" - " + e);
+        }
+
+        return;
+    }
+
+    Console.WriteLine($"OK: técnico Las Palmas importó {resultado.Importadas} facturas desde facturas_validas.xlsx");
+    return;
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();

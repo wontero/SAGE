@@ -1,6 +1,3 @@
-@using System.Globalization
-@using System.Text
-@using ClosedXML.Excel
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext Db
@@ -76,9 +73,6 @@
 </MudDialog>
 
 @code {
-    private const long MaxBytes = 1024 * 1024;
-    private const int MaxFilas = 1000;
-
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
@@ -104,7 +98,6 @@
         {
             var archivo = e.File;
 
-            // Permisos: se vuelven a comprobar aquí (RNF01).
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var principal = auth.User;
             var esAdmin = principal.IsInRole("Administrador");
@@ -128,167 +121,36 @@
                 return;
             }
 
-            if (!await Db.Empresas.AnyAsync(x => x.Id == empresaId && x.Activa))
-            {
-                _errores.Add("La empresa no existe o está inactiva.");
-                return;
-            }
-
             if (!archivo.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
             {
                 _errores.Add("El archivo debe ser .xlsx.");
                 return;
             }
 
-            if (archivo.Size > MaxBytes)
+            if (archivo.Size > FacturaExcelImporter.MaxBytes)
             {
                 _errores.Add("El archivo supera el máximo de 1 MB.");
                 return;
             }
 
             using var memoria = new MemoryStream();
-            await using (var flujo = archivo.OpenReadStream(MaxBytes))
+            await using (var flujo = archivo.OpenReadStream(FacturaExcelImporter.MaxBytes))
             {
                 await flujo.CopyToAsync(memoria);
             }
 
             memoria.Position = 0;
+            var resultado = await FacturaExcelImporter.ImportarAsync(
+                memoria, empresaId.Value, usuario.Id, Db);
 
-            XLWorkbook libro;
-            try
+            if (resultado.Errores.Count > 0)
             {
-                libro = new XLWorkbook(memoria);
-            }
-            catch (Exception)
-            {
-                _errores.Add("No se pudo leer el archivo. Verifica que sea un .xlsx válido.");
+                _errores.AddRange(resultado.Errores);
                 return;
             }
 
-            var nuevas = new List<Factura>();
-
-            using (libro)
-            {
-                var hoja = libro.Worksheets.FirstOrDefault();
-                var ultimaFila = hoja?.LastRowUsed()?.RowNumber() ?? 0;
-
-                if (hoja is null || ultimaFila < 2)
-                {
-                    _errores.Add("El archivo no tiene filas de datos.");
-                    return;
-                }
-
-                if (ultimaFila - 1 > MaxFilas)
-                {
-                    _errores.Add($"El archivo tiene demasiadas filas (máximo {MaxFilas}).");
-                    return;
-                }
-
-                if (!EncabezadosValidos(hoja))
-                {
-                    _errores.Add("Los encabezados de la primera fila deben ser: Año | Mes | Consumo (kWh) | Monto (Bs).");
-                    return;
-                }
-
-                var existentes = (await Db.Facturas.AsNoTracking()
-                        .Where(f => f.EmpresaId == empresaId)
-                        .Select(f => new { f.Anio, f.Mes })
-                        .ToListAsync())
-                    .Select(f => (f.Anio, f.Mes))
-                    .ToHashSet();
-                var vistos = new HashSet<(int, int)>();
-
-                for (var fila = 2; fila <= ultimaFila; fila++)
-                {
-                    var celdas = Enumerable.Range(1, 4).Select(c => hoja.Cell(fila, c)).ToList();
-                    if (celdas.All(c => c.IsEmpty()))
-                    {
-                        continue;
-                    }
-
-                    if (!TryEntero(celdas[0], out var anio))
-                    {
-                        _errores.Add($"Fila {fila}: el año no es un número válido.");
-                        continue;
-                    }
-
-                    if (!TryEntero(celdas[1], out var mes))
-                    {
-                        _errores.Add($"Fila {fila}: el mes no es un número válido.");
-                        continue;
-                    }
-
-                    if (!TryDecimal(celdas[2], out var kwh))
-                    {
-                        _errores.Add($"Fila {fila}: el consumo (kWh) no es un número válido.");
-                        continue;
-                    }
-
-                    if (!TryDecimal(celdas[3], out var monto))
-                    {
-                        _errores.Add($"Fila {fila}: el monto no es un número válido.");
-                        continue;
-                    }
-
-                    var motivo = FacturaReglas.Validar(anio, mes, kwh, monto);
-                    if (motivo is not null)
-                    {
-                        _errores.Add($"Fila {fila}: {motivo}.");
-                        continue;
-                    }
-
-                    if (existentes.Contains((anio, mes)))
-                    {
-                        _errores.Add($"Fila {fila}: el mes {mes}/{anio} ya está registrado.");
-                        continue;
-                    }
-
-                    if (!vistos.Add((anio, mes)))
-                    {
-                        _errores.Add($"Fila {fila}: el mes {mes}/{anio} está repetido en el archivo.");
-                        continue;
-                    }
-
-                    nuevas.Add(new Factura
-                    {
-                        EmpresaId = empresaId.Value,
-                        Anio = anio,
-                        Mes = mes,
-                        ConsumoKwh = kwh,
-                        MontoBs = monto,
-                        Origen = OrigenFactura.Excel,
-                        RegistradaPorId = usuario.Id,
-                        FechaRegistro = DateTime.UtcNow
-                    });
-                }
-            }
-
-            // Todo o nada: si hubo cualquier error no se guarda ninguna fila.
-            if (_errores.Count > 0)
-            {
-                return;
-            }
-
-            if (nuevas.Count == 0)
-            {
-                _errores.Add("El archivo no tiene filas de datos.");
-                return;
-            }
-
-            Db.Facturas.AddRange(nuevas);
-            try
-            {
-                await Db.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                Db.ChangeTracker.Clear();
-                _errores.Add("No se pudo guardar: alguno de los meses ya fue registrado por otra persona. Vuelve a intentarlo.");
-                return;
-            }
-
-            _importadas = nuevas.Count;
-            Snackbar.Add($"Se importaron {nuevas.Count} facturas", Severity.Success);
+            _importadas = resultado.Importadas;
+            Snackbar.Add($"Se importaron {resultado.Importadas} facturas", Severity.Success);
         }
         catch (IOException)
         {
@@ -298,70 +160,5 @@
         {
             _procesando = false;
         }
-    }
-
-    private static bool EncabezadosValidos(IXLWorksheet hoja)
-    {
-        var esperados = new[]
-        {
-            new[] { "ano", "anio" },
-            new[] { "mes" },
-            new[] { "consumokwh" },
-            new[] { "montobs" }
-        };
-
-        for (var i = 0; i < esperados.Length; i++)
-        {
-            var texto = Normalizar(hoja.Cell(1, i + 1).GetString());
-            if (!esperados[i].Contains(texto))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static string Normalizar(string texto)
-    {
-        var descompuesto = texto.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder();
-        foreach (var c in descompuesto)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
-            {
-                continue;
-            }
-
-            if (char.IsLetterOrDigit(c))
-            {
-                sb.Append(char.ToLowerInvariant(c));
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    private static bool TryEntero(IXLCell celda, out int valor)
-    {
-        valor = 0;
-        if (celda.IsEmpty() || !celda.TryGetValue<double>(out var d))
-        {
-            return false;
-        }
-
-        if (d != Math.Floor(d) || d < int.MinValue || d > int.MaxValue)
-        {
-            return false;
-        }
-
-        valor = (int)d;
-        return true;
-    }
-
-    private static bool TryDecimal(IXLCell celda, out decimal valor)
-    {
-        valor = 0;
-        return !celda.IsEmpty() && celda.TryGetValue<decimal>(out valor);
     }
 }
