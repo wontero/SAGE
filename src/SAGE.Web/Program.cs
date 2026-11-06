@@ -82,5 +82,6 @@ app.MapRazorComponents<App>()
 
 app.MapAdditionalIdentityEndpoints();
 app.MapTelemetriaEndpoints();
+app.MapFacturasEndpoints();
 
 app.Run();

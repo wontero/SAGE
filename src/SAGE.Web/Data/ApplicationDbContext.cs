@@ -13,6 +13,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     public DbSet<Medicion> Mediciones => Set<Medicion>();
 
+    public DbSet<Factura> Facturas => Set<Factura>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -53,6 +55,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasOne(m => m.Dispositivo)
                 .WithMany()
                 .HasForeignKey(m => m.DispositivoId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Factura>(entity =>
+        {
+            // Una factura por empresa y mes.
+            entity.HasIndex(f => new { f.EmpresaId, f.Anio, f.Mes }).IsUnique();
+
+            entity.Property(f => f.Origen)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.HasOne(f => f.Empresa)
+                .WithMany()
+                .HasForeignKey(f => f.EmpresaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(f => f.RegistradaPor)
+                .WithMany()
+                .HasForeignKey(f => f.RegistradaPorId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

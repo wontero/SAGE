@@ -1,0 +1,248 @@
+@page "/facturas"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDialogService DialogService
+
+<PageTitle>Facturas — SAGE</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4">Facturas de consumo</MudText>
+
+        @if (_puedeRegistrar)
+        {
+            <MudStack Row="true" Spacing="2">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.UploadFile"
+                           OnClick="AbrirImportar">
+                    Importar desde Excel
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="AbrirRegistrar">
+                    Registrar factura
+                </MudButton>
+            </MudStack>
+        }
+    </MudStack>
+
+    <MudGrid>
+        <MudItem xs="12" sm="6">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudAvatar Color="Color.Warning" Variant="Variant.Filled">
+                        <MudIcon Icon="@Icons.Material.Filled.Bolt" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.caption">Consumo últimos 12 meses (kWh)</MudText>
+                        <MudText Typo="Typo.h5">@_consumo12.ToString("N2", FacturaReglas.Cultura) kWh</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudAvatar Color="Color.Primary" Variant="Variant.Filled">
+                        <MudIcon Icon="@Icons.Material.Filled.Payments" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.caption">Monto últimos 12 meses (Bs)</MudText>
+                        <MudText Typo="Typo.h5">@_monto12.ToString("N2", FacturaReglas.Cultura) Bs</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_esAdmin)
+    {
+        <MudSelect T="int?"
+                   Value="_empresaFiltro"
+                   ValueChanged="CambiarFiltro"
+                   Label="Filtrar por empresa"
+                   Variant="Variant.Outlined"
+                   Style="max-width: 360px;">
+            <MudSelectItem T="int?" Value="@((int?)null)">Todas las empresas</MudSelectItem>
+            @foreach (var empresa in _empresas)
+            {
+                <MudSelectItem T="int?" Value="@((int?)empresa.Id)">@empresa.Nombre</MudSelectItem>
+            }
+        </MudSelect>
+    }
+
+    <MudTable Items="_filas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Periodo</MudTh>
+            @if (_esAdmin)
+            {
+                <MudTh>Empresa</MudTh>
+            }
+            <MudTh>Consumo (kWh)</MudTh>
+            <MudTh>Monto (Bs)</MudTh>
+            <MudTh>Bs/kWh</MudTh>
+            <MudTh>Origen</MudTh>
+            <MudTh>Registrada por</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Periodo">@context.Periodo</MudTd>
+            @if (_esAdmin)
+            {
+                <MudTd DataLabel="Empresa">@context.EmpresaNombre</MudTd>
+            }
+            <MudTd DataLabel="Consumo (kWh)">@context.ConsumoKwh.ToString("N2", FacturaReglas.Cultura) kWh</MudTd>
+            <MudTd DataLabel="Monto (Bs)">@context.MontoBs.ToString("N2", FacturaReglas.Cultura) Bs</MudTd>
+            <MudTd DataLabel="Bs/kWh">@context.BsPorKwh.ToString("N4", FacturaReglas.Cultura) Bs/kWh</MudTd>
+            <MudTd DataLabel="Origen">
+                <MudChip T="string" Size="Size.Small" Color="@(context.Origen == OrigenFactura.Excel ? Color.Info : Color.Default)">
+                    @context.Origen
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Registrada por">@context.RegistradaPor</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No hay facturas registradas.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+</MudStack>
+
+@code {
+    private List<FacturaFila> _filas = new();
+    private List<EmpresaOpcion> _empresas = new();
+    private int? _empresaFiltro;
+    private int? _empresaUsuario;
+    private bool _esAdmin;
+    private bool _puedeRegistrar;
+    private bool _cargando;
+    private decimal _consumo12;
+    private decimal _monto12;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var principal = auth.User;
+        var usuario = await UserManager.GetUserAsync(principal);
+
+        _esAdmin = principal.IsInRole("Administrador");
+        _puedeRegistrar = _esAdmin || principal.IsInRole("Tecnico");
+        _empresaUsuario = usuario?.EmpresaId;
+
+        if (_esAdmin)
+        {
+            _empresas = await Db.Empresas.AsNoTracking()
+                .Where(e => e.Activa)
+                .OrderBy(e => e.Nombre)
+                .Select(e => new EmpresaOpcion(e.Id, e.Nombre))
+                .ToListAsync();
+        }
+
+        await Recargar();
+    }
+
+    private async Task CambiarFiltro(int? empresaId)
+    {
+        _empresaFiltro = empresaId;
+        await Recargar();
+    }
+
+    private async Task Recargar()
+    {
+        _cargando = true;
+        try
+        {
+            var consulta = Db.Facturas.AsNoTracking().AsQueryable();
+
+            // El filtro por empresa se aplica en la consulta (RNF01), no solo en la pantalla.
+            if (_esAdmin)
+            {
+                if (_empresaFiltro is int id)
+                {
+                    consulta = consulta.Where(f => f.EmpresaId == id);
+                }
+            }
+            else
+            {
+                var propia = _empresaUsuario ?? -1;
+                consulta = consulta.Where(f => f.EmpresaId == propia);
+            }
+
+            _filas = await consulta
+                .OrderByDescending(f => f.Anio)
+                .ThenByDescending(f => f.Mes)
+                .Select(f => new FacturaFila
+                {
+                    Anio = f.Anio,
+                    Mes = f.Mes,
+                    EmpresaNombre = f.Empresa.Nombre,
+                    ConsumoKwh = f.ConsumoKwh,
+                    MontoBs = f.MontoBs,
+                    Origen = f.Origen,
+                    RegistradaPor = f.RegistradaPor.NombreCompleto
+                })
+                .ToListAsync();
+
+            var hoy = FacturaReglas.HoyLocal();
+            var inicio = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-11);
+            var ultimos = _filas
+                .Where(f =>
+                {
+                    var fecha = new DateTime(f.Anio, f.Mes, 1);
+                    return fecha >= inicio && fecha <= hoy;
+                })
+                .ToList();
+
+            _consumo12 = ultimos.Sum(f => f.ConsumoKwh);
+            _monto12 = ultimos.Sum(f => f.MontoBs);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task AbrirRegistrar()
+    {
+        var parametros = new DialogParameters<FacturaDialog>
+        {
+            { x => x.EsAdmin, _esAdmin },
+            { x => x.Empresas, _empresas }
+        };
+        var opciones = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialogo = await DialogService.ShowAsync<FacturaDialog>("Registrar factura", parametros, opciones);
+        await dialogo.Result;
+        await Recargar();
+    }
+
+    private async Task AbrirImportar()
+    {
+        var parametros = new DialogParameters<ImportarFacturasDialog>
+        {
+            { x => x.EsAdmin, _esAdmin },
+            { x => x.Empresas, _empresas }
+        };
+        var opciones = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialogo = await DialogService.ShowAsync<ImportarFacturasDialog>("Importar facturas desde Excel", parametros, opciones);
+        await dialogo.Result;
+        await Recargar();
+    }
+
+    private sealed class FacturaFila
+    {
+        public int Anio { get; set; }
+        public int Mes { get; set; }
+        public string EmpresaNombre { get; set; } = string.Empty;
+        public decimal ConsumoKwh { get; set; }
+        public decimal MontoBs { get; set; }
+        public OrigenFactura Origen { get; set; }
+        public string RegistradaPor { get; set; } = string.Empty;
+
+        public string Periodo => FacturaReglas.Periodo(Anio, Mes);
+        public decimal BsPorKwh => ConsumoKwh > 0 ? MontoBs / ConsumoKwh : 0;
+    }
+}
