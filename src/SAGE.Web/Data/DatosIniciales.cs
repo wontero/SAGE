@@ -78,6 +78,31 @@ public static class DatosIniciales
             nombre: "Consulta",
             rol: RolConsulta,
             empresaId: empresa.Id);
+
+        // Empresa del guion de demo (sección 7) para pruebas de Técnico / facturas.
+        var hotel = await db.Empresas.FirstOrDefaultAsync(e => e.Nit == "2099887766");
+        if (hotel is null)
+        {
+            hotel = new Empresa
+            {
+                Nombre = "Hotel Las Palmas",
+                Nit = "2099887766",
+                Direccion = "Calle Comercio 50",
+                Telefono = "71112233",
+                CorreoContacto = "contacto@hotellaspalmas.test",
+                Activa = true,
+                FechaRegistro = DateTime.UtcNow
+            };
+            db.Empresas.Add(hotel);
+            await db.SaveChangesAsync();
+        }
+
+        await AsegurarUsuarioAsync(
+            userManager,
+            correo: "tecnico.palmas@sage.test",
+            nombre: "Técnico Las Palmas",
+            rol: RolTecnico,
+            empresaId: hotel.Id);
     }
 
     private static async Task AsegurarUsuarioAsync(

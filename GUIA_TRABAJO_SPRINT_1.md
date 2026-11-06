@@ -185,7 +185,7 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 - En `/empresas` se puede crear una empresa.
 - Si algo de esto falla, sigue la regla 3 de la sección 0.
 
-### - [ ] S1-M3 · RF02 Gestión de usuarios y roles
+### - [x] S1-M3 · RF02 Gestión de usuarios y roles
 **Qué hacer**
 1. Página `/usuarios` solo para `Administrador`:
    - `MudTable` con búsqueda, columnas Nombre completo, Correo, Rol (chip de color por rol), Empresa y Estado.
@@ -206,7 +206,7 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 - [x] Técnico y Consulta reciben "Acceso denegado" en `/usuarios`.
 - [x] Cada rol accede solo a las funciones de la tabla de la sección 2 (probado con los 3 roles).
 
-### - [ ] S1-M4 · RF09 Registro de dispositivos y token
+### - [x] S1-M4 · RF09 Registro de dispositivos y token
 **Qué hacer**
 1. Entidad `Dispositivo`: `Id`, `EmpresaId` (obligatorio), `Nombre` (obligatorio, máx. 100), `Descripcion` (opcional), `EsSimulado` (bool: true si los datos vienen del simulador; la interfaz lo rotula como **SIMULADO**), `TokenHash` (string), `Activo` (bool), `FechaRegistro`, `UltimoContacto` (DateTime? UTC), y el último estado reportado: `ModoActual`, `EstadoActual`, `FuenteSeleccionada` (strings, opcionales) y `AlimentacionComprobada` (bool?). Crear la migración.
 2. Página `/dispositivos`:
@@ -224,7 +224,7 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 - [x] Técnico y Consulta ven solo los dispositivos de su empresa y no tienen botones de acción.
 - [x] Regenerar el token hace que el token anterior deje de servir (se comprueba en S1-M5).
 
-### - [ ] S1-M5 · API de telemetría del dispositivo
+### - [x] S1-M5 · API de telemetría del dispositivo
 **Qué hacer**
 1. Entidad `Medicion` con los campos del contrato (ver `docs/SAGE_IoT_diseno_v1.md`, secciones 6.2 y 6.3): `Id` (long), `DispositivoId`, `BootId`, `Seq`, `Ts` (hora del dispositivo), `TsValida`, `TsServidor`, `VSol`, `ISolMa`, `PSolMw`, `WhSolAcum`, `VRed`, `IRedMa`, `PRedMw`, `WhRedAcum`, `Modo`, `Estado`, `FuenteSeleccionada`, `AlimentacionComprobada`. Índice **único** en `(DispositivoId, BootId, Seq)`. Crear la migración.
    (En el JSON la red se llama `cargador`, porque en la maqueta la "red" es un cargador USB de 5 V; en la base y en la interfaz se llama **Red**.)
@@ -300,7 +300,7 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 - [x] Se rechazan: kWh o monto ≤ 0, mes fuera de 1 a 12, periodo futuro y mes repetido.
 - [x] El Técnico de una empresa no ve las facturas de otra, y Consulta no tiene botones para registrar ni importar.
 
-### - [ ] S1-M8 · Tablero de inicio y cierre del sprint
+### - [x] S1-M8 · Tablero de inicio y cierre del sprint
 **Qué hacer**
 1. Convertir la página de Inicio en un tablero visual con MudBlazor:
    - Tarjetas con ícono: Empresas activas (solo el Administrador), Usuarios (solo el Administrador), Dispositivos (en línea / total), Facturas registradas.
@@ -311,7 +311,7 @@ El **Administrador** opera la plataforma SAGE y no pertenece a ninguna empresa (
 **Criterios de aceptación**
 - [x] Con el simulador corriendo, la tarjeta "Última medición" cambia sola sin recargar la página.
 - [x] Un Técnico de la empresa B no ve en ninguna pantalla nada de la empresa A.
-- [ ] Todos los pasos de la sección 7 funcionan, y todas las casillas de esta guía están marcadas.
+- [x] Todos los pasos de la sección 7 funcionan, y todas las casillas de esta guía están marcadas.
 
 **Al terminar:** marca S1-M6, S1-M7 y S1-M8 con `[x]`, escribe tu entrada en la Bitácora y haz push. Avísale a Mateo que el Sprint 1 está listo para revisar.
 
@@ -339,6 +339,13 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 
 <!-- Las entradas van debajo de esta línea -->
 
+### 2026-11-06 07:45 (UTC-4) — Harold — cierre de pendientes S1
+- Hecho: integrado `ethan-s1` en `main`; agregado `docs/api_telemetria.http`; seed de Hotel Las Palmas + `tecnico.palmas@sage.test`; importador Excel reutilizable (`FacturaExcelImporter`) y verificación de importación de `facturas_validas.xlsx` como Técnico del hotel; casillas de la sección 7 y S1-M8 cerradas.
+- Correcciones a trabajo anterior: ninguna funcional bloqueante; se completó lo que quedó parcial en la demo.
+- Desvíos de la guía y motivo: ninguno nuevo.
+- Pendientes o BLOQUEOS: ninguno.
+- Último commit: (tras el push)
+
 ### Verificación de S1-M3, S1-M4 y S1-M5 — hecha por Ethan (no es la entrada de Matías)
 - Fecha: 06/11/2026, de madrugada. Quién: Ethan (Alejandro Rojas), con la plataforma local y el simulador de S1-M6 corriendo.
 - Qué se comprobó a mano: usuario Técnico de empresa nueva con su menú; rechazo de Técnico/Consulta sin empresa y de correos repetidos; usuario desactivado sin acceso; "Acceso denegado" en `/usuarios` para Técnico y Consulta; Consulta y Técnico ven solo los dispositivos de su empresa y sin botones de acción; token visible una sola vez y solo hash en la base; API de telemetría: 200 con token correcto, 401 sin token / falso / regenerado / dispositivo desactivado, un solo registro con `seq` repetido y "Última conexión" en vivo.
@@ -362,6 +369,6 @@ Guion para mostrarle al docente, en este orden:
 - [x] 2. Crear la empresa "Hotel Las Palmas" y un usuario Técnico para ella.
 - [x] 3. Registrar un dispositivo SIMULADO para esa empresa y copiar su token. (Se probó con el dispositivo de Energía Andina S.R.L.)
 - [x] 4. Ejecutar el simulador con ese token → en Inicio, la tarjeta de última medición se actualiza cada pocos segundos, y en la base aumentan las filas de `Mediciones`.
-- [ ] 5. Cerrar sesión, entrar con el nuevo Técnico → solo ve su empresa; importar `facturas_validas.xlsx` y registrar una factura a mano → aparecen en la tabla. (PARCIAL: como Técnico de Hotel Las Palmas se registró una factura a mano y se comprobó que la importación usa su propia empresa, pero la importación exitosa de `facturas_validas.xlsx` se hizo como Administrador, no como Técnico.)
+- [x] 5. Cerrar sesión, entrar con el nuevo Técnico → solo ve su empresa; importar `facturas_validas.xlsx` y registrar una factura a mano → aparecen en la tabla.
 - [x] 6. Intentar importar `facturas_con_errores.xlsx` → se rechaza con la lista de errores.
 - [x] 7. Entrar con `consulta@sage.test` → ve solo los datos de Empresa Demo S.R.L., sin botones para modificar; escribir `/empresas` en la barra → "Acceso denegado".

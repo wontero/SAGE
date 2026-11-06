@@ -51,6 +51,7 @@ Abre la URL que muestra la consola (por ejemplo `https://localhost:7xxx` o `http
 | admin@sage.test | Sage2026! | Administrador | — |
 | tecnico@sage.test | Sage2026! | Tecnico | Energía Andina S.R.L. |
 | consulta@sage.test | Sage2026! | Consulta | Energía Andina S.R.L. |
+| tecnico.palmas@sage.test | Sage2026! | Tecnico | Hotel Las Palmas |
 
 ## Simulador del dispositivo (S1-M6)
 

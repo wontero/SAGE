@@ -1,0 +1,84 @@
+### API de telemetría del dispositivo (S1-M5)
+### Base URL: ajusta el puerto al de tu `dotnet run` (ej. http://localhost:5284)
+
+@baseUrl = http://localhost:5284
+@token = PEGA_AQUI_EL_TOKEN_DEL_DISPOSITIVO
+
+### 1) Sin token → 401
+POST {{baseUrl}}/api/dispositivo/telemetria
+Content-Type: application/json
+
+{
+  "boot_id": 12,
+  "seq": 1,
+  "ts": "2026-10-19T14:03:22Z",
+  "ts_valida": true,
+  "modo": "AUTO",
+  "estado": "EN_SOLAR",
+  "fuente_seleccionada": "SOLAR",
+  "alimentacion_comprobada": true,
+  "solar": { "v": 4.93, "i_ma": 196.2, "p_mw": 967, "wh_acum": 3.412 },
+  "cargador": { "v": 5.08, "i_ma": 0.4, "p_mw": 2, "wh_acum": 1.105 },
+  "eventos": [],
+  "resultados_ordenes": []
+}
+
+### 2) Token falso → 401
+POST {{baseUrl}}/api/dispositivo/telemetria
+Authorization: Bearer token-falso
+Content-Type: application/json
+
+{
+  "boot_id": 12,
+  "seq": 1,
+  "ts": "2026-10-19T14:03:22Z",
+  "ts_valida": true,
+  "modo": "AUTO",
+  "estado": "EN_SOLAR",
+  "fuente_seleccionada": "SOLAR",
+  "alimentacion_comprobada": true,
+  "solar": { "v": 4.93, "i_ma": 196.2, "p_mw": 967, "wh_acum": 3.412 },
+  "cargador": { "v": 5.08, "i_ma": 0.4, "p_mw": 2, "wh_acum": 1.105 },
+  "eventos": [],
+  "resultados_ordenes": []
+}
+
+### 3) Petición válida (contrato sección 6.2) → 200
+POST {{baseUrl}}/api/dispositivo/telemetria
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "boot_id": 12,
+  "seq": 4381,
+  "ts": "2026-10-19T14:03:22Z",
+  "ts_valida": true,
+  "modo": "AUTO",
+  "estado": "EN_SOLAR",
+  "fuente_seleccionada": "SOLAR",
+  "alimentacion_comprobada": true,
+  "solar": { "v": 4.93, "i_ma": 196.2, "p_mw": 967, "wh_acum": 3.412 },
+  "cargador": { "v": 5.08, "i_ma": 0.4, "p_mw": 2, "wh_acum": 1.105 },
+  "eventos": [],
+  "resultados_ordenes": []
+}
+
+### 4) Mismo boot_id + seq → 200 sin duplicar fila
+POST {{baseUrl}}/api/dispositivo/telemetria
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "boot_id": 12,
+  "seq": 4381,
+  "ts": "2026-10-19T14:03:22Z",
+  "ts_valida": true,
+  "modo": "AUTO",
+  "estado": "EN_SOLAR",
+  "fuente_seleccionada": "SOLAR",
+  "alimentacion_comprobada": true,
+  "solar": { "v": 4.93, "i_ma": 196.2, "p_mw": 967, "wh_acum": 3.412 },
+  "cargador": { "v": 5.08, "i_ma": 0.4, "p_mw": 2, "wh_acum": 1.105 },
+  "eventos": [],
+  "resultados_ordenes": []
+}
