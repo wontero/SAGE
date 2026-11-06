@@ -1,0 +1,154 @@
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            @if (EsAdmin)
+            {
+                <MudSelect T="int?" @bind-Value="_empresaId" Label="Empresa" Variant="Variant.Outlined" Required="true">
+                    @foreach (var empresa in Empresas)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)empresa.Id)">@empresa.Nombre</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+
+            <MudStack Row="true" Spacing="2">
+                <MudSelect T="int" @bind-Value="_mes" Label="Mes" Variant="Variant.Outlined" Required="true">
+                    @for (var m = 1; m <= 12; m++)
+                    {
+                        <MudSelectItem T="int" Value="@m">@FacturaReglas.NombreMes(m)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField T="int" @bind-Value="_anio" Label="Año" Variant="Variant.Outlined" Min="2000" Max="2100" HideSpinButtons="true" />
+            </MudStack>
+
+            <MudNumericField T="decimal" @bind-Value="_kwh" Label="Consumo (kWh)" Variant="Variant.Outlined" Min="0" HideSpinButtons="true" />
+            <MudNumericField T="decimal" @bind-Value="_monto" Label="Monto (Bs)" Variant="Variant.Outlined" Min="0" HideSpinButtons="true" />
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancelar">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Guardar" Disabled="_guardando">
+            Guardar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public bool EsAdmin { get; set; }
+
+    [Parameter]
+    public List<EmpresaOpcion> Empresas { get; set; } = new();
+
+    private int? _empresaId;
+    private int _mes = FacturaReglas.HoyLocal().Month;
+    private int _anio = FacturaReglas.HoyLocal().Year;
+    private decimal _kwh;
+    private decimal _monto;
+    private string? _error;
+    private bool _guardando;
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    private async Task Guardar()
+    {
+        _error = null;
+        _guardando = true;
+        try
+        {
+            // Los permisos se vuelven a comprobar aquí: no basta con ocultar el botón.
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var principal = auth.User;
+            var esAdmin = principal.IsInRole("Administrador");
+
+            if (!esAdmin && !principal.IsInRole("Tecnico"))
+            {
+                _error = "No tienes permiso para registrar facturas.";
+                return;
+            }
+
+            var usuario = await UserManager.GetUserAsync(principal);
+            if (usuario is null)
+            {
+                _error = "No se pudo identificar al usuario.";
+                return;
+            }
+
+            // El Técnico siempre usa su propia empresa; el Administrador elige.
+            var empresaId = esAdmin ? _empresaId : usuario.EmpresaId;
+            if (empresaId is null)
+            {
+                _error = esAdmin ? "Selecciona una empresa." : "Tu usuario no tiene una empresa asignada.";
+                return;
+            }
+
+            var motivo = FacturaReglas.Validar(_anio, _mes, _kwh, _monto);
+            if (motivo is not null)
+            {
+                _error = char.ToUpperInvariant(motivo[0]) + motivo[1..] + ".";
+                return;
+            }
+
+            var empresaActiva = await Db.Empresas.AnyAsync(e => e.Id == empresaId && e.Activa);
+            if (!empresaActiva)
+            {
+                _error = "La empresa no existe o está inactiva.";
+                return;
+            }
+
+            var repetida = await Db.Facturas.AnyAsync(f =>
+                f.EmpresaId == empresaId && f.Anio == _anio && f.Mes == _mes);
+            if (repetida)
+            {
+                _error = "Ya existe la factura de ese mes";
+                return;
+            }
+
+            Db.Facturas.Add(new Factura
+            {
+                EmpresaId = empresaId.Value,
+                Anio = _anio,
+                Mes = _mes,
+                ConsumoKwh = _kwh,
+                MontoBs = _monto,
+                Origen = OrigenFactura.Manual,
+                RegistradaPorId = usuario.Id,
+                FechaRegistro = DateTime.UtcNow
+            });
+
+            try
+            {
+                await Db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Otra persona registró el mismo mes justo antes (índice único).
+                Db.ChangeTracker.Clear();
+                _error = "Ya existe la factura de ese mes";
+                return;
+            }
+
+            Snackbar.Add("Factura registrada.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+}

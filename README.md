@@ -51,3 +51,20 @@ Abre la URL que muestra la consola (por ejemplo `https://localhost:7xxx` o `http
 | admin@sage.test | Sage2026! | Administrador | — |
 | tecnico@sage.test | Sage2026! | Tecnico | Energía Andina S.R.L. |
 | consulta@sage.test | Sage2026! | Consulta | Energía Andina S.R.L. |
+
+## Simulador del dispositivo (S1-M6)
+
+Consola .NET 10 que imita al ESP32 y envía telemetría falsa a la plataforma.
+
+1. Inicia sesión como Administrador, crea un dispositivo marcado como **SIMULADO** y copia su token (se muestra una sola vez).
+2. Con la plataforma en marcha, ejecuta:
+
+```bash
+dotnet run --project src/SAGE.Simulador -- --url http://localhost:5284 --token <TOKEN>
+```
+
+Parámetros: `--url` y `--token` son obligatorios; `--intervalo <segundos>` (2 por defecto); `--hora <0-24>` es opcional y fija la hora del día simulada (por ejemplo `--hora 12` para probar con sol aunque sea de noche).
+
+## Facturas (S1-M7)
+
+Página `/facturas`. Para importar desde Excel usa el botón "Descargar plantilla" (columnas `Año | Mes | Consumo (kWh) | Monto (Bs)`). En `docs/ejemplos/` hay `facturas_validas.xlsx` (6 meses correctos) y `facturas_con_errores.xlsx` (con errores, no importa ninguna fila).
