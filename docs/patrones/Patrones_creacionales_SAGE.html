@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Patrones creacionales SAGE</title>
+<style>
+  @page { size: Letter; margin: 2.2cm 2cm; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #111; line-height: 1.4; margin: 0; }
+  h1 { font-size: 15pt; margin: 0 0 10px; }
+  h2 { font-size: 13pt; margin: 22px 0 8px; border-bottom: 2px solid #9e0044; padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 16px 0 6px; page-break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 10px 0 4px; color: #9e0044; page-break-after: avoid; }
+  p { margin: 6px 0; text-align: justify; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; }
+  th, td { border: 1px solid #c9c9c9; padding: 5px 6px; vertical-align: top; }
+  th { background: #ececec; text-align: center; }
+  td.c { text-align: center; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  .cover { height: 23cm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-after: always; }
+  .cover h1 { font-size: 22pt; margin-bottom: 18px; }
+  .cover img { width: 6.5cm; margin-bottom: 18px; }
+  .cover .t { font-size: 15pt; font-weight: bold; margin: 4px 0; }
+  .cover .s { font-size: 12pt; font-weight: bold; margin: 7px 0; }
+  .brk { page-break-before: always; }
+  .small { font-size: 9pt; color: #444; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 8.6pt; line-height: 1.32; background: #f6f6f6; border-left: 3px solid #9e0044; padding: 7px 9px; margin: 6px 0 10px; white-space: pre-wrap; page-break-inside: avoid; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; }
+  figure { margin: 8px 0 12px; text-align: center; page-break-inside: avoid; }
+  figcaption { font-size: 9pt; color: #444; margin-top: 3px; }
+  .ficha td:first-child { width: 22%; font-weight: bold; background: #fafafa; }
+  .nota { border: 1px solid #e0b4c8; background: #fbf3f7; padding: 6px 9px; font-size: 9.5pt; margin: 8px 0; page-break-inside: avoid; }
+  .toc { list-style: none; margin-left: 0; }
+  .toc li { margin: 3px 0; }
+  .toc ul { list-style: none; margin-left: 18px; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>UNIVERSIDAD PRIVADA DEL VALLE</h1>
+  <img src="logo.png" alt="Logo Univalle">
+  <div class="t">Proyecto SAGE</div>
+  <div class="t">Patrones de diseño creacionales</div>
+  <div class="s">Aplicación al Sistema de Análisis y Gestión Energética</div>
+  <div class="s" style="margin-top:22px">Alumnos:</div>
+  <div class="s">Mateo Montero Gonzales</div>
+  <div class="s">Harold Henry Chuve Nava</div>
+  <div class="s">Matias Nahim Justiniano Suarez</div>
+  <div class="s">Ethan Matias Cordova Rodriguez</div>
+  <div class="s" style="margin-top:22px">Santa Cruz, noviembre de 2026</div>
+</section>
+
+<h2>Índice</h2>
+<ul class="toc">
+  <li>1. Introducción y contexto técnico de SAGE</li>
+  <li>2. Identificación y clasificación de los patrones creacionales</li>
+  <li>3. Patrones aplicados a SAGE
+    <ul>
+      <li>3.1. Abstract Factory</li>
+      <li>3.2. Builder</li>
+      <li>3.3. Singleton</li>
+    </ul>
+  </li>
+  <li>4. Evaluación de escenarios de uso en SAGE</li>
+  <li>5. Comparación de patrones</li>
+  <li>6. Mejores prácticas de selección e implementación</li>
+  <li>7. Casos de estudio</li>
+  <li>8. Conclusiones</li>
+  <li>9. Referencias</li>
+</ul>
+
+<h2>1. Introducción y contexto técnico de SAGE</h2>
+<p>SAGE (Sistema de Análisis y Gestión Energética) es una plataforma web unida a un dispositivo IoT. El dispositivo, basado en un ESP32 con dos sensores INA219 y un selector de fuente, mide tensión, corriente, potencia y energía de la rama solar y de la red, y decide qué fuente alimenta la carga (modos Solar, Red y Automático). La plataforma recibe esas mediciones, genera alertas, envía órdenes de cambio de modo, registra el consumo facturado por la distribuidora y simula escenarios económicos (red, solar y mixto) para apoyar la decisión de invertir en energía solar.</p>
+<p>El stack definido para el proyecto es <b>Blazor Web App sobre .NET 10</b> (C#), con MudBlazor y Blazor-ApexCharts en la interfaz, <b>Entity Framework Core</b> sobre <b>SQL Server Express 2022</b> para los datos y <b>firmware en Arduino (C++)</b> para el ESP32. Por eso los ejemplos de este documento están en C#, salvo el del firmware, que está en C++.</p>
+<p>Los patrones creacionales resuelven <i>cómo se crean los objetos</i>: separan al código que usa un objeto de la decisión de qué clase concreta instanciar, cómo armarlo o cuántas instancias deben existir. Este documento identifica y clasifica los cinco patrones creacionales clásicos (Gamma et al., 1994) y aplica a SAGE los tres que resuelven problemas reales del proyecto: Abstract Factory, Builder y Singleton, sobre las clases del modelo (<code>ControladorMonitoreo</code>, <code>Simulacion</code>, <code>ControladorFuente</code>, etc.).</p>
+<div class="nota"><b>Alcance.</b> SAGE está en desarrollo (Scrum, Sprints 0–3, del 23/10 al 12/12 de 2026). Las aplicaciones que se describen son decisiones de diseño sobre el modelo actual; el impacto en la calidad se presenta como <i>impacto esperado</i> junto con la forma de medirlo, no como un resultado ya observado.</div>
+
+<h2>2. Identificación y clasificación de los patrones creacionales</h2>
+<p>El catálogo de Gamma, Helm, Johnson y Vlissides (el "GoF") define cinco patrones creacionales. Se pueden clasificar con dos criterios: el <b>ámbito</b> (si la variación se resuelve con herencia entre clases o con composición de objetos) y la <b>pregunta de creación</b> que responden.</p>
+<table>
+  <thead><tr><th>Patrón</th><th>Ámbito</th><th>Pregunta que responde</th><th>Intención</th></tr></thead>
+  <tbody>
+    <tr><td><b>Factory Method</b></td><td class="c">Clase (herencia)</td><td>¿Qué clase concreta se crea?</td><td>Definir un método para crear un objeto y dejar que las subclases decidan qué clase instanciar.</td></tr>
+    <tr><td><b>Abstract Factory</b></td><td class="c">Objeto</td><td>¿Qué <i>familia</i> de objetos se crea?</td><td>Crear familias de objetos relacionados que deben usarse juntos, sin nombrar sus clases concretas.</td></tr>
+    <tr><td><b>Builder</b></td><td class="c">Objeto</td><td>¿Cómo se arma un objeto complejo?</td><td>Separar la construcción paso a paso de un objeto complejo de su representación final.</td></tr>
+    <tr><td><b>Prototype</b></td><td class="c">Objeto</td><td>¿A partir de qué ejemplar se crea?</td><td>Crear objetos nuevos copiando un objeto existente (prototipo) y modificando lo necesario.</td></tr>
+    <tr><td><b>Singleton</b></td><td class="c">Objeto</td><td>¿Cuántas instancias existen?</td><td>Garantizar una única instancia de una clase y un punto de acceso global a ella.</td></tr>
+  </tbody>
+</table>
+<p>Una segunda forma de agruparlos es por el mecanismo: <b>Factory Method</b> y <b>Abstract Factory</b> delegan la creación en una fábrica (el cliente pide, la fábrica decide la clase); <b>Builder</b> y <b>Prototype</b> se ocupan de la configuración del objeto (por pasos o por copia); <b>Singleton</b> controla el ciclo de vida. Además de los cinco del GoF, en la práctica se usa la <i>fábrica simple</i> (un método estático con un <code>switch</code>), que no es un patrón GoF pero suele ser el primer paso antes de un Factory Method, y la <i>inyección de dependencias</i>, que en .NET reemplaza buena parte de los usos clásicos de Singleton y de las fábricas.</p>
+
+<h2>3. Patrones aplicados a SAGE</h2>
+<p>Se aplican los tres patrones que responden a una necesidad concreta de SAGE. Cada uno se presenta con una ficha (problema concreto en SAGE, solución y participantes), un diagrama de clases simplificado y un fragmento de código. Los nombres de clases y métodos salen del diagrama de clases del modelo de SAGE en StarUML; las clases nuevas que introduce cada patrón se indican en el texto.</p>
+
+<h3>3.1. Abstract Factory</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>Monitorear dispositivo y cambiar modo de operación (<code>ControladorMonitoreo</code>, <code>ControladorTelemetria</code>, <code>ControladorOrdenes</code>).</td></tr>
+  <tr><td>Problema</td><td>El equipo decidió construir primero la plataforma (inicio de sesión, pantallas y datos de prueba) y conectar el hardware después. Las pantallas de monitoreo, alertas y control necesitan dos objetos que trabajan juntos: uno que entrega mediciones y otro que envía órdenes al dispositivo. Esos dos objetos tienen que ser de la misma "familia": no tiene sentido leer mediciones simuladas y mandar órdenes a un ESP32 real, o al revés.</td></tr>
+  <tr><td>Solución</td><td>Una interfaz <code>IFabricaDispositivo</code> crea el lector de telemetría y el canal de órdenes. <code>FabricaDispositivoReal</code> crea objetos que leen las <code>Medicion</code> guardadas por la API de telemetría y dejan la <code>Orden</code> pendiente para que el ESP32 la consulte. <code>FabricaDispositivoSimulado</code> genera mediciones con una curva solar de prueba y confirma las órdenes al instante. La familia se elige en un único lugar, al iniciar la aplicación.</td></tr>
+  <tr><td>Participantes</td><td>Fábrica abstracta: <code>IFabricaDispositivo</code> · Fábricas concretas: <code>FabricaDispositivoReal</code>, <code>FabricaDispositivoSimulado</code> · Productos abstractos: <code>ILectorTelemetria</code>, <code>ICanalOrdenes</code> · Productos concretos: dos por familia · Clientes: <code>ControladorMonitoreo</code>, <code>ControladorOrdenes</code>, <code>ControladorAlertas</code>.</td></tr>
+</table>
+<figure><svg id="d-af"></svg><figcaption>Figura 1. Abstract Factory para trabajar con el dispositivo real o con uno simulado.</figcaption></figure>
+<pre>public interface IFabricaDispositivo
+{
+    ILectorTelemetria CrearLector();
+    ICanalOrdenes CrearCanalOrdenes();
+}
+
+public class FabricaDispositivoSimulado : IFabricaDispositivo
+{
+    public ILectorTelemetria CrearLector() =&gt; new LectorTelemetriaSimulado();
+    public ICanalOrdenes CrearCanalOrdenes() =&gt; new CanalOrdenesSimulado();
+}
+
+public class FabricaDispositivoReal(SageDbContext db) : IFabricaDispositivo
+{
+    public ILectorTelemetria CrearLector() =&gt; new LectorTelemetriaBD(db);
+    public ICanalOrdenes CrearCanalOrdenes() =&gt; new CanalOrdenesBD(db);
+}
+
+// Program.cs: la familia se elige una sola vez, por configuración
+if (builder.Configuration["Dispositivo:Modo"] == "Simulado")
+    builder.Services.AddScoped&lt;IFabricaDispositivo, FabricaDispositivoSimulado&gt;();
+else
+    builder.Services.AddScoped&lt;IFabricaDispositivo, FabricaDispositivoReal&gt;();</pre>
+<p>Las pantallas y controladores solo conocen <code>IFabricaDispositivo</code>, <code>ILectorTelemetria</code> e <code>ICanalOrdenes</code>. El paso del Sprint con datos de prueba al Sprint con el ESP32 conectado se reduce a cambiar un valor de configuración. La misma fábrica simulada sirve en las pruebas automáticas de alertas y órdenes, que así corren sin hardware.</p>
+
+<h3>3.2. Builder</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>Simular escenarios económicos, incluido en Gestionar parámetros económicos (<code>PantallaSimulacion</code>, <code>ControladorSimulacion</code>).</td></tr>
+  <tr><td>Problema</td><td>Una <code>Simulacion</code> necesita muchos datos de distintas fuentes: la empresa, los consumos facturados de varios períodos (<code>ConsumoFacturado</code>), la versión vigente de <code>ParametrosEconomicos</code>, la potencia a instalar (kWp) y el horizonte en años. Con todo eso calcula <code>costoRed</code>, <code>costoSolar</code>, <code>costoMixto</code> y <code>recuperacionAnios</code>. Un constructor con siete parámetros es fácil de llamar mal, y además hay reglas: la potencia debe ser positiva, el horizonte razonable, y si hay pocos meses de consumo la pantalla tiene que mostrar una advertencia (<code>PantallaSimulacion.mostrarAdvertencia</code>).</td></tr>
+  <tr><td>Solución</td><td><code>SimulacionBuilder</code> recibe los datos paso a paso con métodos de nombre claro y, en <code>Construir()</code>, valida, calcula los tres escenarios y devuelve una <code>Simulacion</code> que ya no se modifica. <code>ControladorSimulacion</code> cumple el papel de director: sabe en qué orden reunir los datos.</td></tr>
+  <tr><td>Participantes</td><td>Builder: <code>SimulacionBuilder</code> · Director: <code>ControladorSimulacion</code> · Producto: <code>Simulacion</code> · Datos de entrada: <code>ConsumoFacturado</code>, <code>ParametrosEconomicos</code>.</td></tr>
+</table>
+<figure><svg id="d-bu"></svg><figcaption>Figura 2. Builder para armar una simulación económica válida.</figcaption></figure>
+<pre>public class SimulacionBuilder
+{
+    private Empresa? empresa;
+    private List&lt;ConsumoFacturado&gt; consumos = [];
+    private ParametrosEconomicos? parametros;
+    private decimal potenciaKWp;
+    private int horizonteAnios = 10;
+
+    public SimulacionBuilder ParaEmpresa(Empresa e) { empresa = e; return this; }
+    public SimulacionBuilder ConConsumo(IEnumerable&lt;ConsumoFacturado&gt; c) { consumos = c.ToList(); return this; }
+    public SimulacionBuilder ConParametros(ParametrosEconomicos p) { parametros = p; return this; }
+    public SimulacionBuilder ConPotencia(decimal kWp) { potenciaKWp = kWp; return this; }
+    public SimulacionBuilder ConHorizonte(int anios) { horizonteAnios = anios; return this; }
+
+    public Simulacion Construir()
+    {
+        if (empresa is null || parametros is null)
+            throw new InvalidOperationException("Faltan la empresa o los parámetros vigentes.");
+        if (consumos.Count == 0) throw new InvalidOperationException("No hay consumo facturado.");
+        if (potenciaKWp &lt;= 0) throw new ArgumentOutOfRangeException(nameof(potenciaKWp));
+        if (horizonteAnios is &lt; 1 or &gt; 25) throw new ArgumentOutOfRangeException(nameof(horizonteAnios));
+
+        var sim = Simulacion.Calcular(empresa, consumos, parametros, potenciaKWp, horizonteAnios);
+        if (consumos.Count &lt; 12)
+            sim.Advertencias.Add("Menos de 12 meses de consumo: el resultado es orientativo.");
+        return sim;
+    }
+}
+
+// En ControladorSimulacion (director)
+var simulacion = new SimulacionBuilder()
+    .ParaEmpresa(empresa)
+    .ConConsumo(consumosDelAnio)
+    .ConParametros(parametrosVigentes)
+    .ConPotencia(3.0m)
+    .ConHorizonte(10)
+    .Construir();</pre>
+<h3>3.3. Singleton</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>Control de la fuente en el dispositivo (firmware: <code>ControladorFuente</code>, <code>SelectorFuente</code>) y monitoreo en tiempo real en la plataforma.</td></tr>
+  <tr><td>Problema</td><td><b>En el firmware:</b> el ESP32 tiene un solo relé selector. Si dos partes del programa (el ciclo automático y la atención de una orden remota) usaran dos instancias distintas de <code>ControladorFuente</code>, cada una con su propio <code>modo</code>, <code>fuenteActual</code> y <code>esperaReintentoS</code>, podrían mandar posiciones contradictorias al mismo relé. <b>En la plataforma:</b> el estado en vivo de cada dispositivo (último contacto, fuente activa) se actualiza con cada envío de telemetría y lo leen todas las sesiones abiertas de la pantalla de monitoreo; tiene que ser el mismo objeto para todos.</td></tr>
+  <tr><td>Solución</td><td>En el firmware, un Singleton clásico de C++ (instancia estática local, constructor privado, copia prohibida), que además evita memoria dinámica en un microcontrolador. En la plataforma no se escribe un Singleton a mano: se registra la clase en el contenedor de inyección de dependencias de .NET con duración <code>Singleton</code>, que garantiza una instancia por aplicación y sigue siendo reemplazable en las pruebas.</td></tr>
+  <tr><td>Participantes</td><td>Singleton (firmware): <code>ControladorFuente</code>, que usa el único <code>SelectorFuente</code> · Singleton gestionado (plataforma): <code>EstadoDispositivosEnVivo</code> · Clientes: <code>ControladorTelemetria</code> (escribe), <code>ControladorMonitoreo</code> (lee).</td></tr>
+</table>
+<figure><svg id="d-si"></svg><figcaption>Figura 3. Singleton en el firmware y Singleton gestionado por el contenedor en la plataforma.</figcaption></figure>
+<pre>// Firmware ESP32 (Arduino, C++)
+class ControladorFuente {
+public:
+  static ControladorFuente&amp; instancia() {
+    static ControladorFuente unica;     // se crea una sola vez, sin memoria dinámica
+    return unica;
+  }
+  ControladorFuente(const ControladorFuente&amp;) = delete;
+  void operator=(const ControladorFuente&amp;) = delete;
+  void conmutarA(Fuente f);
+private:
+  ControladorFuente() {}
+  Modo modo = AUTOMATICO;
+  Fuente fuenteActual = RED;
+};
+
+// loop(): ControladorFuente::instancia().conmutarA(SOLAR);</pre>
+<pre>// Plataforma (.NET): una instancia compartida, segura entre hilos
+public class EstadoDispositivosEnVivo
+{
+    private readonly ConcurrentDictionary&lt;int, EstadoDispositivo&gt; estados = new();
+
+    public void Actualizar(int dispositivoId, EstadoDispositivo e) =&gt; estados[dispositivoId] = e;
+    public EstadoDispositivo? Obtener(int dispositivoId) =&gt;
+        estados.TryGetValue(dispositivoId, out var e) ? e : null;
+}
+
+// Program.cs
+builder.Services.AddSingleton&lt;EstadoDispositivosEnVivo&gt;();</pre>
+<p>El caso principal es el del firmware, donde la unicidad la impone el hardware. El de la plataforma es un complemento: en .NET no se implementa el patrón a mano, se delega al contenedor. Un Singleton nunca debe recibir por inyección un servicio de duración menor, como el <code>DbContext</code> de EF Core (que es <i>scoped</i>): quedaría "capturado" y se compartiría entre usuarios. Por eso <code>EstadoDispositivosEnVivo</code> solo guarda datos en memoria; lo persistente sigue pasando por la base de datos.</p>
+
+<h2>4. Evaluación de escenarios de uso en SAGE</h2>
+<p>La tabla recorre los escenarios de creación de objetos que aparecen en los casos de uso de SAGE. Incluye escenarios donde la conclusión es <b>no usar ningún patrón</b>, porque un patrón sin una variación real que resolver solo agrega clases.</p>
+<table>
+  <thead><tr><th style="width:24%">Escenario</th><th style="width:15%">CU / clases</th><th style="width:15%">Patrón</th><th>Justificación y alternativa descartada</th></tr></thead>
+  <tbody>
+    <tr><td>Desarrollar pantallas sin el dispositivo físico</td><td>Monitoreo, control, alertas</td><td>Abstract Factory</td><td>Lector y canal de órdenes deben ser de la misma familia. Se descartaron los <code>if (modoDemo)</code> repartidos por las pantallas.</td></tr>
+    <tr><td>Probar alertas y órdenes en pruebas automáticas</td><td><code>ControladorAlertas</code>, <code>ControladorOrdenes</code></td><td>Abstract Factory</td><td>La fábrica simulada se reutiliza en los tests; no hace falta el ESP32 conectado.</td></tr>
+    <tr><td>Calcular una simulación económica</td><td>Simular escenarios</td><td>Builder</td><td>Muchos datos de entrada, reglas de validación y advertencias. Se descartó un constructor de siete parámetros.</td></tr>
+    <tr><td>Controlar el relé selector en el ESP32</td><td><code>ControladorFuente</code></td><td>Singleton</td><td>Un solo recurso físico; dos instancias darían órdenes contradictorias.</td></tr>
+    <tr><td>Estado en vivo de los dispositivos</td><td>Monitoreo</td><td>Singleton (vía DI)</td><td>Compartido por todas las sesiones. Se usa la duración Singleton del contenedor, no un Singleton estático, por testabilidad.</td></tr>
+    <tr><td>Registrar usuario, empresa o dispositivo</td><td><code>Usuario</code>, <code>Empresa</code>, <code>Dispositivo</code></td><td>Ninguno</td><td>Objetos simples con una sola forma de creación: constructor y validación bastan.</td></tr>
+    <tr><td>Crear una alerta</td><td><code>Alerta</code></td><td>Ninguno</td><td>Los tipos de alerta solo difieren en datos (<code>tipo</code>, <code>comentario</code>), no en comportamiento; no justifican subclases ni fábricas.</td></tr>
+  </tbody>
+</table>
+
+<h2>5. Comparación de patrones</h2>
+<p>Se comparan los tres patrones aplicados con los criterios pedidos (eficiencia, mantenibilidad y aplicabilidad) más dos que influyen en la decisión: la complejidad que agregan y la facilidad para probar el código.</p>
+<table>
+  <thead><tr><th>Criterio</th><th>Abstract Factory</th><th>Builder</th><th>Singleton</th></tr></thead>
+  <tbody>
+    <tr><td><b>Eficiencia en ejecución</b></td><td>Despreciable; un objeto fábrica extra.</td><td>Un objeto intermedio por construcción; despreciable.</td><td>Ahorra instancias; si hay estado compartido, exige sincronización.</td></tr>
+    <tr><td><b>Mantenibilidad</b></td><td>Alta para cambiar de familia; baja para agregar un producto (cambia todas las fábricas).</td><td>Alta: agregar un dato opcional no rompe llamadas existentes.</td><td>Baja si es estático: acopla y oculta dependencias. Media con DI.</td></tr>
+    <tr><td><b>Aplicabilidad en SAGE</b></td><td>dispositivo real vs simulado (central en el plan de Sprints).</td><td>simulación económica.</td><td>firmware (relé único) y estado en vivo.</td></tr>
+    <tr><td><b>Complejidad añadida</b></td><td>Alta: interfaces por cada producto y por familia.</td><td>Media: una clase builder.</td><td>Baja.</td></tr>
+    <tr><td><b>Testabilidad</b></td><td>Muy buena: la familia simulada sirve para tests.</td><td>Muy buena: las validaciones se prueban aisladas.</td><td>Mala si es estático; buena con DI.</td></tr>
+  </tbody>
+</table>
+<p><b>Lectura de la comparación.</b> En SAGE ningún patrón creacional afecta de forma apreciable el rendimiento: los cuellos de botella están en la base de datos y en la red (telemetría del ESP32), no en la creación de objetos. La decisión se toma por mantenibilidad y testabilidad. Abstract Factory es el que más estructura agrega, pero es el que más valor da en este proyecto porque sostiene la estrategia de construir la plataforma antes que el hardware. Singleton es el que más fácil se usa mal; por eso se limita al firmware y, en la plataforma, al contenedor de inyección de dependencias.</p>
+<h2>6. Mejores prácticas de selección e implementación</h2>
+<ol>
+  <li><b>Empezar sin patrón.</b> Introducir una fábrica cuando aparece la segunda variante real (un segundo formato, una segunda familia), no "por si acaso". En SAGE, <code>Usuario</code>, <code>Empresa</code> y <code>Alerta</code> se crean con constructor.</li>
+  <li><b>El cliente depende de interfaces.</b> Las fábricas devuelven <code>IDocumentoReporte</code>, <code>ILectorTelemetria</code>, <code>ICanalOrdenes</code>; las pantallas nunca hacen <code>new</code> de una clase concreta de infraestructura.</li>
+  <li><b>Elegir la variante en un solo lugar.</b> La familia de Abstract Factory y las duraciones de los servicios se configuran en <code>Program.cs</code> y en <code>appsettings.json</code>, no en las pantallas.</li>
+  <li><b>En .NET, preferir el contenedor de DI a los Singleton estáticos.</b> <code>AddSingleton</code>, <code>AddScoped</code> y <code>AddTransient</code> resuelven el ciclo de vida sin acoplar el código a una propiedad estática, y permiten reemplazar la instancia en pruebas.</li>
+  <li><b>Un Singleton debe ser seguro entre hilos</b> y no capturar dependencias de menor duración (por ejemplo, el <code>DbContext</code>). Usar colecciones concurrentes o estado inmutable.</li>
+  <li><b>Builder: validar en <code>Construir()</code> y devolver un objeto que no cambie.</b> Así no puede existir una <code>Simulacion</code> a medio armar o inválida.</li>
+  <li><b>Firmware: memoria estática.</b> En el ESP32, evitar <code>new</code> dentro de <code>loop()</code>; el Singleton con instancia estática local no fragmenta la memoria.</li>
+  <li><b>Nombrar y documentar.</b> Nombres que revelen el rol (<code>SimulacionBuilder</code>, <code>FabricaDispositivoSimulado</code>, <code>ControladorFuente::instancia()</code>) y el patrón anotado en el diagrama de clases del modelo.</li>
+  <li><b>Probar cada creación.</b> Una prueba por builder (casos válidos e inválidos), una por fábrica concreta y pruebas de los controladores con la fábrica simulada.</li>
+</ol>
+
+<h2>7. Casos de estudio</h2>
+<p>Los casos 1 y 2 son casos de diseño dentro de SAGE: describen la situación, la aplicación del patrón, el impacto esperado en la calidad según las características de ISO/IEC 25010 y cómo se va a verificar durante los Sprints. El caso 3 muestra el uso de estos mismos patrones en el framework que usa el proyecto.</p>
+
+<h3>Caso 1. De datos de prueba al dispositivo real (Abstract Factory)</h3>
+<p><b>Situación.</b> El plan de trabajo prioriza la plataforma: el Sprint 1 cubre inicio de sesión y pantallas con datos de prueba, y el dispositivo físico se integra después. Sin un diseño previsto, cada pantalla de monitoreo, control y alertas tendría condiciones para distinguir datos falsos de reales, y el día de integrar el ESP32 habría que revisarlas todas.</p>
+<p><b>Aplicación.</b> <code>IFabricaDispositivo</code> con las familias simulada y real (sección 3.1). Las pantallas se escriben una sola vez contra las interfaces.</p>
+<p><b>Impacto esperado.</b> <i>Mantenibilidad (modificabilidad):</i> el cambio de familia queda en un archivo. <i>Testabilidad:</i> las reglas de alertas y órdenes se prueban sin hardware. <i>Fiabilidad:</i> se evita mezclar mediciones simuladas con órdenes reales.</p>
+<p><b>Cómo se verifica.</b> Al integrar el dispositivo, contar los archivos modificados fuera de la infraestructura (objetivo: solo <code>Program.cs</code> y la configuración) y comprobar que las pruebas de alertas siguen pasando con la fábrica simulada.</p>
+
+<h3>Caso 2. Simulaciones siempre válidas (Builder)</h3>
+<p><b>Situación.</b> La simulación cruza el consumo facturado con los parámetros económicos. Un dato faltante o fuera de rango (potencia cero, horizonte de 100 años) produciría proyecciones absurdas que podrían llegar a la gerencia.</p>
+<p><b>Aplicación.</b> <code>SimulacionBuilder</code> concentra todas las validaciones y la advertencia por pocos meses de datos (sección 3.2).</p>
+<p><b>Impacto esperado.</b> <i>Fiabilidad:</i> no se pueden crear simulaciones inválidas. <i>Usabilidad:</i> la advertencia aclara cuándo el resultado es orientativo. <i>Testabilidad:</i> cada regla tiene su prueba.</p>
+<p><b>Cómo se verifica.</b> Pruebas unitarias del builder con un caso válido y un caso por cada regla incumplida.</p>
+
+<h3>Caso 3. Los mismos patrones dentro de .NET</h3>
+<p>El framework que usa SAGE aplica estos patrones en sus propias APIs, lo que muestra su utilidad en un proyecto de gran escala:</p>
+<ul>
+  <li><b>Builder:</b> toda aplicación ASP.NET Core arranca con <code>WebApplication.CreateBuilder(args)</code>, que configura servicios, configuración y registro paso a paso antes de <code>builder.Build()</code>. También <code>StringBuilder</code> y <code>DbContextOptionsBuilder</code> de EF Core.</li>
+  <li><b>Abstract Factory:</b> <code>DbProviderFactory</code> de ADO.NET crea conexiones, comandos y parámetros de un mismo proveedor de base de datos (por ejemplo, SQL Server) sin que el código cliente nombre las clases concretas.</li>
+  <li><b>Singleton gestionado:</b> la duración <code>Singleton</code> del contenedor de inyección de dependencias, usada por el propio framework para servicios como la configuración y el registro de logs.</li>
+</ul>
+
+<h2>8. Conclusiones</h2>
+<ul>
+  <li>Tres patrones creacionales resuelven problemas reales de SAGE: Abstract Factory en el acceso al dispositivo, Builder en la simulación económica y Singleton en el control del relé del ESP32.</li>
+  <li>El de mayor impacto es Abstract Factory, porque permite desarrollar y probar toda la plataforma antes de tener el hardware, que es justamente el orden de trabajo elegido por el equipo.</li>
+  <li>En .NET varios patrones vienen resueltos por el lenguaje o el framework (por ejemplo, el contenedor de DI); conviene usar esos mecanismos antes que implementaciones manuales.</li>
+  <li>Tan importante como aplicar un patrón es saber cuándo no hacerlo: las entidades simples de SAGE se crean con constructores.</li>
+  <li>El impacto en la calidad se verificará durante los Sprints con las pruebas y métricas indicadas en cada caso de estudio.</li>
+</ul>
+
+<h2>9. Referencias</h2>
+<ul>
+  <li>Gamma, E., Helm, R., Johnson, R. y Vlissides, J. (1994). <i>Design Patterns: Elements of Reusable Object-Oriented Software</i>. Addison-Wesley.</li>
+  <li>Freeman, E. y Robson, E. (2020). <i>Head First Design Patterns</i> (2.ª ed.). O'Reilly Media.</li>
+  <li>Shvets, A. <i>Refactoring.Guru: Patrones creacionales</i>. https://refactoring.guru/es/design-patterns/creational-patterns</li>
+  <li>Microsoft. <i>Inserción de dependencias en ASP.NET Core</i> (duraciones de servicio). https://learn.microsoft.com/aspnet/core/fundamentals/dependency-injection</li>
+  <li>ISO/IEC 25010:2023. <i>Systems and software Quality Requirements and Evaluation (SQuaRE): Product quality model</i>.</li>
+  <li>Equipo SAGE (2026). <i>Especificación de Requisitos de Software, versión 2.0</i> y modelo UML del proyecto (StarUML).</li>
+</ul>
+
+<script>
+// Diagramas de clases simplificados (UML) dibujados en SVG
+function uml(id, W, nodes, edges) {
+  const NS = 'http://www.w3.org/2000/svg', svg = document.getElementById(id), LH = 13;
+  const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; };
+  let H = 0; const by = {};
+  nodes.forEach(n => { n.w = n.w || 150; n.hh = 20 + (n.st ? 11 : 0); n.h = n.hh + (n.m || []).length * LH + 6; by[n.id] = n; H = Math.max(H, n.y + n.h); });
+  H += 6;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.innerHTML = `<defs><marker id="${id}t" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto"><path d="M1,1 L11,6 L1,11 Z" fill="#fff" stroke="#333"/></marker>
+    <marker id="${id}a" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="9" markerHeight="9" orient="auto"><path d="M1,1 L11,6 L1,11" fill="none" stroke="#333" stroke-width="1.4"/></marker></defs>`;
+  const c = n => [n.x + n.w / 2, n.y + n.h / 2];
+  const clip = (n, p) => { const [cx, cy] = c(n), dx = p[0] - cx, dy = p[1] - cy; const t = Math.min(dx ? n.w / 2 / Math.abs(dx) : 1e9, dy ? n.h / 2 / Math.abs(dy) : 1e9); return [cx + dx * t, cy + dy * t]; };
+  edges.forEach(([f, t, k, lab, bend]) => {
+    const a = by[f], b = by[t], ca = c(a), cb = c(b);
+    const ctl = bend ? [(ca[0] + cb[0]) / 2, Math.max(ca[1], cb[1]) + bend] : null;
+    const s = clip(a, ctl || cb), e = clip(b, ctl || ca);
+    const d = ctl ? `M${s} Q${ctl} ${e}` : `M${s} L${e}`;
+    el('path', { d, fill: 'none', stroke: '#333', 'stroke-width': 1.1, 'stroke-dasharray': (k === 'impl' || k === 'dep') ? '5 3' : '', 'marker-end': `url(#${id}${k === 'impl' || k === 'inh' ? 't' : 'a'})` });
+    if (lab) { const m = ctl ? [0.25 * s[0] + 0.5 * ctl[0] + 0.25 * e[0], 0.25 * s[1] + 0.5 * ctl[1] + 0.25 * e[1]] : [(s[0] + e[0]) / 2, (s[1] + e[1]) / 2];
+      const tx = el('text', { x: m[0] + 4, y: m[1] - 3, 'font-size': 9.5, fill: '#9e0044', 'font-style': 'italic' }, lab); }
+  });
+  nodes.forEach(n => {
+    el('rect', { x: n.x, y: n.y, width: n.w, height: n.h, fill: n.fill || '#fdf5f9', stroke: '#9e0044', 'stroke-width': 1.2 });
+    if (n.st) el('text', { x: n.x + n.w / 2, y: n.y + 11, 'text-anchor': 'middle', 'font-size': 9 }, n.st);
+    el('text', { x: n.x + n.w / 2, y: n.y + n.hh - 6, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 'bold', 'font-style': n.abs ? 'italic' : 'normal' }, n.t);
+    if (n.m && n.m.length) {
+      el('line', { x1: n.x, y1: n.y + n.hh, x2: n.x + n.w, y2: n.y + n.hh, stroke: '#9e0044' });
+      n.m.forEach((m, i) => { const u = m.startsWith('_'); el('text', { x: n.x + 5, y: n.y + n.hh + 12 + i * LH, 'font-size': 9.5, 'font-family': 'Consolas, monospace', 'text-decoration': u ? 'underline' : '' }, u ? m.slice(1) : m); });
+    }
+  });
+}
+
+uml('d-af', 680, [
+  { id: 'f', x: 215, y: 6, w: 250, t: 'IFabricaDispositivo', st: '«interface»', m: ['+ CrearLector(): ILectorTelemetria', '+ CrearCanalOrdenes(): ICanalOrdenes'] },
+  { id: 'fr', x: 75, y: 125, w: 180, t: 'FabricaDispositivoReal' },
+  { id: 'fs', x: 425, y: 125, w: 190, t: 'FabricaDispositivoSimulado' },
+  { id: 'lb', x: 5, y: 225, w: 160, t: 'LectorTelemetriaBD', st: 'ILectorTelemetria' },
+  { id: 'cb', x: 175, y: 225, w: 155, t: 'CanalOrdenesBD', st: 'ICanalOrdenes' },
+  { id: 'ls', x: 345, y: 225, w: 170, t: 'LectorTelemetriaSimulado', st: 'ILectorTelemetria' },
+  { id: 'cs', x: 525, y: 225, w: 150, t: 'CanalOrdenesSimulado', st: 'ICanalOrdenes' },
+], [['fr', 'f', 'impl'], ['fs', 'f', 'impl'], ['fr', 'lb', 'dep', '«crea»'], ['fr', 'cb', 'dep'], ['fs', 'ls', 'dep', '«crea»'], ['fs', 'cs', 'dep']]);
+
+uml('d-bu', 680, [
+  { id: 'd', x: 5, y: 35, w: 165, t: 'ControladorSimulacion', st: 'director', m: ['+ Simular()'] },
+  { id: 'b', x: 230, y: 6, w: 205, t: 'SimulacionBuilder', m: ['+ ParaEmpresa(e)', '+ ConConsumo(lista)', '+ ConParametros(p)', '+ ConPotencia(kWp)', '+ ConHorizonte(años)', '+ Construir(): Simulacion'] },
+  { id: 's', x: 495, y: 20, w: 180, t: 'Simulacion', st: 'producto', m: ['costoRed, costoSolar', 'costoMixto', 'recuperacionAnios', 'advertencias'] },
+  { id: 'c', x: 165, y: 190, w: 160, t: 'ConsumoFacturado', m: ['periodo, consumoKWh'] },
+  { id: 'p', x: 360, y: 190, w: 170, t: 'ParametrosEconomicos', m: ['version, tarifaBsKWh'] },
+], [['d', 'b', 'assoc', '«usa»'], ['b', 's', 'dep', '«crea»'], ['b', 'c', 'assoc'], ['b', 'p', 'assoc']]);
+
+uml('d-si', 680, [
+  { id: 'cf', x: 5, y: 6, w: 210, t: 'ControladorFuente', st: 'firmware · «singleton»', m: ['_- unica: ControladorFuente', '- modo, fuenteActual', '- ControladorFuente()', '_+ instancia(): ControladorFuente&', '+ conmutarA(f)'] },
+  { id: 'sf', x: 30, y: 160, w: 160, t: 'SelectorFuente', st: 'relé (único)', m: ['+ conmutarA(f)'] },
+  { id: 'ev', x: 330, y: 50, w: 210, t: 'EstadoDispositivosEnVivo', st: 'plataforma · AddSingleton', m: ['- estados: ConcurrentDictionary', '+ Actualizar(id, e)', '+ Obtener(id)'] },
+  { id: 'ct', x: 260, y: 175, w: 165, t: 'ControladorTelemetria' },
+  { id: 'cm', x: 450, y: 175, w: 165, t: 'ControladorMonitoreo' },
+], [['cf', 'sf', 'assoc'], ['ct', 'ev', 'dep', '«escribe»'], ['cm', 'ev', 'dep', '«lee»']]);
+</script>
+</body>
+</html>

@@ -2,8 +2,9 @@
 
 Plataforma web (Blazor, .NET 10, SQL Server) y dispositivo IoT (ESP32) para medir y controlar las fuentes de energía solar y red de una empresa.
 
-- **Sprint 1 en curso:** ver [GUIA_TRABAJO_SPRINT_1.md](GUIA_TRABAJO_SPRINT_1.md) (orden: Harold → Matías → Ethan).
-- **Documentación:** carpeta [docs/](docs/) (ERS 2.0, diseño técnico, modelado y casos de uso).
+- **Sprints 2 y 3 en curso:** ver [GUIA_TRABAJO_SPRINT_2_3.md](GUIA_TRABAJO_SPRINT_2_3.md) (orden: Harold → Matías → Ethan → Mateo).
+- Sprint 1 (cerrado): [GUIA_TRABAJO_SPRINT_1.md](GUIA_TRABAJO_SPRINT_1.md).
+- **Documentación:** carpeta [docs/](docs/) (ERS 2.1, diseño técnico, modelado, casos de uso y documentos de patrones).
 
 ## Requisitos
 

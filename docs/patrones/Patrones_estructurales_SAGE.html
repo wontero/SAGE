@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Patrones estructurales SAGE</title>
+<style>
+  @page { size: Letter; margin: 2.2cm 2cm; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #111; line-height: 1.4; margin: 0; }
+  h1 { font-size: 15pt; margin: 0 0 10px; }
+  h2 { font-size: 13pt; margin: 22px 0 8px; border-bottom: 2px solid #9e0044; padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 16px 0 6px; page-break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 10px 0 4px; color: #9e0044; page-break-after: avoid; }
+  p { margin: 6px 0; text-align: justify; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; }
+  th, td { border: 1px solid #c9c9c9; padding: 5px 6px; vertical-align: top; }
+  th { background: #ececec; text-align: center; }
+  td.c { text-align: center; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  .cover { height: 23cm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-after: always; }
+  .cover h1 { font-size: 22pt; margin-bottom: 18px; }
+  .cover img { width: 6.5cm; margin-bottom: 18px; }
+  .cover .t { font-size: 15pt; font-weight: bold; margin: 4px 0; }
+  .cover .s { font-size: 12pt; font-weight: bold; margin: 7px 0; }
+  .brk { page-break-before: always; }
+  .small { font-size: 9pt; color: #444; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 8.6pt; line-height: 1.32; background: #f6f6f6; border-left: 3px solid #9e0044; padding: 7px 9px; margin: 6px 0 10px; white-space: pre-wrap; page-break-inside: avoid; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; }
+  figure { margin: 8px 0 12px; text-align: center; page-break-inside: avoid; }
+  figcaption { font-size: 9pt; color: #444; margin-top: 3px; }
+  .ficha td:first-child { width: 22%; font-weight: bold; background: #fafafa; }
+  .nota { border: 1px solid #e0b4c8; background: #fbf3f7; padding: 6px 9px; font-size: 9.5pt; margin: 8px 0; page-break-inside: avoid; }
+  .toc { list-style: none; margin-left: 0; }
+  .toc li { margin: 3px 0; }
+  .toc ul { list-style: none; margin-left: 18px; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>UNIVERSIDAD PRIVADA DEL VALLE</h1>
+  <img src="logo.png" alt="Logo Univalle">
+  <div class="t">Proyecto SAGE</div>
+  <div class="t">Patrones de diseño estructurales</div>
+  <div class="s">Aplicación al Sistema de Análisis y Gestión Energética</div>
+  <div class="s" style="margin-top:22px">Alumnos:</div>
+  <div class="s">Mateo Montero Gonzales</div>
+  <div class="s">Harold Henry Chuve Nava</div>
+  <div class="s">Matias Nahim Justiniano Suarez</div>
+  <div class="s">Ethan Matias Cordova Rodriguez</div>
+  <div class="s" style="margin-top:22px">Santa Cruz, noviembre de 2026</div>
+</section>
+
+<h2>Índice</h2>
+<ul class="toc">
+  <li>1. Introducción y contexto técnico de SAGE</li>
+  <li>2. Identificación y clasificación de los patrones estructurales</li>
+  <li>3. Patrones aplicados a SAGE
+    <ul>
+      <li>3.1. Adapter</li>
+      <li>3.2. Facade</li>
+      <li>3.3. Proxy</li>
+    </ul>
+  </li>
+  <li>4. Patrones descartados</li>
+  <li>5. Evaluación de escenarios de uso en SAGE</li>
+  <li>6. Comparación de patrones</li>
+  <li>7. Mejores prácticas de selección e implementación</li>
+  <li>8. Casos de estudio</li>
+  <li>9. Conclusiones</li>
+  <li>10. Referencias</li>
+</ul>
+
+<h2>1. Introducción y contexto técnico de SAGE</h2>
+<p>SAGE (Sistema de Análisis y Gestión Energética) es una plataforma web unida a un dispositivo IoT. El dispositivo, basado en un ESP32 con dos sensores INA219 y un selector de fuente, mide tensión, corriente, potencia y energía de la rama solar y de la red, y decide qué fuente alimenta la carga (modos Solar, Red y Automático). Cada 2 segundos envía sus mediciones a la plataforma por <code>POST /api/dispositivo/telemetria</code>, autenticado con un token propio, y recibe como respuesta la orden pendiente, si la hay. La plataforma guarda las mediciones, genera alertas, registra el consumo facturado y simula escenarios económicos. Cada empresa ve solo sus propios datos (RNF01).</p>
+<p>El stack es <b>Blazor Web App sobre .NET 10</b> (C#), con MudBlazor en la interfaz, <b>Entity Framework Core</b> sobre <b>SQL Server Express 2022</b> y <b>ASP.NET Core Identity</b> con los roles Operador SAGE, Administrador, Técnico y Consulta (el Administrador puede tener varias empresas y trabaja sobre una empresa activa). El firmware del ESP32 está en Arduino (C++). Los ejemplos de este documento están en C#.</p>
+<p>Los patrones estructurales resuelven <i>cómo se combinan clases y objetos para formar estructuras mayores</i>: cómo hacer que encajen interfaces que no coinciden, cómo ocultar un subsistema detrás de una entrada simple o cómo controlar el acceso a un objeto sin que el cliente lo note. Este documento identifica y clasifica los siete patrones estructurales clásicos (Gamma et al., 1994) y aplica a SAGE los tres que resuelven problemas reales del proyecto: <b>Adapter</b>, <b>Facade</b> y <b>Proxy</b>, y explica por qué se descartaron los otros cuatro. Los tres aplicados trabajan sobre la misma ruta, la que va del dispositivo a la pantalla, y se apoyan en las clases ya definidas en el documento de patrones creacionales (<code>IFabricaDispositivo</code>, <code>ICanalOrdenes</code>, <code>EstadoDispositivosEnVivo</code>).</p>
+<div class="nota"><b>Alcance.</b> SAGE está en desarrollo (Scrum, Sprints 0–3, del 23/10 al 12/12 de 2026). El Sprint 1 dejó la plataforma base, la API de telemetría y el simulador de consola. El dispositivo físico se integra en el Sprint 2. Las aplicaciones que se describen son decisiones de diseño sobre ese modelo. El impacto en la calidad se presenta como <i>impacto esperado</i>, junto con la forma de medirlo, y no como un resultado ya observado.</div>
+
+<h2>2. Identificación y clasificación de los patrones estructurales</h2>
+<p>El catálogo de Gamma, Helm, Johnson y Vlissides (el "GoF") define siete patrones estructurales. Igual que en los creacionales, se clasifican con dos criterios: el <b>ámbito</b> (si la estructura se resuelve con herencia entre clases o con composición de objetos) y la <b>pregunta</b> que responden.</p>
+<table>
+  <thead><tr><th>Patrón</th><th>Ámbito</th><th>Pregunta que responde</th><th>Intención</th></tr></thead>
+  <tbody>
+    <tr><td><b>Adapter</b></td><td class="c">Clase y objeto</td><td>¿Cómo uso una clase cuya interfaz no es la que espero?</td><td>Convertir la interfaz de una clase en otra que el cliente espera, para que trabajen juntas clases incompatibles.</td></tr>
+    <tr><td><b>Bridge</b></td><td class="c">Objeto</td><td>¿Cómo hago variar una abstracción y su implementación por separado?</td><td>Separar una abstracción de su implementación para que ambas evolucionen de forma independiente.</td></tr>
+    <tr><td><b>Composite</b></td><td class="c">Objeto</td><td>¿Cómo trato igual a un elemento y a un grupo de elementos?</td><td>Componer objetos en estructuras de árbol y tratar a los objetos individuales y a los compuestos de manera uniforme.</td></tr>
+    <tr><td><b>Decorator</b></td><td class="c">Objeto</td><td>¿Cómo agrego responsabilidades sin crear subclases?</td><td>Añadir comportamiento a un objeto de forma dinámica envolviéndolo en otro con la misma interfaz.</td></tr>
+    <tr><td><b>Facade</b></td><td class="c">Objeto</td><td>¿Cómo simplifico el uso de un subsistema complejo?</td><td>Ofrecer una interfaz única y simple para un conjunto de interfaces de un subsistema.</td></tr>
+    <tr><td><b>Flyweight</b></td><td class="c">Objeto</td><td>¿Cómo manejo muchísimos objetos pequeños sin agotar la memoria?</td><td>Compartir el estado común de muchos objetos de grano fino y dejar fuera solo el estado que cambia.</td></tr>
+    <tr><td><b>Proxy</b></td><td class="c">Objeto</td><td>¿Cómo controlo el acceso a un objeto?</td><td>Proporcionar un sustituto con la misma interfaz que controla el acceso al objeto real (protección, carga diferida, caché, acceso remoto).</td></tr>
+  </tbody>
+</table>
+<p>Una segunda forma de agruparlos es por la <b>relación entre la interfaz del envoltorio y la del objeto envuelto</b>. <b>Adapter</b> ofrece una interfaz <i>distinta</i> a la del objeto que envuelve. <b>Decorator</b> y <b>Proxy</b> ofrecen la <i>misma</i> interfaz: el primero agrega comportamiento y el segundo controla el acceso. <b>Facade</b> ofrece una interfaz <i>más simple</i> que la de todo un subsistema. Los otros tres se ocupan de la forma de la estructura: <b>Bridge</b> la divide en dos jerarquías independientes, <b>Composite</b> la organiza en árbol y <b>Flyweight</b> la comparte para ahorrar memoria. Adapter es el único que admite las dos variantes de ámbito: por herencia (adaptador de clase) o por composición (adaptador de objeto). En C#, sin herencia múltiple, se usa casi siempre la de objeto.</p>
+
+<h2>3. Patrones aplicados a SAGE</h2>
+<p>Se aplican los tres patrones que responden a una necesidad concreta de SAGE. Cada uno se presenta con una ficha (caso de uso, problema concreto, solución y participantes), un diagrama de clases simplificado y un fragmento de código. Los nombres de controladores y entidades salen del modelo UML de SAGE. Las clases nuevas que introduce cada patrón se indican en el texto.</p>
+<figure><svg id="d-ruta"></svg><figcaption>Figura 1. Dónde actúa cada patrón en la ruta del dispositivo a la pantalla.</figcaption></figure>
+
+<h3>3.1. Adapter</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>CU13 Sincronizar telemetría y órdenes (<code>ControladorTelemetria</code>, entidad <code>Medicion</code>).</td></tr>
+  <tr><td>Problema</td><td>El ESP32 envía un JSON con el formato fijado en el contrato del dispositivo, y el firmware no puede cambiar cada vez que cambia la plataforma. Ese formato no coincide con el modelo de dominio: los nombres están en <i>snake_case</i> (<code>boot_id</code>, <code>wh_acum</code>), la rama de la red se llama <code>"cargador"</code> por razones del hardware, los modos llegan como texto (<code>"AUTO"</code>) y, si el reloj del dispositivo no se sincronizó por NTP (<code>ts_valida = false</code>), la hora que manda no sirve y hay que usar la del servidor. Si cada parte de la plataforma leyera el JSON directamente, esas reglas de traducción quedarían repetidas por todo el código, y la palabra "cargador" terminaría en las pantallas.</td></tr>
+  <tr><td>Solución</td><td>Un adaptador de objeto, <code>AdaptadorTelemetriaEsp32</code>, implementa la interfaz que la plataforma espera (<code>IAdaptadorTelemetria</code>) y traduce el paquete del contrato (<code>TelemetriaEsp32Dto</code>) a una <code>Medicion</code> del dominio: renombra los campos, convierte <code>"cargador"</code> en <code>Fuente.Red</code>, convierte los textos a enumeraciones y aplica la regla de la hora. Toda la traducción queda en una sola clase. Si el contrato cambia de versión, o si más adelante el paquete llega por MQTT, se agrega otro adaptador y el resto de la plataforma no se entera.</td></tr>
+  <tr><td>Participantes</td><td>Objetivo (<i>target</i>): <code>IAdaptadorTelemetria</code> · Adaptador: <code>AdaptadorTelemetriaEsp32</code> · Adaptado: <code>TelemetriaEsp32Dto</code> (formato del contrato) · Cliente: <code>FachadaSincronizacion</code> (sección 3.2) · Resultado: <code>Medicion</code>.</td></tr>
+</table>
+<figure><svg id="d-ad"></svg><figcaption>Figura 2. Adapter entre el contrato del ESP32 y el modelo de dominio.</figcaption></figure>
+<pre>// Formato del contrato, tal como lo envía el firmware (solo los campos principales)
+public record LecturaRamaDto(
+    [property: JsonPropertyName("v")] decimal V,
+    [property: JsonPropertyName("i_ma")] decimal IMa,
+    [property: JsonPropertyName("p_mw")] decimal PMw,
+    [property: JsonPropertyName("wh_acum")] decimal WhAcum);
+
+public record TelemetriaEsp32Dto(
+    [property: JsonPropertyName("boot_id")] int BootId,
+    [property: JsonPropertyName("seq")] long Seq,
+    [property: JsonPropertyName("ts")] DateTime Ts,
+    [property: JsonPropertyName("ts_valida")] bool TsValida,
+    [property: JsonPropertyName("modo")] string Modo,
+    [property: JsonPropertyName("fuente_seleccionada")] string FuenteSeleccionada,
+    [property: JsonPropertyName("solar")] LecturaRamaDto Solar,
+    [property: JsonPropertyName("cargador")] LecturaRamaDto Cargador);
+
+public interface IAdaptadorTelemetria
+{
+    Medicion AMedicion(TelemetriaEsp32Dto paquete, int dispositivoId, DateTime horaServidor);
+}
+
+public class AdaptadorTelemetriaEsp32 : IAdaptadorTelemetria
+{
+    public Medicion AMedicion(TelemetriaEsp32Dto p, int dispositivoId, DateTime horaServidor) =&gt; new()
+    {
+        DispositivoId = dispositivoId, BootId = p.BootId, Seq = p.Seq,
+        Ts = p.TsValida ? p.Ts : horaServidor,          // sin NTP: hora del servidor, marcada aproximada
+        TsValida = p.TsValida, TsServidor = horaServidor,
+        VSolar = p.Solar.V, ISolarMa = p.Solar.IMa, PSolarMw = p.Solar.PMw, WhSolarAcum = p.Solar.WhAcum,
+        VRed = p.Cargador.V, IRedMa = p.Cargador.IMa, PRedMw = p.Cargador.PMw, WhRedAcum = p.Cargador.WhAcum,
+        Modo = p.Modo switch
+        {
+            "AUTO" =&gt; ModoFuente.Automatico, "SOLAR" =&gt; ModoFuente.Solar, "CARGADOR" =&gt; ModoFuente.Red,
+            _ =&gt; throw new FormatException($"Modo desconocido: {p.Modo}")
+        },
+        Fuente = p.FuenteSeleccionada switch
+        {
+            "SOLAR" =&gt; Fuente.Solar, "CARGADOR" =&gt; Fuente.Red,
+            _ =&gt; throw new FormatException($"Fuente desconocida: {p.FuenteSeleccionada}")
+        }
+    };
+}</pre>
+<p>El adaptador no toca la base de datos ni la red: es una traducción pura, y por eso se prueba con un JSON de ejemplo y sin infraestructura. Un valor desconocido no se adivina. Se rechaza con un error de formato, que el endpoint convierte en una respuesta 400.</p>
+
+<h3>3.2. Facade</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>CU13 Sincronizar telemetría y órdenes (<code>ControladorTelemetria</code>). Lo usan tanto el simulador de consola del Sprint 1 como el ESP32.</td></tr>
+  <tr><td>Problema</td><td>Atender un solo envío del dispositivo exige siete pasos sobre partes distintas del sistema: autenticar el token comparando su hash, guardar la medición sin duplicar <code>(boot_id, seq)</code>, actualizar el último contacto y el estado del dispositivo, insertar los eventos de la cola, registrar el resultado de las órdenes, evaluar las alertas (y cerrar la de "sin conexión" si estaba abierta) y devolver la orden pendiente marcándola como entregada. Si el endpoint coordinara todo eso, quedaría acoplado a la base de datos, al adaptador, al servicio de alertas y al estado en vivo, y cualquier otra entrada futura (por ejemplo, MQTT) tendría que repetir la misma secuencia y en el mismo orden.</td></tr>
+  <tr><td>Solución</td><td><code>FachadaSincronizacion</code> ofrece un único método, <code>SincronizarAsync(token, paquete)</code>, que ejecuta los siete pasos en orden y los guarda con un solo <code>SaveChangesAsync</code>, es decir, en una sola transacción: o queda todo registrado o no queda nada. El endpoint se reduce a leer el token, llamar a la fachada y elegir la respuesta HTTP. Los subsistemas siguen siendo accesibles por separado. Por ejemplo, la pantalla de alertas usa <code>ServicioAlertas</code> sin pasar por la fachada.</td></tr>
+  <tr><td>Participantes</td><td>Fachada: <code>FachadaSincronizacion</code> · Subsistema: <code>SageDbContext</code>, <code>IAdaptadorTelemetria</code>, <code>ServicioAlertas</code>, <code>EstadoDispositivosEnVivo</code> (Singleton del documento de creacionales) · Cliente: <code>ControladorTelemetria</code> (endpoint <code>POST /api/dispositivo/telemetria</code>).</td></tr>
+</table>
+<figure><svg id="d-fa"></svg><figcaption>Figura 3. Facade sobre los pasos de la sincronización con el dispositivo.</figcaption></figure>
+<pre>public class FachadaSincronizacion(
+    SageDbContext db, IAdaptadorTelemetria adaptador, ServicioAlertas alertas,
+    EstadoDispositivosEnVivo enVivo, TimeProvider reloj)
+{
+    public async Task&lt;RespuestaSincronizacion?&gt; SincronizarAsync(string token, TelemetriaEsp32Dto paquete)
+    {
+        var dispositivo = await AutenticarAsync(token);          // 1. compara el SHA-256 del token
+        if (dispositivo is null) return null;                     //    el endpoint responde 401
+
+        var ahora = reloj.GetUtcNow().UtcDateTime;
+        var medicion = adaptador.AMedicion(paquete, dispositivo.Id, ahora);
+        if (!await YaRecibidaAsync(medicion)) db.Mediciones.Add(medicion);   // 2. sin duplicados
+        dispositivo.RegistrarContacto(medicion, ahora);           // 3. último contacto y estado
+        await RegistrarEventosAsync(dispositivo, paquete);        // 4. eventos de la cola
+        await ActualizarResultadosOrdenesAsync(paquete);          // 5. órdenes informadas
+        await alertas.EvaluarAsync(dispositivo, medicion);        // 6. alertas
+        var orden = await EntregarOrdenPendienteAsync(dispositivo, ahora);   // 7. pendiente → entregada
+
+        await db.SaveChangesAsync();                              // una sola transacción
+        enVivo.Actualizar(dispositivo.Id, EstadoDispositivo.Desde(medicion));
+        return new RespuestaSincronizacion(ahora, orden);
+    }
+    // AutenticarAsync, YaRecibidaAsync, RegistrarEventosAsync, ... son privados
+}
+
+// Endpoint: solo HTTP
+app.MapPost("/api/dispositivo/telemetria",
+    async (HttpRequest req, TelemetriaEsp32Dto paquete, FachadaSincronizacion fachada) =&gt;
+    {
+        var token = req.Headers.Authorization.ToString().Replace("Bearer ", "");
+        var r = await fachada.SincronizarAsync(token, paquete);
+        return r is null ? Results.Unauthorized() : Results.Ok(r);
+    });</pre>
+<p>La fachada se registra con duración <code>Scoped</code> porque usa el <code>DbContext</code>. Un servicio scoped sí puede depender de un Singleton como <code>EstadoDispositivosEnVivo</code>; lo que no se permite es lo contrario. El estado en vivo se actualiza <i>después</i> de guardar, para que las pantallas nunca muestren un dato que no quedó en la base.</p>
+
+<h3>3.3. Proxy</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>CU10 Monitorear dispositivo y CU11 Cambiar modo de fuente (<code>ControladorMonitoreo</code>, <code>ControladorOrdenes</code>). Requisito no funcional RNF01, aislamiento por empresa.</td></tr>
+  <tr><td>Problema</td><td>Un Técnico o un Administrador solo pueden leer y mandar órdenes a los dispositivos de <i>sus</i> empresas; un usuario de Consulta solo puede leer; el Operador SAGE no accede a los datos de energía de ninguna empresa. Ocultar en la interfaz los dispositivos ajenos no alcanza: basta con cambiar el id del dispositivo en una llamada para leer datos de otra empresa o, peor, conmutar su fuente. Si cada controlador hiciera su propia comprobación, bastaría con que uno la olvidara para abrir el hueco.</td></tr>
+  <tr><td>Solución</td><td>Un <b>proxy de protección</b>. <code>CanalOrdenesProtegido</code> implementa la misma interfaz <code>ICanalOrdenes</code> que el canal real. Antes de delegar, comprueba el rol del usuario y que el dispositivo pertenezca a una de sus empresas. Lo mismo hace <code>LectorTelemetriaProtegido</code> con <code>ILectorTelemetria</code>. Los controladores no cambian, porque siguen pidiendo un <code>ICanalOrdenes</code>. Lo único que cambia es la fábrica del documento de creacionales, que devuelve el objeto real envuelto en su proxy. Así no hay forma de obtener un canal sin protección.</td></tr>
+  <tr><td>Participantes</td><td>Sujeto: <code>ICanalOrdenes</code>, <code>ILectorTelemetria</code> · Sujeto real: <code>CanalOrdenesBD</code>, <code>LectorTelemetriaBD</code> · Proxy: <code>CanalOrdenesProtegido</code>, <code>LectorTelemetriaProtegido</code> · Datos de acceso: <code>IUsuarioActual</code> (rol y empresas del usuario, <code>PuedeVerEmpresa</code>) · Clientes: <code>ControladorOrdenes</code>, <code>ControladorMonitoreo</code>.</td></tr>
+</table>
+<figure><svg id="d-pr"></svg><figcaption>Figura 4. Proxy de protección para el aislamiento por empresa (RNF01).</figcaption></figure>
+<pre>public class CanalOrdenesProtegido(ICanalOrdenes real, IUsuarioActual usuario, SageDbContext db) : ICanalOrdenes
+{
+    public async Task&lt;Orden&gt; EnviarModoAsync(int dispositivoId, string modo)
+    {
+        if (!usuario.EnRol("Administrador") &amp;&amp; !usuario.EnRol("Tecnico"))
+            throw new UnauthorizedAccessException("Su rol no permite cambiar el modo de fuente.");
+
+        var empresaDelDispositivo = await db.Dispositivos
+            .Where(d =&gt; d.Id == dispositivoId).Select(d =&gt; d.EmpresaId).SingleAsync();
+        if (!usuario.PuedeVerEmpresa(empresaDelDispositivo))   // false también para el Operador SAGE
+            throw new UnauthorizedAccessException("El dispositivo no pertenece a su empresa activa.");
+
+        return await real.EnviarModoAsync(dispositivoId, modo);       // solo aquí llega al canal real
+    }
+}
+
+// En FabricaDispositivoReal (documento de patrones creacionales)
+public ICanalOrdenes CrearCanalOrdenes() =&gt; new CanalOrdenesProtegido(new CanalOrdenesBD(db), usuario, db);
+public ILectorTelemetria CrearLector()   =&gt; new LectorTelemetriaProtegido(new LectorTelemetriaBD(db), usuario, db);</pre>
+<p>El proxy es la barrera en la lógica de la aplicación. Como segunda barrera, en la base de datos, se recomienda un filtro global de EF Core (<code>HasQueryFilter</code>) por <code>EmpresaId</code> en las entidades de cada empresa. Si alguien escribe una consulta nueva fuera del proxy, el filtro igual deja afuera los datos ajenos. Los dos mecanismos se complementan: el filtro restringe lo que se lee y el proxy restringe además las acciones, como enviar órdenes.</p>
+
+<h2>4. Patrones descartados</h2>
+<p>Los otros cuatro patrones estructurales se evaluaron con el mismo criterio: si existe hoy en SAGE un problema que el patrón resuelva mejor que una solución simple. En los cuatro casos la respuesta fue no. Para cada uno se indica dónde se consideró, por qué se descartó y en qué situación convendría reconsiderarlo.</p>
+<table>
+  <thead><tr><th style="width:11%">Patrón</th><th style="width:25%">Dónde se consideró</th><th style="width:36%">Por qué se descartó</th><th>Cuándo se reconsideraría</th></tr></thead>
+  <tbody>
+    <tr><td><b>Bridge</b></td><td>CU09 Exportar reporte: dos tipos de reporte (historial y simulación) por dos formatos (PDF y Excel).</td><td>Son solo cuatro combinaciones y el caso de uso tiene prioridad <i>Could</i>. Una clase por formato que recibe los datos ya armados alcanza. Bridge obligaría a mantener dos jerarquías (reportes e implementaciones de formato) para un problema que todavía no creció.</td><td>Si crecieran a la vez las dos dimensiones: nuevos reportes (por dispositivo, de alertas, de ensayos) y nuevos formatos (CSV, envío por correo). Ahí la cantidad de combinaciones sí justificaría separarlas.</td></tr>
+    <tr><td><b>Composite</b></td><td>Totales de energía y consumo por empresa, sumando los de sus dispositivos.</td><td>El modelo es plano: una empresa tiene dispositivos y un dispositivo tiene dos ramas (solar y red). No hay un árbol de profundidad variable. Una suma con <code>GROUP BY</code> en SQL Server resuelve los totales, y más rápido que recorrer objetos en memoria.</td><td>Si una empresa se organizara en sucursales, edificios y tableros con medidores anidados, y hubiera que sumar o mostrar cualquier nivel del árbol de la misma forma.</td></tr>
+    <tr><td><b>Decorator</b></td><td>Agregar registro de auditoría a <code>ICanalOrdenes</code> (quién cambió el modo y cuándo), o combinar canales de aviso de alertas.</td><td>La auditoría ya la da el modelo: cada <code>Orden</code> guarda usuario, fecha de creación, entrega y resultado. El registro técnico lo resuelven <code>ILogger</code> y el middleware de ASP.NET Core. Las alertas solo se muestran en pantalla. Un envoltorio más sobre el proxy agregaría una capa sin función nueva.</td><td>Si las alertas se enviaran por varios canales combinables (pantalla, correo, WhatsApp) según la empresa, o si hiciera falta sumar comportamientos opcionales a las órdenes (reintentos, confirmación doble).</td></tr>
+    <tr><td><b>Flyweight</b></td><td>Volumen de mediciones: un envío cada 2 s son unas 43&nbsp;200 mediciones por día por dispositivo.</td><td>Las mediciones no se mantienen en memoria: se guardan en SQL Server y se consultan paginadas o agregadas. Los datos que se repiten (modo, fuente) ya son enumeraciones, que no ocupan objetos aparte. No hay un problema de memoria que resolver.</td><td>Solo si la plataforma tuviera que mantener en memoria, al mismo tiempo, grandes cantidades de objetos con estado repetido, por ejemplo para dibujar en el servidor gráficos con cientos de miles de puntos.</td></tr>
+  </tbody>
+</table>
+<p>Descartar un patrón no es una omisión: es una decisión de diseño. Cada patrón agrega clases e indirección, y ese costo solo se justifica si resuelve un problema presente. Las condiciones de la última columna sirven para revisar la decisión si SAGE crece.</p>
+
+<h2>5. Evaluación de escenarios de uso en SAGE</h2>
+<p>La tabla recorre los escenarios de SAGE donde se plantea cómo conectar o envolver objetos. Incluye escenarios donde la conclusión es <b>no usar ningún patrón</b>, porque un patrón sin un problema real que resolver solo agrega clases.</p>
+<table>
+  <thead><tr><th style="width:24%">Escenario</th><th style="width:15%">CU / clases</th><th style="width:14%">Patrón</th><th>Justificación y alternativa descartada</th></tr></thead>
+  <tbody>
+    <tr><td>Recibir el paquete JSON del ESP32</td><td>CU13, <code>Medicion</code></td><td>Adapter</td><td>El formato del firmware no coincide con el dominio y no debe cambiar con la plataforma. Se descartó usar la <code>Medicion</code> directamente como objeto de deserialización, porque ataría la base de datos al contrato.</td></tr>
+    <tr><td>Recibir telemetría por MQTT o con un contrato v2</td><td>CU13 (futuro)</td><td>Adapter</td><td>El diseño ya prevé reutilizar el contrato como mensaje MQTT. Se agrega un adaptador nuevo y no se toca la lógica.</td></tr>
+    <tr><td>Procesar un envío completo del dispositivo</td><td>CU13, <code>ControladorTelemetria</code></td><td>Facade</td><td>Siete pasos sobre cuatro subsistemas, en orden y en una transacción. Se descartó dejar la secuencia dentro del endpoint.</td></tr>
+    <tr><td>Simulador de consola y ESP32 usando la misma entrada</td><td>CU13</td><td>Facade</td><td>Los dos llegan al mismo método. Lo que se prueba con el simulador en el Sprint 1 vale para el hardware en el Sprint 2.</td></tr>
+    <tr><td>Cambiar el modo de fuente de un dispositivo</td><td>CU11, <code>ControladorOrdenes</code></td><td>Proxy (protección)</td><td>Es una acción sobre hardware real de un cliente. La comprobación de rol y empresa no puede depender de que cada controlador la recuerde.</td></tr>
+    <tr><td>Ver mediciones de un dispositivo</td><td>CU10, <code>ControladorMonitoreo</code></td><td>Proxy (protección)</td><td>Es la misma regla de RNF01, aplicada a la lectura. Se combina con el filtro global de EF Core.</td></tr>
+    <tr><td>Importar facturas desde Excel</td><td>CU05, <code>ConsumoFacturado</code></td><td>Ninguno</td><td>Hay un único formato de plantilla y la lectura con ClosedXML más la validación por fila alcanzan. Si apareciera un segundo formato (CSV de la distribuidora), ahí convendría un adaptador.</td></tr>
+    <tr><td>Exportar reporte en PDF o Excel</td><td>CU09</td><td>Ninguno (por ahora)</td><td>Son dos formatos y un caso de prioridad <i>Could</i>. Se resuelve con una clase por formato. Solo si crecieran a la vez los tipos de reporte y los formatos convendría separar las dos jerarquías.</td></tr>
+    <tr><td>Mostrar el historial de mediciones</td><td>CU06</td><td>Ninguno</td><td>El volumen se maneja en la consulta (proyección y paginación en SQL Server), no compartiendo objetos en memoria.</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Comparación de patrones</h2>
+<p>Se comparan los tres patrones aplicados con los criterios pedidos (eficiencia, mantenibilidad y aplicabilidad) más dos que influyen en la decisión: la complejidad que agregan y la facilidad para probar el código.</p>
+<table>
+  <thead><tr><th>Criterio</th><th>Adapter</th><th>Facade</th><th>Proxy (protección)</th></tr></thead>
+  <tbody>
+    <tr><td><b>Eficiencia en ejecución</b></td><td>Una copia del paquete por envío; despreciable frente al <code>INSERT</code>.</td><td>Neutra o mejor: concentra todo en un único <code>SaveChanges</code> y evita idas y vueltas a la base.</td><td>Una consulta extra por acción para saber la empresa del dispositivo. Las órdenes son poco frecuentes; en lecturas se puede reutilizar el dato del dispositivo ya cargado.</td></tr>
+    <tr><td><b>Mantenibilidad</b></td><td>Alta: un cambio de contrato se resuelve en una sola clase.</td><td>Alta para los clientes. Riesgo: que crezca hasta ser una "clase que hace todo"; por eso los pasos delegan en servicios del subsistema.</td><td>Alta: la regla de seguridad está en un solo lugar. Riesgo: que alguien cree el objeto real sin pasar por la fábrica.</td></tr>
+    <tr><td><b>Aplicabilidad en SAGE</b></td><td>Entrada de datos del dispositivo (CU13).</td><td>Sincronización con el dispositivo (CU13).</td><td>Monitoreo y órdenes (CU10, CU11), RNF01.</td></tr>
+    <tr><td><b>Complejidad añadida</b></td><td>Baja: una interfaz y una clase.</td><td>Baja: una clase. Los subsistemas ya existían.</td><td>Media: un proxy por cada interfaz protegida, y conectarlo en la fábrica.</td></tr>
+    <tr><td><b>Testabilidad</b></td><td>Muy buena: es una función pura, que se prueba con un JSON de ejemplo.</td><td>Buena: se prueba de punta a punta con una base de pruebas y el simulador.</td><td>Muy buena: se prueba con un usuario falso de otra empresa y un canal real falso.</td></tr>
+  </tbody>
+</table>
+<p><b>Lectura de la comparación.</b> Ninguno de los tres cambia de forma apreciable el rendimiento de SAGE: el costo está en la red y en la base de datos, no en las capas de objetos. La decisión se toma por mantenibilidad, seguridad y testabilidad. Adapter y Facade son baratos y protegen a la plataforma de los cambios del hardware. Proxy es el que más estructura agrega, pero es el que protege el requisito más sensible del proyecto: que una empresa no vea ni controle los equipos de otra.</p>
+
+<h2>7. Mejores prácticas de selección e implementación</h2>
+<ol>
+  <li><b>Partir del problema, no del patrón.</b> Primero se identifica el problema concreto (una interfaz que no encaja, un subsistema difícil de usar, un acceso que hay que controlar) y después se busca el patrón que lo resuelve. Si no hay problema, no hay patrón: la importación de Excel y el historial no lo necesitan.</li>
+  <li><b>Distinguir patrones con estructura parecida por su intención.</b> Adapter, Decorator y Proxy envuelven un objeto. Si cambia la interfaz es Adapter; si se agrega comportamiento, Decorator; si se controla el acceso, Proxy. Nombrar bien la clase (<code>AdaptadorTelemetriaEsp32</code>, <code>CanalOrdenesProtegido</code>) deja clara la intención.</li>
+  <li><b>Adapter: el borde del sistema no entra al dominio.</b> Los DTO del contrato (con sus nombres <i>snake_case</i> y su "cargador") se quedan en la capa de API. Las entidades de EF Core no se usan como objetos de deserialización.</li>
+  <li><b>Adapter: no adivinar.</b> Un valor desconocido en el paquete se rechaza con 400, no se convierte en un valor por defecto que esconda un error del firmware.</li>
+  <li><b>Facade: simplificar sin encerrar.</b> La fachada cubre el caso de uso completo, pero los servicios del subsistema siguen siendo públicos para quien necesite uno solo (por ejemplo, la pantalla de alertas).</li>
+  <li><b>Facade: un caso de uso por fachada.</b> Si empieza a atender casos de uso distintos, se divide, para que no termine siendo una clase que hace todo.</li>
+  <li><b>Proxy: hacer imposible saltarlo.</b> El objeto real se crea solo dentro de la fábrica y siempre envuelto. Los controladores dependen de la interfaz, nunca de <code>CanalOrdenesBD</code>.</li>
+  <li><b>Seguridad en dos capas.</b> El proxy en la lógica más el filtro global de EF Core en los datos. Lo que muestra o esconde la interfaz es comodidad, no seguridad.</li>
+  <li><b>Usar lo que ya da .NET.</b> Antes de escribir un patrón a mano, revisar si el framework lo resuelve: convertidores de valores de EF Core, <code>[Authorize]</code> y políticas para el acceso por rol, el contenedor de inyección de dependencias para conectar proxies y fachadas.</li>
+  <li><b>Probar cada envoltorio.</b> El adaptador, con JSON válidos e inválidos. La fachada, con un envío duplicado (no debe crear dos mediciones) y uno con token inválido (no debe guardar nada). El proxy, con un usuario de otra empresa y con uno de Consulta.</li>
+</ol>
+
+<h2>8. Casos de estudio</h2>
+<p>Los casos 1 y 2 son casos de diseño dentro de SAGE. Para cada uno se describen la situación, la aplicación del patrón, el impacto esperado en la calidad según las características de ISO/IEC 25010 y la forma de verificarlo durante los Sprints. El caso 3 muestra los mismos patrones dentro del framework que usa el proyecto.</p>
+
+<h3>Caso 1. Del simulador al ESP32 sin tocar la plataforma (Adapter + Facade)</h3>
+<p><b>Situación.</b> En el Sprint 1 la telemetría llega desde un simulador de consola. En el Sprint 2 llega desde el ESP32 real, con datos más irregulares: reinicios (<code>boot_id</code> nuevo), envíos repetidos tras perder el Wi-Fi y horas sin sincronizar. Si la lógica estuviera repartida entre el endpoint y las pantallas, cada una de estas situaciones obligaría a tocar varias partes.</p>
+<p><b>Aplicación.</b> El adaptador concentra la traducción y la regla de la hora (sección 3.1). La fachada concentra la secuencia, los duplicados y la transacción (sección 3.2). El simulador y el ESP32 envían el mismo contrato al mismo método.</p>
+<p><b>Impacto esperado.</b> <i>Mantenibilidad (modificabilidad):</i> el paso al hardware real no cambia la plataforma. <i>Fiabilidad:</i> un envío repetido no duplica mediciones y un error a mitad del proceso no deja datos a medias. <i>Compatibilidad (interoperabilidad):</i> un nuevo canal, como MQTT, se agrega con un adaptador.</p>
+<p><b>Cómo se verifica.</b> Al integrar el ESP32 en el Sprint 2, contar los archivos de la plataforma que se modifican (objetivo: ninguno fuera de la configuración). Además, una prueba que envía dos veces el mismo <code>(boot_id, seq)</code> y comprueba que existe una sola medición.</p>
+
+<h3>Caso 2. Aislamiento entre empresas (Proxy)</h3>
+<p><b>Situación.</b> SAGE atiende a varias empresas en la misma base de datos. Que un Técnico de la empresa B pueda conmutar la fuente de un equipo de la empresa A sería un fallo de seguridad grave, con efecto físico sobre la instalación de un cliente.</p>
+<p><b>Aplicación.</b> <code>CanalOrdenesProtegido</code> y <code>LectorTelemetriaProtegido</code>, creados siempre por la fábrica (sección 3.3), más el filtro global de EF Core.</p>
+<p><b>Impacto esperado.</b> <i>Seguridad (confidencialidad e integridad):</i> ninguna empresa lee ni controla datos de otra, aunque se manipule el id en la llamada. <i>Mantenibilidad:</i> la regla vive en un solo lugar. <i>Testabilidad:</i> la regla se prueba sin interfaz.</p>
+<p><b>Cómo se verifica.</b> Pruebas automáticas con tres usuarios: un Técnico de la empresa B que intenta enviar una orden a un dispositivo de la empresa A (debe recibir un rechazo y no se debe crear ninguna orden), un usuario de Consulta que intenta enviar una orden (rechazo) un Administrador de la empresa A (permitido) y el Operador SAGE (rechazo). Es la misma comprobación manual con una segunda empresa que ya se hizo al cierre del Sprint 1, ahora automatizada.</p>
+
+<h3>Caso 3. Los mismos patrones dentro de .NET</h3>
+<p>El framework que usa SAGE aplica estos patrones en sus propias APIs, lo que muestra su utilidad en un proyecto de gran escala:</p>
+<ul>
+  <li><b>Adapter:</b> los <code>ValueConverter</code> de EF Core adaptan un tipo de .NET (por ejemplo, un <code>enum</code> como <code>ModoFuente</code>) al tipo que guarda SQL Server. <code>StreamReader</code> adapta un <code>Stream</code> de bytes a la interfaz de lectura de texto <code>TextReader</code>.</li>
+  <li><b>Facade:</b> <code>UserManager</code> y <code>SignInManager</code> de ASP.NET Core Identity, que SAGE ya usa, ocultan detrás de métodos como <code>CreateAsync</code> o <code>PasswordSignInAsync</code> el almacén de usuarios, el generador de hash de contraseñas, los validadores y el manejo de cookies.</li>
+  <li><b>Proxy:</b> la carga diferida de EF Core (<code>UseLazyLoadingProxies</code>) genera en tiempo de ejecución subclases proxy de las entidades, que consultan la base solo cuando se accede a una relación. <code>DispatchProxy</code> permite crear proxies propios sobre cualquier interfaz.</li>
+</ul>
+
+<h2>9. Conclusiones</h2>
+<ul>
+  <li>Tres patrones estructurales resuelven problemas reales de SAGE, todos en la ruta del dispositivo a la pantalla: Adapter en la entrada de datos del ESP32, Facade en la sincronización y Proxy en el control de acceso por empresa.</li>
+  <li>Adapter y Facade, juntos, hacen que el paso del simulador al hardware real no requiera cambios en la plataforma, que es el orden de trabajo elegido por el equipo.</li>
+  <li>El de mayor impacto en la calidad es Proxy, porque protege RNF01 en un solo lugar y sobre una acción con efecto físico: conmutar la fuente de un cliente.</li>
+  <li>Los patrones estructurales se combinan con los creacionales: la Abstract Factory entrega los proxies y la fachada actualiza el Singleton de estado en vivo.</li>
+  <li>Bridge, Composite, Decorator y Flyweight se descartaron porque hoy no hay en SAGE un problema que justifique su costo; la sección 4 deja escritas las condiciones para reconsiderarlos. Por la misma razón, la importación de facturas, la exportación de reportes y el historial se resuelven sin patrones en esta etapa.</li>
+  <li>El impacto en la calidad se verificará durante los Sprints con las pruebas y métricas indicadas en cada caso de estudio.</li>
+</ul>
+
+<h2>10. Referencias</h2>
+<ul>
+  <li>Gamma, E., Helm, R., Johnson, R. y Vlissides, J. (1994). <i>Design Patterns: Elements of Reusable Object-Oriented Software</i>. Addison-Wesley.</li>
+  <li>Freeman, E. y Robson, E. (2020). <i>Head First Design Patterns</i> (2.ª ed.). O'Reilly Media.</li>
+  <li>Shvets, A. <i>Refactoring.Guru: Patrones estructurales</i>. https://refactoring.guru/es/design-patterns/structural-patterns</li>
+  <li>Microsoft. <i>Conversiones de valores</i> y <i>Filtros de consulta globales</i> en Entity Framework Core. https://learn.microsoft.com/ef/core/</li>
+  <li>Microsoft. <i>Introducción a Identity en ASP.NET Core</i>. https://learn.microsoft.com/aspnet/core/security/authentication/identity</li>
+  <li>ISO/IEC 25010:2023. <i>Systems and software Quality Requirements and Evaluation (SQuaRE): Product quality model</i>.</li>
+  <li>Equipo SAGE (2026). <i>Especificación de Requisitos de Software, versión 2.0</i>, diseño IoT (contrato dispositivo–servidor), modelo UML y documento de patrones creacionales del proyecto.</li>
+</ul>
+
+<script>
+// Diagramas de clases simplificados (UML) dibujados en SVG
+function uml(id, W, nodes, edges) {
+  const NS = 'http://www.w3.org/2000/svg', svg = document.getElementById(id), LH = 13;
+  const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; };
+  let H = 0; const by = {};
+  nodes.forEach(n => { n.w = n.w || 150; n.hh = 20 + (n.st ? 11 : 0); n.h = n.hh + (n.m || []).length * LH + 6; by[n.id] = n; H = Math.max(H, n.y + n.h); });
+  H += 6;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.innerHTML = `<defs><marker id="${id}t" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto"><path d="M1,1 L11,6 L1,11 Z" fill="#fff" stroke="#333"/></marker>
+    <marker id="${id}a" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="9" markerHeight="9" orient="auto"><path d="M1,1 L11,6 L1,11" fill="none" stroke="#333" stroke-width="1.4"/></marker></defs>`;
+  const c = n => [n.x + n.w / 2, n.y + n.h / 2];
+  const clip = (n, p) => { const [cx, cy] = c(n), dx = p[0] - cx, dy = p[1] - cy; const t = Math.min(dx ? n.w / 2 / Math.abs(dx) : 1e9, dy ? n.h / 2 / Math.abs(dy) : 1e9); return [cx + dx * t, cy + dy * t]; };
+  edges.forEach(([f, t, k, lab, bend]) => {
+    const a = by[f], b = by[t], ca = c(a), cb = c(b);
+    const ctl = bend ? [(ca[0] + cb[0]) / 2, Math.max(ca[1], cb[1]) + bend] : null;
+    const s = clip(a, ctl || cb), e = clip(b, ctl || ca);
+    const d = ctl ? `M${s} Q${ctl} ${e}` : `M${s} L${e}`;
+    el('path', { d, fill: 'none', stroke: '#333', 'stroke-width': 1.1, 'stroke-dasharray': (k === 'impl' || k === 'dep') ? '5 3' : '', 'marker-end': `url(#${id}${k === 'impl' || k === 'inh' ? 't' : 'a'})` });
+    if (lab) { const m = ctl ? [0.25 * s[0] + 0.5 * ctl[0] + 0.25 * e[0], 0.25 * s[1] + 0.5 * ctl[1] + 0.25 * e[1]] : [(s[0] + e[0]) / 2, (s[1] + e[1]) / 2];
+      const tx = el('text', { x: m[0] + 4, y: m[1] - 3, 'font-size': 9.5, fill: '#9e0044', 'font-style': 'italic' }, lab); }
+  });
+  nodes.forEach(n => {
+    el('rect', { x: n.x, y: n.y, width: n.w, height: n.h, fill: n.fill || '#fdf5f9', stroke: '#9e0044', 'stroke-width': 1.2 });
+    if (n.st) el('text', { x: n.x + n.w / 2, y: n.y + 11, 'text-anchor': 'middle', 'font-size': 9 }, n.st);
+    el('text', { x: n.x + n.w / 2, y: n.y + n.hh - 6, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 'bold', 'font-style': n.abs ? 'italic' : 'normal' }, n.t);
+    if (n.m && n.m.length) {
+      el('line', { x1: n.x, y1: n.y + n.hh, x2: n.x + n.w, y2: n.y + n.hh, stroke: '#9e0044' });
+      n.m.forEach((m, i) => { const u = m.startsWith('_'); el('text', { x: n.x + 5, y: n.y + n.hh + 12 + i * LH, 'font-size': 9.5, 'font-family': 'Consolas, monospace', 'text-decoration': u ? 'underline' : '' }, u ? m.slice(1) : m); });
+    }
+  });
+}
+
+uml('d-ruta', 680, [
+  { id: 'd', x: 5, y: 10, w: 110, t: 'ESP32 / simulador', fill: '#fff' },
+  { id: 'ad', x: 145, y: 4, w: 115, t: 'Adapter', st: 'traduce el JSON' },
+  { id: 'fa', x: 290, y: 4, w: 115, t: 'Facade', st: 'sincroniza' },
+  { id: 'bd', x: 435, y: 10, w: 105, t: 'Base de datos', fill: '#fff' },
+  { id: 'pr', x: 435, y: 80, w: 105, t: 'Proxy', st: 'filtra por empresa' },
+  { id: 'ui', x: 570, y: 86, w: 105, t: 'Pantallas', fill: '#fff' },
+], [['d', 'ad', 'assoc'], ['ad', 'fa', 'assoc'], ['fa', 'bd', 'assoc'], ['bd', 'pr', 'assoc'], ['pr', 'ui', 'assoc']]);
+
+uml('d-ad', 680, [
+  { id: 'cl', x: 5, y: 30, w: 165, t: 'FachadaSincronizacion', st: 'cliente' },
+  { id: 'i', x: 240, y: 6, w: 235, t: 'IAdaptadorTelemetria', st: '«interface» objetivo', m: ['+ AMedicion(paquete, id, hora): Medicion'] },
+  { id: 'a', x: 255, y: 120, w: 205, t: 'AdaptadorTelemetriaEsp32', st: 'adaptador' },
+  { id: 'dto', x: 5, y: 150, w: 185, t: 'TelemetriaEsp32Dto', st: 'adaptado · contrato §6.2', m: ['boot_id, seq, ts_valida', 'solar, cargador'] },
+  { id: 'm', x: 520, y: 105, w: 155, t: 'Medicion', st: 'dominio', m: ['Fuente.Solar / Fuente.Red', 'Ts, TsServidor'] },
+], [['cl', 'i', 'assoc', '«usa»'], ['a', 'i', 'impl'], ['a', 'dto', 'dep', '«traduce»'], ['a', 'm', 'dep', '«crea»']]);
+
+uml('d-fa', 680, [
+  { id: 'c', x: 5, y: 40, w: 165, t: 'ControladorTelemetria', st: 'cliente · endpoint' },
+  { id: 'f', x: 235, y: 22, w: 215, t: 'FachadaSincronizacion', st: 'fachada', m: ['+ SincronizarAsync(token, paquete)'] },
+  { id: 's1', x: 5, y: 150, w: 150, t: 'SageDbContext' },
+  { id: 's2', x: 170, y: 150, w: 165, t: 'IAdaptadorTelemetria' },
+  { id: 's3', x: 350, y: 150, w: 140, t: 'ServicioAlertas' },
+  { id: 's4', x: 505, y: 150, w: 170, t: 'EstadoDispositivosEnVivo', st: 'Singleton' },
+], [['c', 'f', 'assoc', '«usa»'], ['f', 's1', 'assoc'], ['f', 's2', 'assoc'], ['f', 's3', 'assoc'], ['f', 's4', 'assoc']]);
+
+uml('d-pr', 680, [
+  { id: 'cl', x: 5, y: 22, w: 160, t: 'ControladorOrdenes', st: 'cliente' },
+  { id: 'i', x: 240, y: 6, w: 230, t: 'ICanalOrdenes', st: '«interface» sujeto', m: ['+ EnviarModoAsync(id, modo): Orden'] },
+  { id: 'p', x: 130, y: 135, w: 190, t: 'CanalOrdenesProtegido', st: 'proxy', m: ['- real: ICanalOrdenes', '+ EnviarModoAsync(id, modo)'] },
+  { id: 'r', x: 400, y: 135, w: 160, t: 'CanalOrdenesBD', st: 'sujeto real' },
+  { id: 'u', x: 5, y: 245, w: 175, t: 'IUsuarioActual', m: ['rol, PuedeVerEmpresa()'] },
+  { id: 'fb', x: 500, y: 30, w: 175, t: 'FabricaDispositivoReal', st: 'Abstract Factory' },
+], [['cl', 'i', 'assoc', '«usa»'], ['p', 'i', 'impl'], ['r', 'i', 'impl'], ['p', 'r', 'assoc', '«delega»'], ['p', 'u', 'assoc', '«consulta»'], ['fb', 'p', 'dep', '«crea»']]);
+</script>
+</body>
+</html>

@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Patrones de comportamiento SAGE</title>
+<style>
+  @page { size: Letter; margin: 2.2cm 2cm; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #111; line-height: 1.4; margin: 0; }
+  h1 { font-size: 15pt; margin: 0 0 10px; }
+  h2 { font-size: 13pt; margin: 22px 0 8px; border-bottom: 2px solid #9e0044; padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 16px 0 6px; page-break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 10px 0 4px; color: #9e0044; page-break-after: avoid; }
+  p { margin: 6px 0; text-align: justify; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; }
+  th, td { border: 1px solid #c9c9c9; padding: 5px 6px; vertical-align: top; }
+  th { background: #ececec; text-align: center; }
+  td.c { text-align: center; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  .cover { height: 23cm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-after: always; }
+  .cover h1 { font-size: 22pt; margin-bottom: 18px; }
+  .cover img { width: 6.5cm; margin-bottom: 18px; }
+  .cover .t { font-size: 15pt; font-weight: bold; margin: 4px 0; }
+  .cover .s { font-size: 12pt; font-weight: bold; margin: 7px 0; }
+  .brk { page-break-before: always; }
+  .small { font-size: 9pt; color: #444; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 8.6pt; line-height: 1.32; background: #f6f6f6; border-left: 3px solid #9e0044; padding: 7px 9px; margin: 6px 0 10px; white-space: pre-wrap; page-break-inside: avoid; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; }
+  figure { margin: 8px 0 12px; text-align: center; page-break-inside: avoid; }
+  figcaption { font-size: 9pt; color: #444; margin-top: 3px; }
+  .ficha td:first-child { width: 22%; font-weight: bold; background: #fafafa; }
+  .nota { border: 1px solid #e0b4c8; background: #fbf3f7; padding: 6px 9px; font-size: 9.5pt; margin: 8px 0; page-break-inside: avoid; }
+  .toc { list-style: none; margin-left: 0; }
+  .toc li { margin: 3px 0; }
+  .toc ul { list-style: none; margin-left: 18px; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>UNIVERSIDAD PRIVADA DEL VALLE</h1>
+  <img src="logo.png" alt="Logo Univalle">
+  <div class="t">Proyecto SAGE</div>
+  <div class="t">Patrones de diseño de comportamiento</div>
+  <div class="s">Aplicación al Sistema de Análisis y Gestión Energética</div>
+  <div class="s" style="margin-top:22px">Alumnos:</div>
+  <div class="s">Mateo Montero Gonzales</div>
+  <div class="s">Harold Henry Chuve Nava</div>
+  <div class="s">Matias Nahim Justiniano Suarez</div>
+  <div class="s">Ethan Matias Cordova Rodriguez</div>
+  <div class="s" style="margin-top:22px">Santa Cruz, noviembre de 2026</div>
+</section>
+
+<h2>Índice</h2>
+<ul class="toc">
+  <li>1. Introducción y contexto técnico de SAGE</li>
+  <li>2. Identificación y clasificación de los patrones de comportamiento</li>
+  <li>3. Patrones aplicados a SAGE
+    <ul>
+      <li>3.1. State</li>
+      <li>3.2. Command</li>
+      <li>3.3. Observer</li>
+    </ul>
+  </li>
+  <li>4. Patrones descartados</li>
+  <li>5. Evaluación de escenarios de uso en SAGE</li>
+  <li>6. Comparación de patrones</li>
+  <li>7. Mejores prácticas de selección e implementación</li>
+  <li>8. Casos de estudio</li>
+  <li>9. Conclusiones</li>
+  <li>10. Referencias</li>
+</ul>
+
+<h2>1. Introducción y contexto técnico de SAGE</h2>
+<p>SAGE (Sistema de Análisis y Gestión Energética) es una plataforma web unida a un dispositivo IoT. El dispositivo, basado en un ESP32 con dos sensores INA219 y un relé selector de fuente, mide tensión, corriente, potencia y energía de la rama solar y de la red, y decide qué fuente alimenta la carga (modos Solar, Red y Automático; en el firmware la rama de la red se llama <i>cargador</i>). Cada 2 segundos envía sus mediciones a la plataforma por <code>POST /api/dispositivo/telemetria</code> y recibe como respuesta la orden pendiente, si la hay. La plataforma guarda las mediciones, muestra el estado en vivo, genera alertas, registra el consumo facturado y simula escenarios económicos. Cada empresa ve solo sus propios datos (RNF01).</p>
+<p>El stack es <b>Blazor Web App sobre .NET 10</b> (C#), con MudBlazor en la interfaz, <b>Entity Framework Core</b> sobre <b>SQL Server Express 2022</b> y <b>ASP.NET Core Identity</b> con los roles Operador SAGE, Administrador, Técnico y Consulta (el Administrador puede tener varias empresas y trabaja sobre una empresa activa). El firmware del ESP32 está en Arduino (C++). Los ejemplos de este documento están en C++ cuando corresponden al dispositivo y en C# cuando corresponden a la plataforma.</p>
+<p>Los patrones de comportamiento resuelven <i>cómo se reparten las responsabilidades entre objetos y cómo se comunican</i>: quién decide, quién ejecuta y quién se entera de un cambio. Este documento identifica y clasifica los nueve patrones de comportamiento del temario (Gamma et al., 1994) y aplica a SAGE los tres que resuelven problemas reales del proyecto: <b>State</b>, <b>Command</b> y <b>Observer</b>. También explica por qué se descartaron los otros seis. Los tres aplicados cubren el ciclo completo de control: el dispositivo decide su fuente (State), el usuario le da órdenes a distancia (Command) y las pantallas se enteran del resultado sin consultar la base de datos (Observer). Se apoyan en las clases de los documentos anteriores (<code>ControladorFuente</code>, <code>EstadoDispositivosEnVivo</code>, <code>FachadaSincronizacion</code>, <code>ICanalOrdenes</code>).</p>
+<div class="nota"><b>Alcance.</b> SAGE está en desarrollo (Scrum, Sprints 0–3, del 23/10 al 12/12 de 2026). El Sprint 1 dejó la plataforma base, la API de telemetría y el simulador de consola. El dispositivo físico y su máquina de estados se integran en el Sprint 2. Las aplicaciones que se describen son decisiones de diseño sobre ese modelo. El impacto en la calidad se presenta como <i>impacto esperado</i>, junto con la forma de medirlo, y no como un resultado ya observado.</div>
+
+<h2>2. Identificación y clasificación de los patrones de comportamiento</h2>
+<p>El catálogo de Gamma, Helm, Johnson y Vlissides (el "GoF") define once patrones de comportamiento. El temario de la materia trabaja nueve; Interpreter y Visitor quedan fuera. Igual que en los documentos anteriores, se clasifican por <b>ámbito</b> (si el comportamiento se reparte con herencia entre clases o con colaboración entre objetos) y por la <b>pregunta</b> que responden.</p>
+<table>
+  <thead><tr><th>Patrón</th><th>Ámbito</th><th>Pregunta que responde</th><th>Intención</th></tr></thead>
+  <tbody>
+    <tr><td><b>Chain of Responsibility</b></td><td class="c">Objeto</td><td>¿Cómo paso una solicitud por varios posibles responsables sin que el emisor sepa cuál la atiende?</td><td>Encadenar receptores y pasar la solicitud por la cadena hasta que uno la atienda.</td></tr>
+    <tr><td><b>Command</b></td><td class="c">Objeto</td><td>¿Cómo convierto una solicitud en algo que se pueda guardar, encolar, deshacer o registrar?</td><td>Encapsular una solicitud como objeto, separando a quien la emite de quien la ejecuta.</td></tr>
+    <tr><td><b>Iterator</b></td><td class="c">Objeto</td><td>¿Cómo recorro una colección sin conocer su estructura interna?</td><td>Acceder en secuencia a los elementos de un agregado sin exponer su representación.</td></tr>
+    <tr><td><b>Mediator</b></td><td class="c">Objeto</td><td>¿Cómo evito que muchos objetos se conozcan todos entre sí?</td><td>Centralizar en un objeto la comunicación entre colegas, que dejan de referirse unos a otros.</td></tr>
+    <tr><td><b>Memento</b></td><td class="c">Objeto</td><td>¿Cómo guardo y restauro el estado de un objeto sin romper su encapsulamiento?</td><td>Capturar el estado interno en un objeto aparte para poder volver a él más tarde.</td></tr>
+    <tr><td><b>Observer</b></td><td class="c">Objeto</td><td>¿Cómo se enteran varios objetos de que otro cambió?</td><td>Definir una dependencia uno a muchos: cuando el sujeto cambia, se notifica a todos sus observadores.</td></tr>
+    <tr><td><b>State</b></td><td class="c">Objeto</td><td>¿Cómo hago que un objeto se comporte distinto según su estado sin llenarlo de condicionales?</td><td>Representar cada estado como un objeto; el contexto delega en el estado actual y cambia de objeto al cambiar de estado.</td></tr>
+    <tr><td><b>Strategy</b></td><td class="c">Objeto</td><td>¿Cómo elijo entre varios algoritmos intercambiables?</td><td>Encapsular cada algoritmo en una clase con la misma interfaz para poder cambiarlo sin tocar al cliente.</td></tr>
+    <tr><td><b>Template Method</b></td><td class="c">Clase</td><td>¿Cómo fijo los pasos de un algoritmo y dejo que las subclases completen algunos?</td><td>Definir el esqueleto en una clase base y dejar pasos concretos a las subclases.</td></tr>
+  </tbody>
+</table>
+<p>Una segunda forma de agruparlos es por <b>lo que encapsulan</b>. <b>State</b>, <b>Strategy</b> y <b>Template Method</b> encapsulan <i>comportamiento que varía</i>: los dos primeros por composición y el tercero por herencia. La diferencia entre State y Strategy no está en la estructura, que es casi igual, sino en quién decide el cambio: en State lo deciden los propios estados con sus transiciones; en Strategy lo elige el cliente. <b>Command</b> y <b>Chain of Responsibility</b> encapsulan <i>solicitudes</i>: el primero las convierte en objetos y el segundo decide quién las atiende. <b>Observer</b> y <b>Mediator</b> organizan la <i>comunicación</i>: el primero difunde avisos a quien quiera escuchar y el segundo canaliza la conversación por un centro. <b>Iterator</b> y <b>Memento</b> encapsulan el <i>acceso al estado</i> de un objeto: uno para recorrerlo y otro para guardarlo y restaurarlo.</p>
+
+<h2>3. Patrones aplicados a SAGE</h2>
+<p>Se aplican los tres patrones que responden a una necesidad concreta de SAGE. Cada uno se presenta con una ficha (caso de uso, problema concreto, solución y participantes), un diagrama simplificado y un fragmento de código. Los nombres de estados, motivos y campos salen del diseño técnico del dispositivo; los de controladores y entidades, del modelo UML. Las clases nuevas que introduce cada patrón se indican en el texto.</p>
+<figure><svg id="d-ruta"></svg><figcaption>Figura 1. Dónde actúa cada patrón en el ciclo de control: orden, conmutación y aviso a las pantallas.</figcaption></figure>
+
+<h3>3.1. State</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>Conmutación automática local (RF12) y modos manuales (RF11), ejecutados en el firmware por <code>ControladorFuente</code>. Requisitos RNF07 (funciona sin Wi-Fi) y RNF10 (reacción a una falla solar en ≤ 2 s).</td></tr>
+  <tr><td>Problema</td><td>El dispositivo no puede limitarse a "elegir la fuente con más tensión". Tiene cuatro situaciones con reglas distintas: en el cargador espera que el sol se mantenga estable antes de volver; al volver a solar la <i>prueba con carga</i> durante <code>T_prueba</code>, porque un panel en vacío puede marcar 5 V aunque no sostenga la lámpara; en solar vigila que la tensión no caiga bajo <code>V_min</code>; y si ninguna rama sirve, deja el relé en reposo y alerta. Además hay histéresis, una espera creciente tras cada prueba fallida y un motivo que se registra en cada cambio (RF13). Escrito con <code>if</code> y <code>switch</code> sobre una variable <code>estado</code> dentro de <code>loop()</code>, cada regla nueva obliga a revisar todas las ramas, y es fácil olvidar un caso que haga parpadear la lámpara.</td></tr>
+  <tr><td>Solución</td><td>Cada estado de la tabla de transiciones del diseño es una clase que hereda de <code>EstadoFuente</code>: <code>EnCargador</code>, <code>ProbandoSolar</code>, <code>EnSolar</code> y <code>SinAlimentacion</code>. El contexto, <code>ControladorFuente</code> (el Singleton del documento de creacionales), guarda un puntero al estado actual y, una vez por segundo, le pasa las lecturas promediadas. Cada estado decide si cambia y a cuál. El cambio pasa siempre por <code>cambiarA(nuevo, motivo)</code>, que mueve el relé, reinicia los temporizadores y encola el evento de conmutación con su motivo.</td></tr>
+  <tr><td>Participantes</td><td>Contexto: <code>ControladorFuente</code> · Estado: <code>EstadoFuente</code> · Estados concretos: <code>EnCargador</code>, <code>ProbandoSolar</code>, <code>EnSolar</code>, <code>SinAlimentacion</code> · Datos: <code>Lecturas</code> (promedio de 1 s) y <code>Parametros</code> (<code>V_min</code>, <code>V_retorno</code>, <code>T_falla</code>, <code>T_estable</code>, <code>T_prueba</code>).</td></tr>
+</table>
+<figure><svg id="d-maq" viewBox="0 0 680 250" width="680" height="250" font-family="Arial, Helvetica, sans-serif">
+  <defs><marker id="fl" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="9" markerHeight="9" orient="auto"><path d="M1,1 L11,6 L1,11" fill="none" stroke="#333" stroke-width="1.4"/></marker></defs>
+  <g fill="#fdf5f9" stroke="#9e0044" stroke-width="1.2">
+    <rect x="10" y="95" width="150" height="44" rx="10"/><rect x="265" y="10" width="150" height="44" rx="10"/>
+    <rect x="520" y="95" width="150" height="44" rx="10"/><rect x="265" y="190" width="150" height="44" rx="10"/>
+  </g>
+  <g text-anchor="middle" font-size="11" font-weight="bold">
+    <text x="85" y="114">EN_CARGADOR</text><text x="340" y="29">PROBANDO_SOLAR</text>
+    <text x="595" y="114">EN_SOLAR</text><text x="340" y="209">SIN_ALIMENTACION</text>
+  </g>
+  <g text-anchor="middle" font-size="9" fill="#444">
+    <text x="85" y="129">relé NC (reposo seguro)</text><text x="340" y="44">relé NO · prueba con carga</text>
+    <text x="595" y="129">relé NO</text><text x="340" y="224">relé NC · alerta</text>
+  </g>
+  <circle cx="22" cy="172" r="6" fill="#333"/>
+  <g fill="none" stroke="#333" stroke-width="1.1" marker-end="url(#fl)">
+    <path d="M26,167 L42,140"/>
+    <path d="M130,95 Q160,25 264,28"/>
+    <path d="M415,28 Q470,30 560,94"/>
+    <path d="M285,54 Q230,110 161,112"/>
+    <path d="M520,125 Q340,165 161,128"/>
+    <path d="M560,212 L416,212" stroke-dasharray="5 3"/>
+    <path d="M265,215 Q120,215 86,140"/>
+  </g>
+  <g font-size="9.5" fill="#9e0044" font-style="italic">
+    <text x="8" y="190">arranque</text>
+    <text x="160" y="36" text-anchor="end">intento_retorno_solar</text>
+    <text x="132" y="49" text-anchor="end">o cargador_sin_tension</text>
+    <text x="492" y="42">solar_comprobada</text>
+    <text x="232" y="126" text-anchor="middle">prueba_solar_fallida</text>
+    <text x="232" y="138" text-anchor="middle" font-style="normal" fill="#444" font-size="8.5">(duplica la espera)</text>
+    <text x="400" y="167" text-anchor="middle">solar_insuficiente</text>
+    <text x="428" y="206">sin_fuente_valida</text>
+    <text x="428" y="228" font-style="normal" fill="#444" font-size="8.5">(desde cualquier estado)</text>
+    <text x="116" y="210" text-anchor="middle" font-style="normal" fill="#444" font-size="8.5">vuelve tensión</text>
+  </g>
+</svg><figcaption>Figura 2. Máquina de estados del modo Automático, con el motivo que se registra en cada transición.</figcaption></figure>
+<figure><svg id="d-st"></svg><figcaption>Figura 3. Estructura del patrón State en el firmware.</figcaption></figure>
+<pre>// Firmware (Arduino C++). Cada estado es una clase; el contexto delega en el actual.
+class EstadoFuente {
+public:
+  virtual const char* nombre() const = 0;
+  virtual void entrar(ControladorFuente&amp; c) {}
+  virtual void evaluar(ControladorFuente&amp; c, const Lecturas&amp; l) = 0;   // una vez por segundo
+};
+
+class EnCargador : public EstadoFuente {
+public:
+  const char* nombre() const override { return "EN_CARGADOR"; }
+  void entrar(ControladorFuente&amp; c) override { c.rele(NC); }
+  void evaluar(ControladorFuente&amp; c, const Lecturas&amp; l) override {
+    if (c.modo() != AUTOMATICO) return;                  // en modo Red (cargador) nunca sale de aquí
+    bool cae     = c.falla.sostenido(l.cargador.v &lt; c.p.vMin, c.p.tFalla);
+    bool estable = c.estable.sostenido(l.solar.v &gt;= c.p.vRetorno, c.p.tEstable);
+    if (cae &amp;&amp; l.solar.v &gt;= c.p.vRetorno)        c.cambiarA(PROBANDO_SOLAR, "cargador_sin_tension");
+    else if (estable &amp;&amp; c.esperaVencida())        c.cambiarA(PROBANDO_SOLAR, "intento_retorno_solar");
+  }
+};
+
+class EnSolar : public EstadoFuente {
+public:
+  const char* nombre() const override { return "EN_SOLAR"; }
+  void entrar(ControladorFuente&amp; c) override { c.rele(NO); }
+  void evaluar(ControladorFuente&amp; c, const Lecturas&amp; l) override {
+    if (c.falla.sostenido(l.solar.v &lt; c.p.vMin, c.p.tFalla)) {
+      if (c.modo() == SOLAR) c.marcarRespaldo();          // manual: protege, alerta y no reintenta (D2)
+      c.cambiarA(EN_CARGADOR, "solar_insuficiente");
+    }
+  }
+};
+// ProbandoSolar y SinAlimentacion siguen la misma forma.
+
+// Los estados no guardan datos propios: una instancia estática de cada uno, sin memoria dinámica.
+EnCargador EN_CARGADOR;  ProbandoSolar PROBANDO_SOLAR;  EnSolar EN_SOLAR;  SinAlimentacion SIN_ALIMENTACION;
+
+void ControladorFuente::tick(const Lecturas&amp; l) {          // llamado desde loop() cada 1 s
+  if (l.solar.v &lt; p.vMin &amp;&amp; l.cargador.v &lt; p.vMin &amp;&amp; estado != &amp;SIN_ALIMENTACION) {
+    cambiarA(SIN_ALIMENTACION, "sin_fuente_valida");     // transición válida desde cualquier estado
+    return;
+  }
+  estado-&gt;evaluar(*this, l);
+}
+
+void ControladorFuente::cambiarA(EstadoFuente&amp; nuevo, const char* motivo) {
+  eventos.agregar(Evento::conmutacion(estado-&gt;nombre(), nuevo.nombre(), motivo));   // RF13
+  estado = &amp;nuevo;
+  falla.reiniciar();  estable.reiniciar();
+  estado-&gt;entrar(*this);                                   // mueve el relé
+}</pre>
+<p>El estado inicial es siempre <code>EN_CARGADOR</code>, con el relé en reposo, que es el estado seguro del diseño. Los tiempos (<code>falla</code>, <code>estable</code>, la espera creciente) viven en el contexto y no en los estados, para que los estados puedan ser instancias únicas sin <code>new</code>: en un microcontrolador conviene evitar la memoria dinámica. Los modos manuales no son estados aparte: son una condición que los estados consultan (<code>c.modo()</code>), porque los tres modos recorren los mismos estados físicos del relé.</p>
+
+<h3>3.2. Command</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>CU11 Cambiar modo de fuente (RF11), con su entrega en CU13 Sincronizar telemetría y órdenes. Requisitos RNF10 (orden ejecutada en ≤ 5 s si hay conexión) y RNF12 (trazabilidad).</td></tr>
+  <tr><td>Problema</td><td>Cuando un Técnico pide "pasar a Solar", la plataforma no puede llamar al ESP32: el dispositivo no tiene un puerto abierto y solo se comunica cuando envía su telemetría. La solicitud tiene que <b>esperar</b> hasta el próximo envío, <b>viajar</b> dentro de la respuesta HTTP, <b>ejecutarse</b> en otro equipo, que puede rechazarla (por ejemplo, <code>solar_no_disponible</code> con el panel sombreado), y <b>devolver un resultado</b> que el usuario debe ver. Además, si el dispositivo estuvo sin conexión, al volver no debe ejecutar una orden vieja, y si recibe la misma orden dos veces no debe ejecutarla dos veces. Una llamada directa a un método no sirve para nada de esto.</td></tr>
+  <tr><td>Solución</td><td>La solicitud se convierte en un objeto: la entidad <code>Orden</code>, con tipo, valor, usuario, fechas y un ciclo de vida (<code>pendiente → entregada → ejecutada | rechazada</code>, o <code>expirada</code> si no se entrega en 30 s). Como es un objeto guardado, se puede encolar, entregar más tarde, vencer y auditar. En el ESP32, <code>ProcesadorOrdenes</code> (el invocador) recibe la orden de la respuesta, descarta las que ya ejecutó (guarda el id de la última en memoria no volátil) y la convierte en un <code>Comando</code> concreto que actúa sobre <code>ControladorFuente</code> (el receptor). El resultado vuelve en el siguiente envío de telemetría.</td></tr>
+  <tr><td>Participantes</td><td>Cliente: <code>ControladorOrdenes</code>, a través de <code>ICanalOrdenes</code> (con el proxy del documento de estructurales) · Comando guardado: <code>Orden</code> · Transporte: <code>FachadaSincronizacion</code> (paso 7 de CU13) · Invocador: <code>ProcesadorOrdenes</code> (ESP32) · Comandos concretos: <code>ComandoModo</code>, <code>ComandoParametros</code> · Receptor: <code>ControladorFuente</code>.</td></tr>
+</table>
+<figure><svg id="d-cmd"></svg><figcaption>Figura 4. Command: la orden se crea en la plataforma y se ejecuta en el dispositivo.</figcaption></figure>
+<pre>// Plataforma (C#): la orden es el comando guardado como dato
+public class Orden
+{
+    public int Id { get; set; }
+    public int DispositivoId { get; set; }
+    public string UsuarioId { get; set; } = "";        // quién la pidió (RNF12)
+    public TipoOrden Tipo { get; set; }                 // Modo | Parametros
+    public string ValorJson { get; set; } = "";         // "SOLAR", "AUTO", ... o los umbrales
+    public EstadoOrden Estado { get; private set; } = EstadoOrden.Pendiente;
+    public string? Motivo { get; private set; }
+    public DateTime Creada { get; set; }
+    public DateTime? Entregada { get; private set; }
+    public DateTime? Resuelta { get; private set; }
+
+    public bool Vencida(DateTime ahora) =&gt;
+        Estado == EstadoOrden.Pendiente &amp;&amp; ahora - Creada &gt; TimeSpan.FromSeconds(30);
+    public void Entregar(DateTime ahora) { Estado = EstadoOrden.Entregada; Entregada = ahora; }
+    public void Expirar(DateTime ahora)  { Estado = EstadoOrden.Expirada;  Resuelta = ahora; }
+    public void Resolver(bool ejecutada, string? motivo, DateTime ahora)
+    {
+        if (Estado != EstadoOrden.Entregada) return;    // un resultado repetido no cambia nada
+        Estado = ejecutada ? EstadoOrden.Ejecutada : EstadoOrden.Rechazada;
+        Motivo = motivo; Resuelta = ahora;
+    }
+}</pre>
+<pre>// Firmware (C++): el invocador convierte la orden recibida en un comando y lo ejecuta
+class Comando {
+public:
+  virtual ~Comando() {}
+  virtual Resultado ejecutar(ControladorFuente&amp; receptor) = 0;
+};
+
+class ComandoModo : public Comando {
+  Modo modo;
+public:
+  explicit ComandoModo(Modo m) : modo(m) {}
+  Resultado ejecutar(ControladorFuente&amp; c) override {
+    if (modo == SOLAR &amp;&amp; c.lecturas().solar.v &lt; c.p.vRetorno)
+      return Resultado::rechazada("solar_no_disponible");   // D2: no se fuerza la fuente solar
+    c.fijarModo(modo);                                      // guarda el modo en Preferences
+    return Resultado::ejecutada();
+  }
+};
+
+void ProcesadorOrdenes::atender(const OrdenRecibida&amp; o) {
+  if (o.id &lt;= ultimaEjecutada) return;                     // idempotencia: no repite una orden
+  ComandoModo modo(o.modo);  ComandoParametros params(o.parametros);
+  Comando&amp; cmd = (o.tipo == TIPO_MODO) ? static_cast&lt;Comando&amp;&gt;(modo) : params;
+  resultados.agregar(o.id, cmd.ejecutar(ControladorFuente::instancia()));   // viaja en el próximo envío
+  ultimaEjecutada = o.id;
+  prefs.putUInt("ult_orden", o.id);
+}</pre>
+<p>Esta es la variante del patrón para sistemas distribuidos: el comando se guarda y se transmite como dato, y se reconstruye como objeto ejecutable del lado del receptor. Lo que se pierde respecto del Command clásico es el <i>deshacer</i>, y es a propósito: una conmutación física no se deshace, se corrige con otra orden, que queda registrada igual que la primera. La expiración la aplica la fachada antes de entregar: una orden <code>pendiente</code> vencida pasa a <code>expirada</code> y no se envía.</p>
+
+<h3>3.3. Observer</h3>
+<table class="ficha">
+  <tr><td>Caso de uso</td><td>CU10 Monitorear dispositivo (<code>ControladorMonitoreo</code>, pantalla de monitoreo) y el resultado visible de CU11. Requisito RF10: mostrar el estado con un retraso máximo de 5 s.</td></tr>
+  <tr><td>Problema</td><td>El estado de un dispositivo cambia cada 2 s, cuando llega su telemetría, y también cuando deja de llegar (alerta de "sin conexión" tras 30 s). Ese estado lo muestran a la vez varias pantallas abiertas: el panel de monitoreo de cada usuario y el indicador de alertas del menú. Si cada pantalla consultara la base de datos cada 2 s, el número de consultas crecería con cada usuario conectado, y aun así habría un retraso extra entre el dato guardado y el dato mostrado. Y si la fachada llamara directamente a cada pantalla, el procesamiento de telemetría quedaría acoplado a la interfaz.</td></tr>
+  <tr><td>Solución</td><td><code>EstadoDispositivosEnVivo</code> (el Singleton del documento de creacionales) pasa a ser el <b>sujeto</b>: además de guardar el último estado de cada dispositivo, expone el evento <code>Cambio</code>. La fachada de sincronización y el vigilante de conexión llaman a <code>Actualizar</code>, y el sujeto avisa a todos los suscritos. Cada componente Blazor que muestra un dispositivo se suscribe al abrirse, filtra por el id que le interesa, se redibuja y cancela su suscripción al cerrarse. Ni la fachada ni el vigilante saben qué pantallas existen.</td></tr>
+  <tr><td>Participantes</td><td>Sujeto: <code>EstadoDispositivosEnVivo</code> · Observadores: <code>PanelMonitoreo</code>, <code>IndicadorAlertas</code> (componentes Blazor) · Quienes producen cambios: <code>FachadaSincronizacion</code> (cada envío) y <code>VigilanteConexion</code> (<code>BackgroundService</code> que detecta la falta de contacto) · Mecanismo: evento de C# (<code>event Action&lt;int, EstadoDispositivo&gt;</code>).</td></tr>
+</table>
+<figure><svg id="d-obs"></svg><figcaption>Figura 5. Observer entre el estado en vivo y las pantallas de Blazor.</figcaption></figure>
+<pre>// Sujeto: el mismo Singleton del documento de creacionales, ahora con un evento
+public class EstadoDispositivosEnVivo
+{
+    private readonly ConcurrentDictionary&lt;int, EstadoDispositivo&gt; estados = new();
+    public event Action&lt;int, EstadoDispositivo&gt;? Cambio;
+
+    public void Actualizar(int dispositivoId, EstadoDispositivo e)
+    {
+        estados[dispositivoId] = e;
+        Cambio?.Invoke(dispositivoId, e);              // avisa a todos los observadores
+    }
+    public EstadoDispositivo? Obtener(int id) =&gt; estados.TryGetValue(id, out var e) ? e : null;
+}
+
+// Observador: PanelMonitoreo.razor (modo interactivo de servidor)
+@implements IDisposable
+@inject EstadoDispositivosEnVivo EnVivo
+
+@code {
+    [Parameter] public int DispositivoId { get; set; }   // ya autorizado por LectorTelemetriaProtegido
+    private EstadoDispositivo? estado;
+
+    protected override void OnInitialized()
+    {
+        estado = EnVivo.Obtener(DispositivoId);
+        EnVivo.Cambio += AlCambiar;                       // se suscribe
+    }
+
+    private void AlCambiar(int id, EstadoDispositivo e)
+    {
+        if (id != DispositivoId) return;
+        estado = e;
+        _ = InvokeAsync(StateHasChanged);                 // el aviso llega desde otro hilo
+    }
+
+    public void Dispose() =&gt; EnVivo.Cambio -= AlCambiar;  // sin esto, el Singleton retiene la pantalla cerrada
+}</pre>
+<p>El aviso se emite <i>después</i> de que la fachada guarda en la base, así que una pantalla nunca muestra un dato que no quedó registrado. Con el modo interactivo de servidor de Blazor, <code>StateHasChanged</code> envía el cambio al navegador por la conexión SignalR que el framework ya mantiene: no hace falta escribir un hub propio. El panel solo recibe el id de un dispositivo que ya pasó por el proxy de protección, de modo que el observador no abre un camino nuevo para ver datos de otra empresa.</p>
+
+<h2>4. Patrones descartados</h2>
+<p>Los otros seis patrones del temario se evaluaron con el mismo criterio: si existe hoy en SAGE un problema que el patrón resuelva mejor que una solución simple o que lo que ya ofrece la plataforma. En los seis casos la respuesta fue no. Para cada uno se indica dónde se consideró, por qué se descartó y en qué situación convendría reconsiderarlo.</p>
+<table>
+  <thead><tr><th style="width:12%">Patrón</th><th style="width:24%">Dónde se consideró</th><th style="width:36%">Por qué se descartó</th><th>Cuándo se reconsideraría</th></tr></thead>
+  <tbody>
+    <tr><td><b>Chain of Responsibility</b></td><td>Procesamiento de cada envío de telemetría (autenticar, validar, descartar duplicados…) y evaluación de alertas.</td><td>Los pasos de CU13 son fijos y se ejecutan <i>todos</i>, en orden; no se trata de buscar al primero que atienda la solicitud. Esa secuencia ya está en la fachada. Lo transversal (errores, registro, autenticación de usuarios) lo resuelve el <i>pipeline</i> de middleware de ASP.NET Core, que es en sí una cadena de responsabilidad. Las cuatro alertas de RF16 se evalúan todas, cada una por su lado.</td><td>Si las alertas se escalaran por niveles (primero el Técnico, si no responde el Administrador, luego un correo) o si cada empresa pudiera configurar su propia serie de validaciones.</td></tr>
+    <tr><td><b>Iterator</b></td><td>Recorrido del historial de mediciones y de la cola de eventos.</td><td>C# ya lo trae incorporado: <code>IEnumerable</code>, <code>foreach</code>, <code>yield return</code> e <code>IAsyncEnumerable</code>. EF Core devuelve <code>IQueryable</code>, y el historial se pagina en SQL Server. Escribir un iterador propio duplicaría el lenguaje.</td><td>Solo si apareciera una colección propia que varias partes tuvieran que recorrer sin conocer su estructura, por ejemplo la cola circular de eventos del ESP32 si creciera a varios consumidores.</td></tr>
+    <tr><td><b>Mediator</b></td><td>Coordinación de los componentes de la pantalla de monitoreo: selector de dispositivo, gráfico, tabla de eventos y botones de modo.</td><td>Son pocos componentes y la página que los contiene los coordina con parámetros y <code>EventCallback</code>, que es el mecanismo propio de Blazor. La comunicación entre pantallas distintas ya la cubre el Observer. Un mediador agregaría una clase central sin sacar dependencias reales.</td><td>Si el tablero creciera a muchos paneles que se afectan entre sí (filtros por empresa, periodo y fuente que cambian varios gráficos a la vez).</td></tr>
+    <tr><td><b>Memento</b></td><td>Deshacer cambios en los umbrales del dispositivo (RF15) y guardar el estado del ESP32 antes de un reinicio.</td><td>Los parámetros ya se guardan con versión en la base de datos: volver a una configuración anterior es crear una versión nueva con esos valores, y queda registrada. En el ESP32, lo que se guarda en <code>Preferences</code> (modo, parámetros, última orden) es persistencia simple, no la restauración del estado interno de un objeto. Una conmutación física, además, no se puede deshacer.</td><td>Si se agregara un editor de ensayos o de parámetros con varios pasos y <i>deshacer/rehacer</i> antes de guardar.</td></tr>
+    <tr><td><b>Strategy</b></td><td>Los modos Solar, Red y Automático en el firmware; las reglas de alerta; los escenarios de la simulación económica.</td><td>Los modos no reemplazan un algoritmo completo: los tres recorren los mismos estados del relé y solo cambian qué transiciones se permiten. Separarlos en estrategias duplicaría las transiciones del State. Las alertas son cuatro reglas fijas con umbrales que son datos. La simulación calcula siempre los tres escenarios (red, solar y mixto) juntos para compararlos; no se elige uno.</td><td>Si la v2 agrega modos con lógica realmente distinta (por horario o por tarifa) o si la simulación tuviera que usar modelos tarifarios intercambiables según la distribuidora.</td></tr>
+    <tr><td><b>Template Method</b></td><td>Exportación de reportes en PDF y Excel (CU09) e importación de facturas desde Excel (CU05).</td><td>Son dos formatos en un caso de prioridad <i>Could</i>, y las bibliotecas de PDF y Excel imponen su propia forma de armar el documento. La parte común, la consulta de los datos, se resuelve con un método compartido. Hay un solo formato de importación. Una clase base con pasos abstractos ataría por herencia dos implementaciones que casi no comparten código.</td><td>Si hubiera tres o más reportes o importadores con el mismo esqueleto (obtener datos, validar, dar formato, entregar) y solo cambiaran algunos pasos.</td></tr>
+  </tbody>
+</table>
+<p>Descartar un patrón no es una omisión: es una decisión de diseño. Cada patrón agrega clases e indirección, y ese costo solo se justifica si resuelve un problema presente. En los de comportamiento, además, varios ya vienen resueltos por el lenguaje o el framework (Iterator, Chain of Responsibility, Observer mediante eventos): en esos casos la buena práctica es usar lo que ya existe. Las condiciones de la última columna sirven para revisar la decisión si SAGE crece.</p>
+
+<h2>5. Evaluación de escenarios de uso en SAGE</h2>
+<p>La tabla recorre los escenarios de SAGE donde se plantea cómo repartir el comportamiento o cómo comunicar objetos. Incluye escenarios donde la conclusión es <b>no usar ningún patrón</b>, porque un patrón sin un problema real que resolver solo agrega clases.</p>
+<table>
+  <thead><tr><th style="width:24%">Escenario</th><th style="width:15%">CU / RF</th><th style="width:14%">Patrón</th><th>Justificación y alternativa descartada</th></tr></thead>
+  <tbody>
+    <tr><td>Conmutar la fuente en modo Automático sin conexión</td><td>RF12, RNF07</td><td>State</td><td>Cuatro estados con reglas, tiempos y motivos propios. Se descartó un <code>switch</code> sobre una variable de estado dentro de <code>loop()</code>.</td></tr>
+    <tr><td>Recuperar solar sin que la lámpara parpadee</td><td>RF12</td><td>State</td><td>La prueba con carga y la espera creciente viven en <code>ProbandoSolar</code> y en el contexto, no repartidas en condicionales.</td></tr>
+    <tr><td>Enviar una orden de modo desde la plataforma</td><td>CU11, RF11</td><td>Command</td><td>El receptor es remoto y solo se comunica cuando envía telemetría. La orden tiene que esperar, viajar y volver con resultado.</td></tr>
+    <tr><td>Dispositivo que se reconecta tras perder el Wi-Fi</td><td>CU13, RNF10</td><td>Command</td><td>La orden guardada permite expirarla y evitar ejecutarla dos veces (id de la última orden en memoria no volátil).</td></tr>
+    <tr><td>Pedir Solar con el panel sombreado</td><td>CU11, D2</td><td>Command + State</td><td><code>ComandoModo</code> la rechaza con <code>solar_no_disponible</code>; si la acepta, el State hace la prueba con carga.</td></tr>
+    <tr><td>Mostrar el estado del dispositivo en ≤ 5 s</td><td>CU10, RF10</td><td>Observer</td><td>Varias pantallas reciben el mismo cambio. Se descartó que cada pantalla consulte la base cada 2 s.</td></tr>
+    <tr><td>Avisar que un dispositivo perdió la conexión</td><td>RF16</td><td>Observer</td><td>El vigilante de conexión actualiza el sujeto y las pantallas se enteran igual que con un envío normal.</td></tr>
+    <tr><td>Evaluar las alertas de cada envío</td><td>RF16</td><td>Ninguno</td><td>Cuatro reglas fijas con umbrales como datos, dentro de <code>ServicioAlertas</code>.</td></tr>
+    <tr><td>Calcular la simulación económica</td><td>CU de simulación</td><td>Ninguno</td><td>El Builder ya arma la <code>Simulacion</code>; los tres escenarios se calculan siempre juntos.</td></tr>
+    <tr><td>Recorrer el historial de mediciones</td><td>CU06</td><td>Ninguno</td><td><code>IQueryable</code> con paginación en SQL Server.</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Comparación de patrones</h2>
+<p>Se comparan los tres patrones aplicados con los criterios pedidos (eficiencia, mantenibilidad y aplicabilidad) más dos que influyen en la decisión: la complejidad que agregan y la facilidad para probar el código.</p>
+<table>
+  <thead><tr><th>Criterio</th><th>State</th><th>Command</th><th>Observer</th></tr></thead>
+  <tbody>
+    <tr><td><b>Eficiencia en ejecución</b></td><td>Una llamada virtual por segundo y estados estáticos sin memoria dinámica: despreciable en el ESP32.</td><td>Una fila por orden; las órdenes son pocas. La entrega viaja en la respuesta que ya existe, sin conexiones extra.</td><td>Mejora clara: reemplaza N consultas a la base cada 2 s (una por pantalla abierta) por un aviso en memoria.</td></tr>
+    <tr><td><b>Mantenibilidad</b></td><td>Alta: cada regla está en su estado. Un estado nuevo (por ejemplo, batería en una v2) es una clase más. Riesgo: transiciones repartidas; la tabla del diseño se mantiene como referencia única.</td><td>Alta: el ciclo de vida está en una entidad. Un tipo de orden nuevo (parámetros, RF15) es un comando concreto más.</td><td>Alta: quien produce el cambio no conoce a quien lo muestra. Riesgo: olvidar cancelar la suscripción y retener pantallas cerradas en memoria.</td></tr>
+    <tr><td><b>Aplicabilidad en SAGE</b></td><td>Firmware: RF12, RNF07, RNF10.</td><td>Plataforma y firmware: CU11, CU13, RNF12.</td><td>Plataforma: CU10, RF10, RF16.</td></tr>
+    <tr><td><b>Complejidad añadida</b></td><td>Media: una clase base, cuatro estados y el contexto.</td><td>Media: la entidad, el invocador y dos comandos en el firmware.</td><td>Baja: un evento de C# y la suscripción en cada componente.</td></tr>
+    <tr><td><b>Testabilidad</b></td><td>Muy buena: cada estado se prueba en la PC con secuencias de lecturas falsas, sin relé ni panel.</td><td>Buena: el ciclo de vida se prueba sin dispositivo (expiración, resultado repetido); el firmware, con órdenes simuladas.</td><td>Buena: se suscribe un observador falso, se llama a <code>Actualizar</code> y se comprueba que recibió el aviso, y que deja de recibirlo tras cancelar.</td></tr>
+  </tbody>
+</table>
+<p><b>Lectura de la comparación.</b> A diferencia de los estructurales, aquí un patrón sí cambia el rendimiento: Observer elimina consultas repetidas a la base y reduce el retraso de la pantalla. State y Command no se eligen por eficiencia sino por fiabilidad: State hace que el dispositivo conmute bien sin conexión y Command hace que una orden remota tenga siempre un resultado conocido. Los tres juntos sostienen el requisito central del proyecto, el control de fuente (RF11), de punta a punta.</p>
+
+<h2>7. Mejores prácticas de selección e implementación</h2>
+<ol>
+  <li><b>Partir del problema, no del patrón.</b> Primero se identifica el problema concreto (un comportamiento que cambia con el estado, una solicitud que no se puede ejecutar en el momento, varios interesados en un mismo cambio) y después se busca el patrón. Las alertas y el historial no lo necesitan.</li>
+  <li><b>Distinguir State de Strategy por quién decide el cambio.</b> Si el objeto cambia solo según lo que pasa, es State. Si el cliente elige el algoritmo, es Strategy. En SAGE el usuario elige el modo, pero el modo solo habilita transiciones: por eso es una condición dentro del State y no una Strategy.</li>
+  <li><b>State: la tabla de transiciones es la especificación.</b> Cada transición del código debe estar en la tabla del diseño, con su motivo. Todos los cambios pasan por un único <code>cambiarA</code>, que registra el evento (RF13).</li>
+  <li><b>State: estados sin datos y estado inicial seguro.</b> Los tiempos van en el contexto; así los estados son instancias estáticas, sin <code>new</code> en el microcontrolador. Al arrancar, siempre <code>EN_CARGADOR</code> con el relé en reposo.</li>
+  <li><b>Command: si el receptor es remoto, el comando es un dato.</b> Debe tener un id, poder serializarse, ser idempotente (no ejecutarse dos veces) y tener vencimiento.</li>
+  <li><b>Command: toda orden termina con un resultado.</b> Ejecutada, rechazada con motivo o expirada. El usuario nunca debe ver una orden "en el aire".</li>
+  <li><b>Observer: cancelar siempre la suscripción.</b> El sujeto es un Singleton y vive más que cualquier pantalla. Cada componente que se suscribe implementa <code>IDisposable</code>.</li>
+  <li><b>Observer: avisar después de guardar y volver al hilo de la interfaz.</b> El aviso se emite cuando el dato ya está en la base. En Blazor, el observador redibuja con <code>InvokeAsync(StateHasChanged)</code>. Los manejadores deben ser rápidos y no lanzar excepciones, porque bloquearían a los demás.</li>
+  <li><b>No usar Observer para saltar la seguridad.</b> El aviso lleva el id del dispositivo; cada pantalla solo atiende ids que ya obtuvo a través del proxy de protección.</li>
+  <li><b>Usar lo que ya da la plataforma.</b> Eventos de C# para Observer, <code>IEnumerable</code> para Iterator, el middleware de ASP.NET Core para Chain of Responsibility y <code>EventCallback</code> de Blazor para la comunicación entre componentes, antes de escribir una implementación propia.</li>
+</ol>
+
+<h2>8. Casos de estudio</h2>
+<p>Los casos 1 y 2 son casos de diseño dentro de SAGE. Para cada uno se describen la situación, la aplicación del patrón, el impacto esperado en la calidad según las características de ISO/IEC 25010 y la forma de verificarlo durante los Sprints, usando los ensayos ya definidos en el diseño técnico. El caso 3 muestra los mismos patrones dentro de la plataforma que usa el proyecto.</p>
+
+<h3>Caso 1. Conmutación confiable sin conexión (State)</h3>
+<p><b>Situación.</b> Una nube tapa el panel mientras la lámpara está en solar, y el ESP32 no tiene Wi-Fi en ese momento. El dispositivo debe pasar al cargador en menos de 2 s, esperar a que el sol vuelva y se mantenga, probar solar con carga antes de quedarse y, si la prueba falla, esperar cada vez más antes del siguiente intento, para que la lámpara no parpadee.</p>
+<p><b>Aplicación.</b> Los cuatro estados de la sección 3.1. Cada regla vive en el estado donde aplica, y cada cambio deja un evento con su motivo que se envía cuando vuelve la conexión.</p>
+<p><b>Impacto esperado.</b> <i>Fiabilidad (tolerancia a fallos y disponibilidad):</i> la carga nunca queda sin fuente si hay una válida, con o sin red (RNF07). <i>Mantenibilidad (modificabilidad y capacidad de prueba):</i> agregar un estado o cambiar una regla no toca los demás estados, y cada uno se prueba en la PC. <i>Trazabilidad:</i> cada conmutación queda explicada con su motivo (RF13).</p>
+<p><b>Cómo se verifica.</b> Pruebas unitarias en la PC que alimentan secuencias de lecturas y comprueban cada fila de la tabla de transiciones. Después, el ensayo E4 del diseño: sombra → cargador en ≤ 2 s, recuperación de solar tras <code>T_estable</code>, espera creciente después de una prueba fallida y ninguna alternancia continua.</p>
+
+<h3>Caso 2. Orden remota con resultado visible (Command + Observer)</h3>
+<p><b>Situación.</b> Es el paso 4 de la demostración del diseño: con el panel sombreado, un Técnico ordena Solar desde la plataforma. La orden debe llegar al dispositivo, ser rechazada con <code>solar_no_disponible</code> y mostrarse como rechazada en la pantalla en menos de 5 s. Además, en el ensayo E5 se corta el Wi-Fi: al volver, el dispositivo no debe ejecutar una orden vieja.</p>
+<p><b>Aplicación.</b> <code>Orden</code> y <code>ComandoModo</code> (sección 3.2) llevan la solicitud y su resultado. Cuando la fachada registra el resultado, actualiza <code>EstadoDispositivosEnVivo</code> y el Observer (sección 3.3) lo lleva a todas las pantallas abiertas sin consultar la base.</p>
+<p><b>Impacto esperado.</b> <i>Fiabilidad:</i> ninguna orden se pierde ni se ejecuta dos veces, y una orden vieja expira. <i>Usabilidad (retroalimentación):</i> el usuario siempre ve qué pasó con su orden y por qué. <i>Seguridad (responsabilidad):</i> cada orden queda asociada al usuario que la pidió. <i>Eficiencia:</i> el estado llega a la pantalla sin consultas periódicas a la base.</p>
+<p><b>Cómo se verifica.</b> Medir el tiempo entre el clic y el resultado en pantalla (objetivo: ≤ 5 s, RNF10) en diez órdenes seguidas. En el ensayo E5, dejar una orden pendiente con el Wi-Fi cortado más de 30 s y comprobar que queda <code>expirada</code> y que el relé no cambia al reconectar. Con dos navegadores abiertos en el mismo dispositivo, comprobar que ambos se actualizan.</p>
+
+<h3>Caso 3. Los mismos patrones dentro de .NET</h3>
+<p>El framework que usa SAGE aplica estos patrones en sus propias APIs, lo que muestra su utilidad en un proyecto de gran escala:</p>
+<ul>
+  <li><b>Observer:</b> los eventos de C# y la interfaz <code>IObservable&lt;T&gt;</code>/<code>IObserver&lt;T&gt;</code> lo implementan directamente. <code>INotifyPropertyChanged</code> avisa a las interfaces cuando cambia una propiedad, y el modo de servidor de Blazor se basa en avisar al navegador de cada cambio por SignalR.</li>
+  <li><b>Command:</b> las migraciones de EF Core, que SAGE usa para crear su base, son comandos: cada una es un objeto con <code>Up()</code> y <code>Down()</code> que se puede aplicar, revertir y registrar en la tabla <code>__EFMigrationsHistory</code>.</li>
+  <li><b>State:</b> el <i>circuit breaker</i> de las bibliotecas de resiliencia de .NET (<code>Microsoft.Extensions.Resilience</code>, basado en Polly) es una máquina de estados <i>cerrado → abierto → semiabierto</i>. El estado semiabierto prueba si el servicio volvió antes de confiar en él, la misma idea que <code>PROBANDO_SOLAR</code>.</li>
+</ul>
+
+<h2>9. Conclusiones</h2>
+<ul>
+  <li>Tres patrones de comportamiento resuelven problemas reales de SAGE y cubren juntos el ciclo de control de fuente: State decide en el dispositivo, Command lleva las órdenes del usuario y Observer devuelve el resultado a las pantallas.</li>
+  <li>State es el de mayor impacto en la fiabilidad, porque el dispositivo toma decisiones físicas solo y sin conexión; la tabla de transiciones del diseño pasa a ser directamente el código.</li>
+  <li>Command hace que una orden remota tenga siempre un resultado conocido: se puede encolar, expirar, auditar y nunca se ejecuta dos veces.</li>
+  <li>Observer es el único de los tres que mejora la eficiencia de forma medible, porque elimina las consultas periódicas de cada pantalla abierta.</li>
+  <li>Los patrones de comportamiento se combinan con los de los documentos anteriores: el State vive dentro del Singleton <code>ControladorFuente</code>, el Observer amplía el Singleton <code>EstadoDispositivosEnVivo</code>, las órdenes pasan por el Proxy de protección y se entregan a través de la Facade.</li>
+  <li>Chain of Responsibility, Iterator, Mediator, Memento, Strategy y Template Method se descartaron porque hoy no hay en SAGE un problema que justifique su costo, o porque la plataforma ya los resuelve; la sección 4 deja escritas las condiciones para reconsiderarlos.</li>
+  <li>El impacto en la calidad se verificará durante los Sprints con las pruebas y los ensayos indicados en cada caso de estudio.</li>
+</ul>
+
+<h2>10. Referencias</h2>
+<ul>
+  <li>Gamma, E., Helm, R., Johnson, R. y Vlissides, J. (1994). <i>Design Patterns: Elements of Reusable Object-Oriented Software</i>. Addison-Wesley.</li>
+  <li>Freeman, E. y Robson, E. (2020). <i>Head First Design Patterns</i> (2.ª ed.). O'Reilly Media.</li>
+  <li>Shvets, A. <i>Refactoring.Guru: Patrones de comportamiento</i>. https://refactoring.guru/es/design-patterns/behavioral-patterns</li>
+  <li>Microsoft. <i>Eventos (Guía de programación de C#)</i> y <i>Patrón de diseño de observador</i>. https://learn.microsoft.com/dotnet/standard/events/</li>
+  <li>Microsoft. <i>Ciclo de vida de los componentes de ASP.NET Core Razor</i> (<code>IDisposable</code>, <code>InvokeAsync</code>). https://learn.microsoft.com/aspnet/core/blazor/components/lifecycle</li>
+  <li>Microsoft. <i>Migraciones en Entity Framework Core</i>. https://learn.microsoft.com/ef/core/managing-schemas/migrations/</li>
+  <li>ISO/IEC 25010:2023. <i>Systems and software Quality Requirements and Evaluation (SQuaRE): Product quality model</i>.</li>
+  <li>Equipo SAGE (2026). <i>Especificación de Requisitos de Software, versión 2.0</i>, diseño IoT (máquina de estados y contrato dispositivo–servidor), modelo UML y documentos de patrones creacionales y estructurales del proyecto.</li>
+</ul>
+
+<script>
+// Diagramas de clases simplificados (UML) dibujados en SVG
+function uml(id, W, nodes, edges) {
+  const NS = 'http://www.w3.org/2000/svg', svg = document.getElementById(id), LH = 13;
+  const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; };
+  let H = 0; const by = {};
+  nodes.forEach(n => { n.w = n.w || 150; n.hh = 20 + (n.st ? 11 : 0); n.h = n.hh + (n.m || []).length * LH + 6; by[n.id] = n; H = Math.max(H, n.y + n.h); });
+  H += 6;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.innerHTML = `<defs><marker id="${id}t" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto"><path d="M1,1 L11,6 L1,11 Z" fill="#fff" stroke="#333"/></marker>
+    <marker id="${id}a" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="9" markerHeight="9" orient="auto"><path d="M1,1 L11,6 L1,11" fill="none" stroke="#333" stroke-width="1.4"/></marker></defs>`;
+  const c = n => [n.x + n.w / 2, n.y + n.h / 2];
+  const clip = (n, p) => { const [cx, cy] = c(n), dx = p[0] - cx, dy = p[1] - cy; const t = Math.min(dx ? n.w / 2 / Math.abs(dx) : 1e9, dy ? n.h / 2 / Math.abs(dy) : 1e9); return [cx + dx * t, cy + dy * t]; };
+  edges.forEach(([f, t, k, lab, bend]) => {
+    const a = by[f], b = by[t], ca = c(a), cb = c(b);
+    const ctl = bend ? [(ca[0] + cb[0]) / 2, Math.max(ca[1], cb[1]) + bend] : null;
+    const s = clip(a, ctl || cb), e = clip(b, ctl || ca);
+    const d = ctl ? `M${s} Q${ctl} ${e}` : `M${s} L${e}`;
+    el('path', { d, fill: 'none', stroke: '#333', 'stroke-width': 1.1, 'stroke-dasharray': (k === 'impl' || k === 'dep') ? '5 3' : '', 'marker-end': `url(#${id}${k === 'impl' || k === 'inh' ? 't' : 'a'})` });
+    if (lab) { const m = ctl ? [0.25 * s[0] + 0.5 * ctl[0] + 0.25 * e[0], 0.25 * s[1] + 0.5 * ctl[1] + 0.25 * e[1]] : [(s[0] + e[0]) / 2, (s[1] + e[1]) / 2];
+      const tx = el('text', { x: m[0] + 4, y: m[1] - 3, 'font-size': 9.5, fill: '#9e0044', 'font-style': 'italic' }, lab); }
+  });
+  nodes.forEach(n => {
+    el('rect', { x: n.x, y: n.y, width: n.w, height: n.h, fill: n.fill || '#fdf5f9', stroke: '#9e0044', 'stroke-width': 1.2 });
+    if (n.st) el('text', { x: n.x + n.w / 2, y: n.y + 11, 'text-anchor': 'middle', 'font-size': 9 }, n.st);
+    el('text', { x: n.x + n.w / 2, y: n.y + n.hh - 6, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 'bold', 'font-style': n.abs ? 'italic' : 'normal' }, n.t);
+    if (n.m && n.m.length) {
+      el('line', { x1: n.x, y1: n.y + n.hh, x2: n.x + n.w, y2: n.y + n.hh, stroke: '#9e0044' });
+      n.m.forEach((m, i) => { const u = m.startsWith('_'); el('text', { x: n.x + 5, y: n.y + n.hh + 12 + i * LH, 'font-size': 9.5, 'font-family': 'Consolas, monospace', 'text-decoration': u ? 'underline' : '' }, u ? m.slice(1) : m); });
+    }
+  });
+}
+
+uml('d-ruta', 680, [
+  { id: 'u', x: 5, y: 10, w: 110, t: 'Técnico', st: 'pantalla de órdenes', fill: '#fff' },
+  { id: 'cm', x: 205, y: 10, w: 140, t: 'Command', st: 'Orden' },
+  { id: 'st', x: 450, y: 10, w: 200, t: 'State', st: 'ESP32 · ControladorFuente' },
+  { id: 'fa', x: 450, y: 105, w: 200, t: 'Fachada (CU13)', st: 'recibe la telemetría', fill: '#fff' },
+  { id: 'ob', x: 205, y: 105, w: 140, t: 'Observer', st: 'EstadoDispositivosEnVivo' },
+  { id: 'p', x: 5, y: 105, w: 110, t: 'Panel en vivo', st: 'CU10', fill: '#fff' },
+], [['u', 'cm', 'assoc', 'crea'], ['cm', 'st', 'assoc', 'entrega'], ['st', 'fa', 'assoc', 'resultado'], ['fa', 'ob', 'assoc', 'actualiza'], ['ob', 'p', 'assoc', 'avisa']]);
+
+uml('d-st', 680, [
+  { id: 'ctx', x: 5, y: 6, w: 230, t: 'ControladorFuente', st: 'contexto · Singleton', m: ['- estado: EstadoFuente*', '+ tick(lecturas)', '+ cambiarA(estado, motivo)'] },
+  { id: 'e', x: 400, y: 6, w: 230, t: 'EstadoFuente', st: '«abstracta» estado', abs: true, m: ['+ nombre()', '+ entrar(c)', '+ evaluar(c, lecturas)'] },
+  { id: 'e1', x: 160, y: 150, w: 120, t: 'EnCargador' },
+  { id: 'e2', x: 295, y: 150, w: 125, t: 'ProbandoSolar' },
+  { id: 'e3', x: 435, y: 150, w: 95, t: 'EnSolar' },
+  { id: 'e4', x: 545, y: 150, w: 130, t: 'SinAlimentacion' },
+], [['ctx', 'e', 'assoc', 'estado actual'], ['e1', 'e', 'inh'], ['e2', 'e', 'inh'], ['e3', 'e', 'inh'], ['e4', 'e', 'inh']]);
+
+uml('d-cmd', 680, [
+  { id: 'cl', x: 5, y: 10, w: 140, t: 'ControladorOrdenes', st: 'cliente · plataforma' },
+  { id: 'o', x: 235, y: 5, w: 235, t: 'Orden', st: 'comando guardado (BD)', m: ['Tipo, ValorJson, Estado, UsuarioId', '+ Entregar() / Resolver() / Expirar()'] },
+  { id: 'fa', x: 520, y: 75, w: 155, t: 'FachadaSincronizacion', st: 'transporte · CU13' },
+  { id: 'inv', x: 520, y: 165, w: 155, t: 'ProcesadorOrdenes', st: 'invocador · ESP32' },
+  { id: 'cmd', x: 245, y: 150, w: 170, t: 'Comando', st: '«abstracta»', abs: true, m: ['+ ejecutar(c): Resultado'] },
+  { id: 'c1', x: 190, y: 260, w: 140, t: 'ComandoModo' },
+  { id: 'c2', x: 350, y: 260, w: 170, t: 'ComandoParametros' },
+  { id: 'r', x: 5, y: 250, w: 165, t: 'ControladorFuente', st: 'receptor · ESP32' },
+], [['cl', 'o', 'dep', '«crea»'], ['fa', 'o', 'assoc', '«entrega»'], ['fa', 'inv', 'assoc', 'respuesta HTTP'], ['inv', 'cmd', 'assoc', '«ejecuta»'], ['c1', 'cmd', 'inh'], ['c2', 'cmd', 'inh'], ['cmd', 'r', 'assoc', '«actúa sobre»']]);
+
+uml('d-obs', 680, [
+  { id: 's', x: 240, y: 60, w: 200, t: 'EstadoDispositivosEnVivo', st: 'sujeto · Singleton', m: ['+ event Cambio', '+ Actualizar(id, estado)', '+ Obtener(id)'] },
+  { id: 'fa', x: 5, y: 175, w: 175, t: 'FachadaSincronizacion', st: 'cada envío' },
+  { id: 'vg', x: 5, y: 0, w: 150, t: 'VigilanteConexion', st: 'BackgroundService' },
+  { id: 'o1', x: 500, y: 0, w: 175, t: 'PanelMonitoreo', st: 'observador · Blazor', m: ['+ AlCambiar(id, estado)', '+ Dispose()'] },
+  { id: 'o2', x: 500, y: 165, w: 175, t: 'IndicadorAlertas', st: 'observador · menú', m: ['+ AlCambiar(id, estado)', '+ Dispose()'] },
+], [['fa', 's', 'assoc', 'Actualizar'], ['vg', 's', 'assoc', 'Actualizar'], ['s', 'o1', 'dep'], ['s', 'o2', 'dep', 'avisa']]);
+</script>
+</body>
+</html>

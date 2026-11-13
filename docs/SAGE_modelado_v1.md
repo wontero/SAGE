@@ -216,23 +216,24 @@ stop
 |---|---|---|
 | **Consulta** | Humano | Ve monitoreo, historial, alertas y reportes. Es el rol de la Gerencia |
 | **Técnico** | Humano | Hereda de Consulta. Registra consumos, simula, controla dispositivos y hace ensayos |
-| **Administrador** | Humano | Hereda de Técnico. Gestiona empresas, usuarios, dispositivos y tarifas |
+| **Operador SAGE** | Humano | Personal de SAGE. Registra empresas, crea administradores y los vincula a empresas, mantiene los parámetros económicos generales. No ve datos de energía |
+| **Administrador** | Humano | Hereda de Técnico. Pertenece a una o más empresas; crea sus usuarios, registra dispositivos y fija la tarifa de su empresa |
 | **Dispositivo SAGE** | Sistema (ESP32) | Mide, conmuta y sincroniza con la plataforma |
 | **Reloj del sistema** | Temporizador | Dispara verificaciones periódicas (dispositivo sin conexión, órdenes expiradas) |
 
-> **[D] Pendiente:** RF01 ("registrar empresas") supone a alguien por encima de cada empresa. La propuesta es que el **Administrador** sea el operador de SAGE y gestione todas las empresas, y que Técnico y Consulta pertenezcan a una sola. Si se quiere que cada empresa tenga su propio administrador, hace falta un cuarto rol, "Superadministrador".
+> **[D] Resuelto (13/11/2026, ERS 2.1):** se agregó el rol **Operador SAGE**, que registra empresas y crea administradores. Cada empresa tiene su propio Administrador, que puede tener varias empresas con los datos separados. Técnico y Consulta pertenecen a una sola.
 
 ### 3.2 Lista de casos de uso
 
 | CU | Nombre | Actor principal | Requisitos | Prioridad |
 |---|---|---|---|---|
 | CU01 | Iniciar sesión | Consulta (y herederos) | RNF01 | Must |
-| CU02 | Gestionar empresas | Administrador | RF01 | Must |
-| CU03 | Gestionar usuarios y roles | Administrador | RF02 | Must |
+| CU02 | Gestionar empresas | Operador SAGE | RF01 | Must |
+| CU03 | Gestionar usuarios y roles | Operador SAGE, Administrador | RF02 | Must |
 | CU04 | Registrar dispositivo | Administrador | RF09, RNF08 | Must |
 | CU05 | Registrar consumo facturado | Técnico | RF03 | Should |
 | CU06 | Consultar historial | Consulta | RF04 | Must |
-| CU07 | Configurar parámetros económicos | Administrador | RF05, RNF06 | Should |
+| CU07 | Configurar parámetros económicos | Operador SAGE, Administrador | RF05, RNF06 | Should |
 | CU08 | Simular y comparar escenarios | Técnico | RF06, RF07 | Should |
 | CU09 | Exportar reporte | Consulta | RF08 | Could |
 | CU10 | Monitorear dispositivo | Consulta | RF10, RF14 | Must |

@@ -10,10 +10,11 @@ En esta sección se describe **qué puede hacer cada actor con SAGE**. Los casos
 |---|---|---|
 | **Consulta** | Normalmente la gerencia de la empresa | Revisa el estado de los dispositivos, el historial, las alertas y los reportes. No modifica nada |
 | **Técnico** | Personal técnico o administrativo de la empresa | Todo lo que hace Consulta, y además registra consumos, realiza simulaciones, controla los dispositivos y registra ensayos |
-| **Administrador** | Operador de la plataforma SAGE | Todo lo que hace el Técnico, y además gestiona empresas, usuarios, dispositivos y parámetros económicos |
+| **Operador SAGE** | Personal de SAGE, proveedor del servicio | Registra empresas, crea administradores y los vincula a una o más empresas, y mantiene los parámetros económicos generales. No ve datos de energía |
+| **Administrador** | Responsable de una o más empresas cliente | Todo lo que hace el Técnico en sus empresas, y además crea a sus usuarios, registra dispositivos y fija la tarifa propia de la empresa. No crea empresas |
 | **Dispositivo SAGE** | El equipo instalado en la empresa | Mide la energía de cada fuente, cambia de fuente según las reglas y se comunica con la plataforma |
 
-Los roles humanos son **acumulativos**: el Técnico puede hacer todo lo que hace Consulta, y el Administrador todo lo que hace el Técnico.
+Los roles de empresa son **acumulativos**: el Técnico puede hacer todo lo que hace Consulta, y el Administrador todo lo que hace el Técnico. El Operador SAGE es aparte: no hereda de los otros roles. (Actualizado el 13/11/2026, ERS 2.1.)
 
 ---
 
@@ -23,12 +24,12 @@ Los roles humanos son **acumulativos**: el Técnico puede hacer todo lo que hace
 |---|---|---|---|
 | **Acceso y administración** | | | |
 | CU01 | Iniciar sesión | Consulta, Técnico, Administrador | RNF01 |
-| CU02 | Gestionar empresas | Administrador | RF01 |
-| CU03 | Gestionar usuarios y roles | Administrador | RF02 |
+| CU02 | Gestionar empresas | Operador SAGE | RF01 |
+| CU03 | Gestionar usuarios y roles | Operador SAGE, Administrador | RF02 |
 | CU04 | Registrar dispositivo | Administrador | RF09 |
 | **Análisis económico** | | | |
 | CU05 | Registrar consumo facturado | Técnico | RF03 |
-| CU06 | Configurar parámetros económicos | Administrador | RF05, RNF06 |
+| CU06 | Configurar parámetros económicos | Operador SAGE (generales), Administrador (tarifa de su empresa) | RF05, RNF06 |
 | CU07 | Simular escenarios económicos | Técnico | RF06, RF07 |
 | CU08 | Consultar historial y exportar reportes | Consulta | RF04, RF08 |
 | **Monitoreo y control de fuentes** | | | |
@@ -72,11 +73,11 @@ Los roles humanos son **acumulativos**: el Técnico puede hacer todo lo que hace
 
 ### CU02 · Gestionar empresas
 
-**Actor:** Administrador.
+**Actor:** Operador SAGE.
 **Objetivo:** registrar las empresas que usan SAGE y mantener actualizados sus datos.
 
 **Flujo principal**
-1. El administrador abre el módulo de empresas.
+1. El operador abre el módulo de empresas.
 2. Elige registrar una empresa nueva o editar una existente.
 3. Ingresa la razón social, el NIT, el rubro, la ciudad y los datos de contacto.
 4. El sistema valida que no falten datos y que el NIT no esté repetido.
@@ -92,21 +93,24 @@ Los roles humanos son **acumulativos**: el Técnico puede hacer todo lo que hace
 
 ### CU03 · Gestionar usuarios y roles
 
-**Actor:** Administrador.
+**Actores:** Operador SAGE y Administrador.
 **Objetivo:** crear los usuarios de cada empresa y asignarles un rol.
 
-**Flujo principal**
-1. El administrador elige la empresa.
-2. Ingresa el nombre y el correo del usuario y le asigna un rol: Administrador, Técnico o Consulta.
-3. El sistema verifica que el correo no esté registrado.
-4. El sistema crea el usuario con una contraseña temporal y la muestra una sola vez.
+**Flujo principal (Operador SAGE)**
+1. El operador crea un administrador con su nombre, su correo, una contraseña temporal y la empresa a la que pertenece.
+2. Más adelante puede vincular ese administrador a otra empresa, desvincularlo (si le queda al menos una) o desactivarlo.
+
+**Flujo principal (Administrador)**
+1. El administrador elige una de sus empresas.
+2. Ingresa el nombre, el correo y una contraseña temporal, y asigna un rol: Administrador, Técnico o Consulta.
+3. El sistema verifica que el correo no esté registrado y crea el usuario.
 
 **Flujos alternativos**
 - Si el correo ya existe, el sistema no crea el usuario.
-- Si se desactiva un usuario, se cierran sus sesiones abiertas.
-- El sistema no permite dejar la plataforma sin ningún administrador.
+- En su primer inicio de sesión, el usuario debe cambiar la contraseña temporal antes de usar el sistema. Lo mismo ocurre después de un restablecimiento de contraseña.
+- Solo el Operador SAGE desactiva administradores; el Administrador desactiva Técnicos y Consulta de sus empresas.
 
-**Postcondición:** el usuario puede ingresar con los permisos de su rol.
+**Postcondición:** el usuario puede ingresar con los permisos de su rol, solo en sus empresas.
 
 ---
 

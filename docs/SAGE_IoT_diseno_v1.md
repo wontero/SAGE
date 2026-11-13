@@ -312,12 +312,21 @@ Volumen estimado: un registro cada 2 s equivale a unas 43 000 filas diarias por 
 
 ### 6.4 Permisos
 
-| Acción | Administrador | Técnico | Consulta |
-|---|---|---|---|
-| Ver monitoreo e historial de su empresa | ✔ | ✔ | ✔ |
-| Enviar órdenes de modo | ✔ | ✔ | ✘ |
-| Cambiar parámetros de reglas | ✔ | ✔ | ✘ |
-| Registrar dispositivos y emitir credenciales | ✔ | ✘ | ✘ |
+Actualizado el 13/11/2026 (ERS 2.1, observación O10): se agrega el **Operador SAGE**, y el Administrador pertenece a una o más empresas.
+
+| Acción | Operador SAGE | Administrador | Técnico | Consulta |
+|---|---|---|---|---|
+| Registrar, editar y desactivar empresas | ✔ | ✘ | ✘ | ✘ |
+| Crear administradores y vincularlos a empresas | ✔ | ✔ solo crear, para sus empresas | ✘ | ✘ |
+| Crear y desactivar Técnicos y Consulta | ✘ | ✔ (sus empresas) | ✘ | ✘ |
+| Parámetros económicos generales | ✔ | ✘ | ✘ | ✘ |
+| Tarifa propia de la empresa | ✘ | ✔ | ✘ | ✘ |
+| Ver monitoreo e historial de su empresa activa | ✘ | ✔ | ✔ | ✔ |
+| Enviar órdenes de modo | ✘ | ✔ | ✔ | ✘ |
+| Cambiar parámetros de reglas | ✘ | ✔ | ✔ | ✘ |
+| Registrar dispositivos y emitir credenciales | ✘ | ✔ | ✘ | ✘ |
+
+Todo usuario nuevo recibe una contraseña temporal y debe cambiarla en su primer inicio de sesión. Un usuario con varias empresas trabaja sobre una empresa activa; los datos de distintas empresas nunca se mezclan.
 
 ---
 
