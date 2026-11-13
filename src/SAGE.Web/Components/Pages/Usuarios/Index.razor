@@ -11,163 +11,124 @@
 
 <PageTitle>Usuarios — SAGE</PageTitle>
 
-<MudStack Spacing="3">
-    <MudText Typo="Typo.h4">Usuarios</MudText>
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Administración</p>
+            <h1 class="page-title">Usuarios</h1>
+        </div>
+        <div class="page-actions">
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       OnClick="NuevoUsuario"
+                       Disabled="@(_cargando || _cambiandoEstado)">
+                Nuevo usuario
+            </MudButton>
+        </div>
+    </header>
 
-    <MudButton Color="Color.Primary"
-               Variant="Variant.Filled"
-               StartIcon="@Icons.Material.Filled.PersonAdd"
-               OnClick="NuevoUsuario"
-               Disabled="@(_cargando || _cambiandoEstado)">
-        Nuevo usuario
-    </MudButton>
+    <div class="page-filters">
+        <MudTextField T="string"
+                      @bind-Value="_busqueda"
+                      Label="Buscar por nombre o correo"
+                      Variant="Variant.Outlined"
+                      Immediate="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" />
 
-    <MudGrid>
-        <MudItem xs="12" md="6">
-            <MudTextField T="string"
-                          @bind-Value="_busqueda"
-                          Label="Buscar por nombre o correo"
-                          Variant="Variant.Outlined"
-                          Immediate="true"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search" />
-        </MudItem>
+        <MudSelect T="int"
+                   @bind-Value="_empresaFiltro"
+                   Label="Empresa"
+                   Variant="Variant.Outlined">
+            <MudSelectItem T="int" Value="0">Todas las empresas</MudSelectItem>
+            @foreach (var empresa in _empresas)
+            {
+                <MudSelectItem T="int" Value="@empresa.Id">@empresa.Nombre</MudSelectItem>
+            }
+        </MudSelect>
 
-        <MudItem xs="12" md="3">
-            <MudSelect T="int"
-                       @bind-Value="_empresaFiltro"
-                       Label="Empresa"
-                       Variant="Variant.Outlined">
-                <MudSelectItem T="int" Value="0">
-                    Todas las empresas
-                </MudSelectItem>
-
-                @foreach (var empresa in _empresas)
-                {
-                    <MudSelectItem T="int" Value="@empresa.Id">
-                        @empresa.Nombre
-                    </MudSelectItem>
-                }
-            </MudSelect>
-        </MudItem>
-
-        <MudItem xs="12" md="3">
-            <MudSelect T="string"
-                       @bind-Value="_rolFiltro"
-                       Label="Rol"
-                       Variant="Variant.Outlined">
-                <MudSelectItem T="string" Value="@("")">
-                    Todos los roles
-                </MudSelectItem>
-
-                <MudSelectItem T="string" Value="@("Administrador")">
-                    Administrador
-                </MudSelectItem>
-
-                <MudSelectItem T="string" Value="@("Tecnico")">
-                    Técnico
-                </MudSelectItem>
-
-                <MudSelectItem T="string" Value="@("Consulta")">
-                    Consulta
-                </MudSelectItem>
-            </MudSelect>
-        </MudItem>
-    </MudGrid>
+        <MudSelect T="string"
+                   @bind-Value="_rolFiltro"
+                   Label="Rol"
+                   Variant="Variant.Outlined">
+            <MudSelectItem T="string" Value="@("")">Todos los roles</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Administrador")">Administrador</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Tecnico")">Técnico</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Consulta")">Consulta</MudSelectItem>
+        </MudSelect>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <MudAlert Severity="Severity.Error">
-            @_error
-        </MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
     }
 
-    <MudTable T="UsuarioFila"
-              Items="@UsuariosFiltrados"
-              Loading="_cargando"
-              Hover="true"
-              Striped="true"
-              Breakpoint="Breakpoint.Sm"
-              Elevation="1">
-        <HeaderContent>
-            <MudTh>Nombre completo</MudTh>
-            <MudTh>Correo</MudTh>
-            <MudTh>Rol</MudTh>
-            <MudTh>Empresa</MudTh>
-            <MudTh>Estado</MudTh>
-            <MudTh>Acciones</MudTh>
-        </HeaderContent>
+    <div class="page-panel">
+        <MudTable T="UsuarioFila"
+                  Items="@UsuariosFiltrados"
+                  Loading="_cargando"
+                  Hover="true"
+                  Breakpoint="Breakpoint.Sm"
+                  Elevation="0">
+            <HeaderContent>
+                <MudTh>Nombre completo</MudTh>
+                <MudTh>Correo</MudTh>
+                <MudTh>Rol</MudTh>
+                <MudTh>Empresa</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh>Acciones</MudTh>
+            </HeaderContent>
 
-        <RowTemplate>
-            <MudTd DataLabel="Nombre completo">
-                @context.NombreCompleto
-            </MudTd>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre completo">@context.NombreCompleto</MudTd>
+                <MudTd DataLabel="Correo">@context.Correo</MudTd>
+                <MudTd DataLabel="Rol">
+                    <MudChip T="string" Color="@ColorRol(context.Rol)" Size="Size.Small">
+                        @(context.Rol == "Tecnico" ? "Técnico" : context.Rol)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Empresa">@context.EmpresaNombre</MudTd>
+                <MudTd DataLabel="Estado">
+                    <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Default)" Size="Size.Small">
+                        @(context.Activo ? "Activo" : "Inactivo")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Acciones">
+                    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       aria-label="Editar"
+                                       OnClick="@(() => EditarUsuario(context))"
+                                       Disabled="@(_cargando || _cambiandoEstado)" />
+                        <MudIconButton Icon="@(context.Activo ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                       Color="@(context.Activo ? Color.Warning : Color.Success)"
+                                       Size="Size.Small"
+                                       aria-label="@(context.Activo ? "Desactivar" : "Activar")"
+                                       OnClick="@(() => CambiarEstadoUsuario(context))"
+                                       Disabled="@(_cargando || _cambiandoEstado)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.LockReset"
+                                       Color="Color.Secondary"
+                                       Size="Size.Small"
+                                       aria-label="Restablecer contraseña"
+                                       OnClick="@(() => RestablecerContrasena(context))"
+                                       Disabled="@(_cargando || _cambiandoEstado)" />
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
 
-            <MudTd DataLabel="Correo">
-                @context.Correo
-            </MudTd>
+            <NoRecordsContent>
+                <MudText>No se encontraron usuarios.</MudText>
+            </NoRecordsContent>
 
-            <MudTd DataLabel="Rol">
-                <MudChip T="string"
-                         Color="@ColorRol(context.Rol)"
-                         Size="Size.Small">
-                    @(context.Rol == "Tecnico" ? "Técnico" : context.Rol)
-                </MudChip>
-            </MudTd>
-
-            <MudTd DataLabel="Empresa">
-                @context.EmpresaNombre
-            </MudTd>
-
-            <MudTd DataLabel="Estado">
-                <MudChip T="string"
-                         Color="@(context.Activo ? Color.Success : Color.Default)"
-                         Size="Size.Small">
-                    @(context.Activo ? "Activo" : "Inactivo")
-                </MudChip>
-            </MudTd>
-
-            <MudTd DataLabel="Acciones">
-                <MudStack Spacing="1">
-                    <MudButton Color="Color.Primary"
-                               Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Edit"
-                               OnClick="@(() => EditarUsuario(context))"
-                               Disabled="@(_cargando || _cambiandoEstado)">
-                        Editar
-                    </MudButton>
-
-                    <MudButton Color="@(context.Activo ? Color.Warning : Color.Success)"
-                               Size="Size.Small"
-                               StartIcon="@(context.Activo
-                                                           ? Icons.Material.Filled.Block
-                                                       : Icons.Material.Filled.CheckCircle)"
-                               OnClick="@(() => CambiarEstadoUsuario(context))"
-                               Disabled="@(_cargando || _cambiandoEstado)">
-                        @(context.Activo ? "Desactivar" : "Activar")
-                    </MudButton>
-
-                    <MudButton Color="Color.Secondary"
-                               Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.LockReset"
-                               OnClick="@(() => RestablecerContrasena(context))"
-                               Disabled="@(_cargando || _cambiandoEstado)">
-                        Restablecer contraseña
-                    </MudButton>
-                </MudStack>
-            </MudTd>
-        </RowTemplate>
-
-        <NoRecordsContent>
-            <MudText>No se encontraron usuarios.</MudText>
-        </NoRecordsContent>
-
-        <PagerContent>
-            <MudTablePager RowsPerPageString="Filas por página"
-                           InfoFormat="{first_item}-{last_item} de {all_items}" />
-        </PagerContent>
-    </MudTable>
-</MudStack>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Filas por página"
+                               InfoFormat="{first_item}-{last_item} de {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </div>
+</div>
 
 @code {
     private List<UsuarioFila> _usuarios = new();

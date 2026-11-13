@@ -9,18 +9,20 @@
 
 <PageTitle>Facturas — SAGE</PageTitle>
 
-<MudStack Spacing="3">
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-        <MudText Typo="Typo.h4">Facturas de consumo</MudText>
-
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Consumo</p>
+            <h1 class="page-title">Facturas</h1>
+        </div>
         @if (_puedeRegistrar)
         {
-            <MudStack Row="true" Spacing="2">
+            <div class="page-actions">
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.UploadFile"
                            OnClick="AbrirImportar">
-                    Importar desde Excel
+                    Importar Excel
                 </MudButton>
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
@@ -28,89 +30,77 @@
                            OnClick="AbrirRegistrar">
                     Registrar factura
                 </MudButton>
-            </MudStack>
+            </div>
         }
-    </MudStack>
+    </header>
 
-    <MudGrid>
-        <MudItem xs="12" sm="6">
-            <MudPaper Class="pa-4" Elevation="1">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
-                    <MudAvatar Color="Color.Warning" Variant="Variant.Filled">
-                        <MudIcon Icon="@Icons.Material.Filled.Bolt" />
-                    </MudAvatar>
-                    <div>
-                        <MudText Typo="Typo.caption">Consumo últimos 12 meses (kWh)</MudText>
-                        <MudText Typo="Typo.h5">@_consumo12.ToString("N2", FacturaReglas.Cultura) kWh</MudText>
-                    </div>
-                </MudStack>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12" sm="6">
-            <MudPaper Class="pa-4" Elevation="1">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
-                    <MudAvatar Color="Color.Primary" Variant="Variant.Filled">
-                        <MudIcon Icon="@Icons.Material.Filled.Payments" />
-                    </MudAvatar>
-                    <div>
-                        <MudText Typo="Typo.caption">Monto últimos 12 meses (Bs)</MudText>
-                        <MudText Typo="Typo.h5">@_monto12.ToString("N2", FacturaReglas.Cultura) Bs</MudText>
-                    </div>
-                </MudStack>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+    <section class="home-group" aria-label="Resumen de facturas">
+        <h2 class="home-group__title">Últimos 12 meses</h2>
+        <div class="home-list">
+            <div class="home-row">
+                <span class="home-row__label">Consumo</span>
+                <span class="home-row__value home-row__value--emphasis">@_consumo12.ToString("N2", FacturaReglas.Cultura) kWh</span>
+            </div>
+            <div class="home-row">
+                <span class="home-row__label">Monto</span>
+                <span class="home-row__value home-row__value--emphasis">@_monto12.ToString("N2", FacturaReglas.Cultura) Bs</span>
+            </div>
+        </div>
+    </section>
 
     @if (_esAdmin)
     {
-        <MudSelect T="int?"
-                   Value="_empresaFiltro"
-                   ValueChanged="CambiarFiltro"
-                   Label="Filtrar por empresa"
-                   Variant="Variant.Outlined"
-                   Style="max-width: 360px;">
-            <MudSelectItem T="int?" Value="@((int?)null)">Todas las empresas</MudSelectItem>
-            @foreach (var empresa in _empresas)
-            {
-                <MudSelectItem T="int?" Value="@((int?)empresa.Id)">@empresa.Nombre</MudSelectItem>
-            }
-        </MudSelect>
+        <div class="page-filters">
+            <MudSelect T="int?"
+                       Value="_empresaFiltro"
+                       ValueChanged="CambiarFiltro"
+                       Label="Filtrar por empresa"
+                       Variant="Variant.Outlined">
+                <MudSelectItem T="int?" Value="@((int?)null)">Todas las empresas</MudSelectItem>
+                @foreach (var empresa in _empresas)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)empresa.Id)">@empresa.Nombre</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
     }
 
-    <MudTable Items="_filas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <MudTh>Periodo</MudTh>
-            @if (_esAdmin)
-            {
-                <MudTh>Empresa</MudTh>
-            }
-            <MudTh>Consumo (kWh)</MudTh>
-            <MudTh>Monto (Bs)</MudTh>
-            <MudTh>Bs/kWh</MudTh>
-            <MudTh>Origen</MudTh>
-            <MudTh>Registrada por</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Periodo">@context.Periodo</MudTd>
-            @if (_esAdmin)
-            {
-                <MudTd DataLabel="Empresa">@context.EmpresaNombre</MudTd>
-            }
-            <MudTd DataLabel="Consumo (kWh)">@context.ConsumoKwh.ToString("N2", FacturaReglas.Cultura) kWh</MudTd>
-            <MudTd DataLabel="Monto (Bs)">@context.MontoBs.ToString("N2", FacturaReglas.Cultura) Bs</MudTd>
-            <MudTd DataLabel="Bs/kWh">@context.BsPorKwh.ToString("N4", FacturaReglas.Cultura) Bs/kWh</MudTd>
-            <MudTd DataLabel="Origen">
-                <MudChip T="string" Size="Size.Small" Color="@(context.Origen == OrigenFactura.Excel ? Color.Info : Color.Default)">
-                    @context.Origen
-                </MudChip>
-            </MudTd>
-            <MudTd DataLabel="Registrada por">@context.RegistradaPor</MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText>No hay facturas registradas.</MudText>
-        </NoRecordsContent>
-    </MudTable>
-</MudStack>
+    <div class="page-panel">
+        <MudTable Items="_filas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>Periodo</MudTh>
+                @if (_esAdmin)
+                {
+                    <MudTh>Empresa</MudTh>
+                }
+                <MudTh>Consumo (kWh)</MudTh>
+                <MudTh>Monto (Bs)</MudTh>
+                <MudTh>Bs/kWh</MudTh>
+                <MudTh>Origen</MudTh>
+                <MudTh>Registrada por</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Periodo">@context.Periodo</MudTd>
+                @if (_esAdmin)
+                {
+                    <MudTd DataLabel="Empresa">@context.EmpresaNombre</MudTd>
+                }
+                <MudTd DataLabel="Consumo (kWh)">@context.ConsumoKwh.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Monto (Bs)">@context.MontoBs.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Bs/kWh">@context.BsPorKwh.ToString("N4", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Origen">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Origen == OrigenFactura.Excel ? Color.Info : Color.Default)">
+                        @context.Origen
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Registrada por">@context.RegistradaPor</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>No hay facturas registradas.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </div>
+</div>
 
 @code {
     private List<FacturaFila> _filas = new();

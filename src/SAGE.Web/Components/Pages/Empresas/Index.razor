@@ -7,54 +7,63 @@
 
 <PageTitle>Empresas — SAGE</PageTitle>
 
-<MudStack Spacing="3">
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-        <MudText Typo="Typo.h4">Empresas</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNueva">
-            Nueva empresa
-        </MudButton>
-    </MudStack>
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Administración</p>
+            <h1 class="page-title">Empresas</h1>
+        </div>
+        <div class="page-actions">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNueva">
+                Nueva empresa
+            </MudButton>
+        </div>
+    </header>
 
-    <MudTextField @bind-Value="_busqueda"
-                  Label="Buscar por nombre o NIT"
-                  Variant="Variant.Outlined"
-                  Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Filled.Search"
-                  Immediate="true"
-                  DebounceInterval="300"
-                  OnDebounceIntervalElapsed="Recargar" />
+    <div class="page-filters">
+        <MudTextField @bind-Value="_busqueda"
+                      Label="Buscar por nombre o NIT"
+                      Variant="Variant.Outlined"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      DebounceInterval="300"
+                      OnDebounceIntervalElapsed="Recargar" />
+    </div>
 
-    <MudTable Items="_empresas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <MudTh>Nombre</MudTh>
-            <MudTh>NIT</MudTh>
-            <MudTh>Teléfono</MudTh>
-            <MudTh>Usuarios</MudTh>
-            <MudTh>Estado</MudTh>
-            <MudTh>Acciones</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
-            <MudTd DataLabel="NIT">@context.Nit</MudTd>
-            <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
-            <MudTd DataLabel="Usuarios">@context.CantidadUsuarios</MudTd>
-            <MudTd DataLabel="Estado">
-                <MudChip T="string" Size="Size.Small" Color="@(context.Activa ? Color.Success : Color.Default)">
-                    @(context.Activa ? "Activa" : "Inactiva")
-                </MudChip>
-            </MudTd>
-            <MudTd DataLabel="Acciones">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => AbrirEditar(context))" />
-                <MudIconButton Icon="@(context.Activa ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
-                               Color="@(context.Activa ? Color.Warning : Color.Success)"
-                               OnClick="@(() => CambiarEstado(context))" />
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText>No hay empresas para mostrar.</MudText>
-        </NoRecordsContent>
-    </MudTable>
-</MudStack>
+    <div class="page-panel">
+        <MudTable Items="_empresas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>NIT</MudTh>
+                <MudTh>Teléfono</MudTh>
+                <MudTh>Usuarios</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh>Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                <MudTd DataLabel="NIT">@context.Nit</MudTd>
+                <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
+                <MudTd DataLabel="Usuarios">@context.CantidadUsuarios</MudTd>
+                <MudTd DataLabel="Estado">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Activa ? Color.Success : Color.Default)">
+                        @(context.Activa ? "Activa" : "Inactiva")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Acciones">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => AbrirEditar(context))" />
+                    <MudIconButton Icon="@(context.Activa ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                   Color="@(context.Activa ? Color.Warning : Color.Success)"
+                                   OnClick="@(() => CambiarEstado(context))" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>No hay empresas para mostrar.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </div>
+</div>
 
 @code {
     private List<EmpresaListaItem> _empresas = new();

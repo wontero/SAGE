@@ -11,159 +11,133 @@
 
 <PageTitle>Dispositivos — SAGE</PageTitle>
 
-<MudStack Spacing="3">
-    <MudText Typo="Typo.h4">Dispositivos</MudText>
-
-    <MudStack Row="true" Spacing="2">
-        @if (_esAdministrador)
-        {
-            <MudButton Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="NuevoDispositivo"
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Monitoreo</p>
+            <h1 class="page-title">Dispositivos</h1>
+        </div>
+        <div class="page-actions">
+            @if (_esAdministrador)
+            {
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="NuevoDispositivo"
+                           Disabled="@(_cargando || _ocupado)">
+                    Nuevo dispositivo
+                </MudButton>
+            }
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="CargarDispositivos"
                        Disabled="@(_cargando || _ocupado)">
-                Nuevo dispositivo
+                Actualizar
             </MudButton>
-        }
-
-        <MudButton Variant="Variant.Outlined"
-                   StartIcon="@Icons.Material.Filled.Refresh"
-                   OnClick="CargarDispositivos"
-                   Disabled="@(_cargando || _ocupado)">
-            Actualizar
-        </MudButton>
-    </MudStack>
+        </div>
+    </header>
 
     @if (_esAdministrador)
     {
-        <MudSelect T="int"
-                   Value="_empresaFiltro"
-                   ValueChanged="CambiarFiltro"
-                   Label="Filtrar por empresa"
-                   Variant="Variant.Outlined"
-                   Disabled="@(_cargando || _ocupado)">
-            <MudSelectItem T="int" Value="0">
-                Todas las empresas
-            </MudSelectItem>
-
-            @foreach (var empresa in _empresas)
-            {
-                <MudSelectItem T="int" Value="@empresa.Id">
-                    @empresa.Nombre
-                </MudSelectItem>
-            }
-        </MudSelect>
+        <div class="page-filters">
+            <MudSelect T="int"
+                       Value="_empresaFiltro"
+                       ValueChanged="CambiarFiltro"
+                       Label="Filtrar por empresa"
+                       Variant="Variant.Outlined"
+                       Disabled="@(_cargando || _ocupado)">
+                <MudSelectItem T="int" Value="0">Todas las empresas</MudSelectItem>
+                @foreach (var empresa in _empresas)
+                {
+                    <MudSelectItem T="int" Value="@empresa.Id">@empresa.Nombre</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
     }
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <MudAlert Severity="Severity.Error">
-            @_error
-        </MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
     }
 
-    <MudTable T="DispositivoFila"
-              Items="_dispositivos"
-              Loading="_cargando"
-              Hover="true"
-              Striped="true"
-              Breakpoint="Breakpoint.Sm"
-              Elevation="1">
-        <HeaderContent>
-            <MudTh>Nombre</MudTh>
-            <MudTh>Empresa</MudTh>
-            <MudTh>Tipo</MudTh>
-            <MudTh>Estado</MudTh>
-            <MudTh>Última conexión</MudTh>
+    <div class="page-panel">
+        <MudTable T="DispositivoFila"
+                  Items="_dispositivos"
+                  Loading="_cargando"
+                  Hover="true"
+                  Breakpoint="Breakpoint.Sm"
+                  Elevation="0">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>Empresa</MudTh>
+                <MudTh>Tipo</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh>Última conexión</MudTh>
+                @if (_esAdministrador)
+                {
+                    <MudTh>Acciones</MudTh>
+                }
+            </HeaderContent>
 
-            @if (_esAdministrador)
-            {
-                <MudTh>Acciones</MudTh>
-            }
-        </HeaderContent>
-
-        <RowTemplate>
-            <MudTd DataLabel="Nombre">
-                @context.Nombre
-            </MudTd>
-
-            <MudTd DataLabel="Empresa">
-                @context.EmpresaNombre
-            </MudTd>
-
-            <MudTd DataLabel="Tipo">
-                <MudChip T="string"
-                         Size="Size.Small"
-                         Color="@(context.EsSimulado ? Color.Warning : Color.Info)">
-                    @(context.EsSimulado ? "SIMULADO" : "REAL")
-                </MudChip>
-            </MudTd>
-
-            <MudTd DataLabel="Estado">
-                <MudChip T="string"
-                         Size="Size.Small"
-                         Color="@(context.Activo ? Color.Success : Color.Default)">
-                    @(context.Activo ? "Activo" : "Inactivo")
-                </MudChip>
-            </MudTd>
-
-            <MudTd DataLabel="Última conexión">
-                <MudStack Row="true"
-                          AlignItems="AlignItems.Center"
-                          Spacing="1">
-                    <MudIcon Icon="@Icons.Material.Filled.Circle"
-                             Size="Size.Small"
-                             Color="@(EstaEnLinea(context.UltimoContacto)
-                                                     ? Color.Success
-                                                     : Color.Error)" />
-
-                    <MudText Typo="Typo.body2">
-                        @TiempoDesde(context.UltimoContacto)
-                    </MudText>
-                </MudStack>
-            </MudTd>
-
-            @if (_esAdministrador)
-            {
-                <MudTd DataLabel="Acciones">
-                    <MudStack Spacing="1">
-                        <MudButton Color="Color.Primary"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Edit"
-                                   OnClick="@(() => EditarDispositivo(context))"
-                                   Disabled="@(_cargando || _ocupado)">
-                            Editar
-                        </MudButton>
-
-                        <MudButton Color="@(context.Activo ? Color.Warning : Color.Success)"
-                                   Size="Size.Small"
-                                   OnClick="@(() => CambiarEstado(context))"
-                                   Disabled="@(_cargando || _ocupado)">
-                            @(context.Activo ? "Desactivar" : "Activar")
-                        </MudButton>
-
-                        <MudButton Color="Color.Secondary"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Refresh"
-                                   OnClick="@(() => RegenerarToken(context))"
-                                   Disabled="@(_cargando || _ocupado)">
-                            Regenerar token
-                        </MudButton>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                <MudTd DataLabel="Empresa">@context.EmpresaNombre</MudTd>
+                <MudTd DataLabel="Tipo">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.EsSimulado ? Color.Warning : Color.Info)">
+                        @(context.EsSimulado ? "Simulado" : "Real")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Estado">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Activo ? Color.Success : Color.Default)">
+                        @(context.Activo ? "Activo" : "Inactivo")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Última conexión">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.Circle"
+                                 Size="Size.Small"
+                                 Color="@(EstaEnLinea(context.UltimoContacto) ? Color.Success : Color.Error)" />
+                        <MudText Typo="Typo.body2">@TiempoDesde(context.UltimoContacto)</MudText>
                     </MudStack>
                 </MudTd>
-            }
-        </RowTemplate>
+                @if (_esAdministrador)
+                {
+                    <MudTd DataLabel="Acciones">
+                        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           aria-label="Editar"
+                                           OnClick="@(() => EditarDispositivo(context))"
+                                           Disabled="@(_cargando || _ocupado)" />
+                            <MudIconButton Icon="@(context.Activo ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                           Color="@(context.Activo ? Color.Warning : Color.Success)"
+                                           Size="Size.Small"
+                                           aria-label="@(context.Activo ? "Desactivar" : "Activar")"
+                                           OnClick="@(() => CambiarEstado(context))"
+                                           Disabled="@(_cargando || _ocupado)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.VpnKey"
+                                           Color="Color.Secondary"
+                                           Size="Size.Small"
+                                           aria-label="Regenerar token"
+                                           OnClick="@(() => RegenerarToken(context))"
+                                           Disabled="@(_cargando || _ocupado)" />
+                        </MudStack>
+                    </MudTd>
+                }
+            </RowTemplate>
 
-        <NoRecordsContent>
-            <MudText>No hay dispositivos para mostrar.</MudText>
-        </NoRecordsContent>
+            <NoRecordsContent>
+                <MudText>No hay dispositivos para mostrar.</MudText>
+            </NoRecordsContent>
 
-        <PagerContent>
-            <MudTablePager RowsPerPageString="Filas por página"
-                           InfoFormat="{first_item}-{last_item} de {all_items}" />
-        </PagerContent>
-    </MudTable>
-</MudStack>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Filas por página"
+                               InfoFormat="{first_item}-{last_item} de {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </div>
+</div>
 
 @code {
     private List<DispositivoFila> _dispositivos = new();

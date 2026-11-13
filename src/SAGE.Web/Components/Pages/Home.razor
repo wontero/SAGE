@@ -10,86 +10,130 @@
 
 <PageTitle>Inicio — SAGE</PageTitle>
 
-<MudStack Spacing="4">
-    <div class="home-intro">
-        <h1 class="home-title">@_nombre</h1>
-        <p class="home-meta">@_saludo · @_fraseRol@(_esAdmin ? "" : $" · {_empresaNombre}")</p>
-    </div>
+<div class="home">
+    <header class="home-intro">
+        <div class="page-head__text">
+            <p class="home-kicker">@_saludo</p>
+            <h1 class="home-title">@_nombre</h1>
+            <p class="home-meta">@_fraseRol@(_esAdmin ? "" : $" · {_empresaNombre}")</p>
+        </div>
+    </header>
 
-    <MudGrid>
-        @foreach (var tarjeta in Tarjetas())
-        {
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4" Elevation="1">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
-                        <MudAvatar Color="@tarjeta.Color" Variant="Variant.Filled">
-                            <MudIcon Icon="@tarjeta.Icono" />
-                        </MudAvatar>
-                        <div>
-                            <MudText Typo="Typo.caption">@tarjeta.Titulo</MudText>
-                            <MudText Typo="Typo.h5">@tarjeta.Valor</MudText>
+    <div class="home-body">
+        <div class="home-body__side">
+            <section class="home-group" aria-labelledby="home-now-title">
+                <h2 id="home-now-title" class="home-group__title">Ahora</h2>
+                <div class="home-list">
+                    <div class="home-row home-row--hero">
+                        <div class="home-row__stack">
+                            <span class="home-row__label">Potencia</span>
+                            <span class="home-row__hint">
+                                <span class="home-live-dot" aria-hidden="true"></span>
+                                En vivo · cada 5 s
+                            </span>
                         </div>
-                    </MudStack>
-                </MudPaper>
-            </MudItem>
-        }
-    </MudGrid>
+                        <span class="home-row__hero">@Watts(_potenciaTotalMw) <small>W</small></span>
+                    </div>
+                    <div class="home-row">
+                        <span class="home-row__label">
+                            <span class="home-swatch home-swatch--solar" aria-hidden="true"></span>
+                            Solar
+                        </span>
+                        <span class="home-row__value">@Watts(_potenciaSolarMw) W</span>
+                    </div>
+                    <div class="home-row">
+                        <span class="home-row__label">
+                            <span class="home-swatch home-swatch--red" aria-hidden="true"></span>
+                            Red
+                        </span>
+                        <span class="home-row__value">@Watts(_potenciaRedMw) W</span>
+                    </div>
+                    @if (_potenciaTotalMw > 0)
+                    {
+                        <div class="home-mix" aria-hidden="true">
+                            <span class="home-mix__solar" style="width: @Porcentaje(_potenciaSolarMw, _potenciaTotalMw)%"></span>
+                            <span class="home-mix__red" style="width: @Porcentaje(_potenciaRedMw, _potenciaTotalMw)%"></span>
+                        </div>
+                    }
+                </div>
+            </section>
 
-    <div>
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
-            <MudText Typo="Typo.h6">Última medición</MudText>
-            <MudText Typo="Typo.caption">(se actualiza cada 5 s)</MudText>
-        </MudStack>
+            <section class="home-group" aria-labelledby="home-summary-title">
+                <h2 id="home-summary-title" class="home-group__title">Resumen</h2>
+                <div class="home-list">
+                    @foreach (var kpi in Kpis())
+                    {
+                        <div class="home-row">
+                            <span class="home-row__label">@kpi.Titulo</span>
+                            <span class="home-row__value">@kpi.Valor</span>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
 
-        @if (_dispositivos.Count == 0)
-        {
-            <MudAlert Severity="Severity.Info">No hay dispositivos activos para mostrar.</MudAlert>
-        }
-        else
-        {
-            <MudGrid>
-                @foreach (var d in _dispositivos)
+        <section class="home-group" aria-labelledby="home-devices-title">
+            <h2 id="home-devices-title" class="home-group__title">Última medición</h2>
+            <div class="home-list">
+                @if (_dispositivos.Count == 0)
                 {
-                    <MudItem xs="12" sm="6" md="4">
-                        <MudPaper Class="pa-4" Elevation="1">
-                            <MudStack Spacing="1">
-                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                    <MudText Typo="Typo.subtitle1"><b>@d.Nombre</b></MudText>
+                    <div class="home-row home-row--muted">
+                        <span class="home-row__label">No hay dispositivos activos</span>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var d in _dispositivos)
+                    {
+                        var solar = d.Medicion?.EsSolar == true;
+                        <div class="home-row home-row--device">
+                            <div class="home-row__stack">
+                                <span class="home-row__label">@d.Nombre</span>
+                                <span class="home-row__hint">
+                                    @if (_esAdmin)
+                                    {
+                                        @d.EmpresaNombre
+                                        <span aria-hidden="true"> · </span>
+                                    }
                                     @if (d.EsSimulado)
                                     {
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">SIMULADO</MudChip>
+                                        <text>Simulado</text>
+                                        @if (d.Medicion is not null)
+                                        {
+                                            <span aria-hidden="true"> · </span>
+                                        }
                                     }
-                                </MudStack>
-
-                                @if (_esAdmin)
-                                {
-                                    <MudText Typo="Typo.caption">@d.EmpresaNombre</MudText>
-                                }
-
-                                @if (d.Medicion is null)
-                                {
-                                    <MudText Typo="Typo.body2">Sin mediciones todavía.</MudText>
-                                }
-                                else
-                                {
-                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                        <MudText Typo="Typo.body2">Fuente:</MudText>
-                                        <MudChip T="string" Size="Size.Small" Color="@(d.Medicion.EsSolar ? Color.Warning : Color.Info)">
-                                            @(d.Medicion.EsSolar ? "Solar" : "Red")
-                                        </MudChip>
-                                    </MudStack>
-                                    <MudText Typo="Typo.body2">Potencia solar: <b>@Watts(d.Medicion.PSolMw) W</b></MudText>
-                                    <MudText Typo="Typo.body2">Potencia de red: <b>@Watts(d.Medicion.PRedMw) W</b></MudText>
-                                    <MudText Typo="Typo.caption">Llegó @TiempoDesde(d.Medicion.TsServidor)</MudText>
-                                }
-                            </MudStack>
-                        </MudPaper>
-                    </MudItem>
+                                    @if (d.Medicion is null)
+                                    {
+                                        <text>Sin mediciones</text>
+                                    }
+                                    else
+                                    {
+                                        <text>@(solar ? "Solar" : "Red") · @TiempoDesde(d.Medicion.TsServidor)</text>
+                                    }
+                                </span>
+                            </div>
+                            @if (d.Medicion is not null)
+                            {
+                                <span class="home-row__value home-row__value--emphasis">
+                                    @Watts(solar ? d.Medicion.PSolMw : d.Medicion.PRedMw) W
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="home-row__value">—</span>
+                            }
+                        </div>
+                    }
                 }
-            </MudGrid>
-        }
+                <a class="home-action" href="dispositivos">
+                    <span>Ver dispositivos</span>
+                    <span class="home-action__chev" aria-hidden="true">›</span>
+                </a>
+            </div>
+        </section>
     </div>
-</MudStack>
+</div>
 
 @code {
     private readonly CancellationTokenSource _cts = new();
@@ -107,6 +151,9 @@
     private int _dispositivosEnLinea;
     private int _dispositivosTotal;
     private int _facturas;
+    private decimal _potenciaSolarMw;
+    private decimal _potenciaRedMw;
+    private decimal _potenciaTotalMw;
     private List<TarjetaDispositivo> _dispositivos = new();
 
     protected override async Task OnInitializedAsync()
@@ -137,14 +184,11 @@
         }
     }
 
-    // Todas las consultas usan un alcance propio: así el temporizador nunca comparte
-    // el DbContext con otra operación de la página.
     private async Task CargarResumenAsync()
     {
         await using var scope = ScopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        // Filtro por empresa en la consulta (RNF01): Técnico y Consulta solo ven la suya.
         var propia = _empresaId ?? -1;
 
         if (_esAdmin)
@@ -205,6 +249,21 @@
         }
 
         _dispositivos = lista;
+        RecalcularPotencia();
+    }
+
+    private void RecalcularPotencia()
+    {
+        _potenciaSolarMw = 0;
+        _potenciaRedMw = 0;
+        foreach (var d in _dispositivos)
+        {
+            if (d.Medicion is null) continue;
+            _potenciaSolarMw += d.Medicion.PSolMw;
+            _potenciaRedMw += d.Medicion.PRedMw;
+        }
+
+        _potenciaTotalMw = _potenciaSolarMw + _potenciaRedMw;
     }
 
     private async Task RefrescarCadaCincoSegundosAsync()
@@ -222,14 +281,12 @@
         }
         catch (OperationCanceledException)
         {
-            // La página se cerró.
         }
         catch (ObjectDisposedException)
         {
         }
         catch (Exception)
         {
-            // Un fallo puntual (por ejemplo, el circuito se cerró) no debe tumbar la aplicación.
         }
     }
 
@@ -239,19 +296,25 @@
         _cts.Dispose();
     }
 
-    private IEnumerable<TarjetaResumen> Tarjetas()
+    private IEnumerable<KpiItem> Kpis()
     {
         if (_esAdmin)
         {
-            yield return new("Empresas activas", _empresasActivas.ToString(), Icons.Material.Filled.Apartment, Color.Primary);
-            yield return new("Usuarios", _usuarios.ToString(), Icons.Material.Filled.People, Color.Secondary);
+            yield return new("Empresas activas", _empresasActivas.ToString());
+            yield return new("Usuarios", _usuarios.ToString());
         }
 
-        yield return new("Dispositivos (en línea / total)", $"{_dispositivosEnLinea} / {_dispositivosTotal}", Icons.Material.Filled.Devices, Color.Success);
-        yield return new("Facturas registradas", _facturas.ToString(), Icons.Material.Filled.Receipt, Color.Warning);
+        yield return new("Dispositivos en línea", $"{_dispositivosEnLinea} / {_dispositivosTotal}");
+        yield return new("Facturas registradas", _facturas.ToString());
     }
 
     private static string Watts(decimal mw) => (mw / 1000m).ToString("N2", FacturaReglas.Cultura);
+
+    private static double Porcentaje(decimal parte, decimal total)
+    {
+        if (total <= 0) return 0;
+        return Math.Round((double)(parte / total * 100m), 1);
+    }
 
     private static string TiempoDesde(DateTime utc)
     {
@@ -293,7 +356,7 @@
         return TimeZoneInfo.Local;
     }
 
-    private sealed record TarjetaResumen(string Titulo, string Valor, string Icono, Color Color);
+    private sealed record KpiItem(string Titulo, string Valor);
 
     private sealed class TarjetaDispositivo
     {
