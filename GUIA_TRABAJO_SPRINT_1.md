@@ -333,7 +333,7 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 ### 2026-11-05 00:50 (UTC-4) — Harold — S1-M1, S1-M2
 - Hecho: solución Blazor .NET 10 con Identity, roles, MudBlazor (tema SAGE), login en español, seed de usuarios, gestión de empresas en `/empresas`, README, migración `InitialCreate`, marca Gauge y pulido de UI.
 - Correcciones a trabajo anterior: ninguna
-- Desvíos de la guía y motivo: en macOS no hay SQL Server Express `.\SQLEXPRESS`; se usa Azure SQL Edge en Docker (`localhost,1433`, autenticación `sa` / `SageSql2026!`) y Rider en lugar de Visual Studio. Paleta primaria azul Gauge (`#1565C0`) en lugar del verde `#2E7D32` de la guía, alineada al logo. Empresa de prueba: Energía Andina S.R.L. El stack (.NET 10, Blazor Server, EF Core, MudBlazor, Identity) se mantiene.
+- Desvíos de la guía y motivo: en macOS no hay SQL Server Express `.\SQLEXPRESS`; se usa Azure SQL Edge en Docker (`localhost,1433`, autenticación `sa` con contraseña local vía `ConnectionStrings__DefaultConnection`, sin subirla al repo) y Rider en lugar de Visual Studio. Paleta primaria azul Gauge (`#1565C0`) en lugar del verde `#2E7D32` de la guía, alineada al logo. Empresa de prueba: Energía Andina S.R.L. El stack (.NET 10, Blazor Server, EF Core, MudBlazor, Identity) se mantiene.
 - Pendientes o BLOQUEOS: ninguno
 - Último commit: 55c772e
 

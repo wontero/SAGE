@@ -2,72 +2,76 @@
 @attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
 
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.EntityFrameworkCore
-@using System.Security.Claims
 @using SAGE.Web.Data
+@using SAGE.Web.Servicios.Seguridad
 
 @inject IServiceScopeFactory ScopeFactory
-@inject AuthenticationStateProvider AuthProvider
+@inject IUsuarioActual UsuarioActual
 
-<PageTitle>Mediciones - SAGE</PageTitle>
+<PageTitle>Mediciones — SAGE</PageTitle>
 
-<h3>Mediciones de telemetría</h3>
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Telemetría</p>
+            <h1 class="page-title">Mediciones</h1>
+            <p class="page-meta">Últimas 50 mediciones registradas</p>
+        </div>
+    </header>
 
-<p>Últimas 50 mediciones registradas en SAGE.</p>
-
-@if (cargando)
-{
-    <p>Cargando mediciones...</p>
-}
-else if (error != null)
-{
-    <div class="alert alert-danger">@error</div>
-}
-else if (mediciones.Count == 0)
-{
-    <div class="alert alert-info">
-        No hay mediciones registradas.
-    </div>
-}
-else
-{
-    <div class="table-responsive">
-        <table class="table table-striped table-bordered">
-            <thead>
-                <tr>
-                    <th>Dispositivo</th>
-                    <th>Fecha servidor (UTC)</th>
-                    <th>Boot</th>
-                    <th>Seq</th>
-                    <th>Voltaje solar</th>
-                    <th>Corriente solar</th>
-                    <th>Potencia solar</th>
-                    <th>Modo</th>
-                    <th>Estado</th>
-                    <th>Fuente</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var m in mediciones)
-                {
-                    <tr>
-                        <td>@m.DispositivoId</td>
-                        <td>@m.TsServidor.ToString("dd/MM/yyyy HH:mm:ss")</td>
-                        <td>@m.BootId</td>
-                        <td>@m.Seq</td>
-                        <td>@m.VSol V</td>
-                        <td>@m.ISolMa mA</td>
-                        <td>@m.PSolMw mW</td>
-                        <td>@m.Modo</td>
-                        <td>@m.Estado</td>
-                        <td>@m.FuenteSeleccionada</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}
+    @if (cargando)
+    {
+        <div class="page-panel">
+            <div class="home-row home-row--muted">
+                <span class="home-row__label">Cargando mediciones…</span>
+            </div>
+        </div>
+    }
+    else if (error != null)
+    {
+        <MudAlert Severity="Severity.Error">@error</MudAlert>
+    }
+    else if (mediciones.Count == 0)
+    {
+        <div class="home-list">
+            <div class="home-row home-row--muted">
+                <span class="home-row__label">No hay mediciones registradas</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="page-panel">
+            <MudTable Items="mediciones" Dense="true" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Dispositivo</MudTh>
+                    <MudTh>Servidor (UTC)</MudTh>
+                    <MudTh>Boot</MudTh>
+                    <MudTh>Seq</MudTh>
+                    <MudTh>V solar</MudTh>
+                    <MudTh>I solar</MudTh>
+                    <MudTh>P solar</MudTh>
+                    <MudTh>Modo</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>Fuente</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Dispositivo">@context.DispositivoId</MudTd>
+                    <MudTd DataLabel="Servidor (UTC)">@context.TsServidor.ToString("dd/MM/yyyy HH:mm:ss")</MudTd>
+                    <MudTd DataLabel="Boot">@context.BootId</MudTd>
+                    <MudTd DataLabel="Seq">@context.Seq</MudTd>
+                    <MudTd DataLabel="V solar">@context.VSol V</MudTd>
+                    <MudTd DataLabel="I solar">@context.ISolMa mA</MudTd>
+                    <MudTd DataLabel="P solar">@context.PSolMw mW</MudTd>
+                    <MudTd DataLabel="Modo">@context.Modo</MudTd>
+                    <MudTd DataLabel="Estado">@context.Estado</MudTd>
+                    <MudTd DataLabel="Fuente">@context.FuenteSeleccionada</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </div>
+    }
+</div>
 
 @code {
     private List<Medicion> mediciones = new();
@@ -78,44 +82,23 @@ else
     {
         try
         {
-            var auth = await AuthProvider.GetAuthenticationStateAsync();
-            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            await UsuarioActual.CargarAsync();
 
-            if (string.IsNullOrEmpty(userId))
+            if (UsuarioActual.EmpresaActivaId is not int empresaId)
             {
-                error = "Debes iniciar sesión.";
+                error = "No tenés una empresa activa.";
                 return;
             }
 
             await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            var db = scope.ServiceProvider
-                .GetRequiredService<ApplicationDbContext>();
-
-            var usuario = await db.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Id == userId);
-
-            if (usuario is null)
-            {
-                error = "No se encontró el usuario.";
-                return;
-            }
-
-
-            var consulta = db.Mediciones.AsNoTracking();
-
-            if (!auth.User.IsInRole("Administrador"))
-            {
-                consulta = consulta.Where(m =>
-                    m.Dispositivo.EmpresaId == usuario.EmpresaId);
-            }
-
-            mediciones = await consulta
+            // El filtro por empresa activa se aplica siempre en la consulta (RNF01).
+            mediciones = await db.Mediciones.AsNoTracking()
+                .Where(m => m.Dispositivo.EmpresaId == empresaId)
                 .OrderByDescending(m => m.TsServidor)
                 .Take(50)
                 .ToListAsync();
-
         }
         catch (Exception)
         {

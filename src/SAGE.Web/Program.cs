@@ -6,6 +6,7 @@ using SAGE.Web.Components;
 using SAGE.Web.Components.Account;
 using SAGE.Web.Data;
 using SAGE.Web.Api;
+using SAGE.Web.Servicios.Seguridad;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+builder.Services.AddScoped<IUsuarioActual, UsuarioActual>();
 
 builder.Services.AddAuthentication(options =>
     {
@@ -53,8 +55,6 @@ var app = builder.Build();
 
 await DatosIniciales.InicializarAsync(app.Services);
 
-// Uso: dotnet run --project src/SAGE.Web -- --importar-demo-tecnico
-// Importa docs/ejemplos/facturas_validas.xlsx como técnico.palmas@sage.test (solo Development).
 if (app.Environment.IsDevelopment() && args.Contains("--importar-demo-tecnico"))
 {
     using var scope = app.Services.CreateScope();
@@ -62,19 +62,21 @@ if (app.Environment.IsDevelopment() && args.Contains("--importar-demo-tecnico"))
     var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var tecnico = await users.FindByEmailAsync("tecnico.palmas@sage.test")
         ?? throw new InvalidOperationException("Falta tecnico.palmas@sage.test en el seed.");
-    if (tecnico.EmpresaId is null)
-    {
-        throw new InvalidOperationException("El técnico de Las Palmas no tiene empresa.");
-    }
 
-    // Limpia facturas previas del hotel para poder reimportar el ejemplo.
-    var previas = db.Facturas.Where(f => f.EmpresaId == tecnico.EmpresaId);
+    var empresaId = await db.UsuarioEmpresas
+        .Where(ue => ue.UsuarioId == tecnico.Id)
+        .OrderBy(ue => ue.EmpresaId)
+        .Select(ue => (int?)ue.EmpresaId)
+        .FirstOrDefaultAsync()
+        ?? throw new InvalidOperationException("El técnico de Las Palmas no tiene empresa.");
+
+    var previas = db.Facturas.Where(f => f.EmpresaId == empresaId);
     db.Facturas.RemoveRange(previas);
     await db.SaveChangesAsync();
 
     var ruta = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "docs", "ejemplos", "facturas_validas.xlsx"));
     await using var stream = File.OpenRead(ruta);
-    var resultado = await FacturaExcelImporter.ImportarAsync(stream, tecnico.EmpresaId.Value, tecnico.Id, db);
+    var resultado = await FacturaExcelImporter.ImportarAsync(stream, empresaId, tecnico.Id, db);
     if (resultado.Errores.Count > 0)
     {
         Console.Error.WriteLine("Importación falló:");
@@ -107,10 +109,40 @@ app.UseWhen(
         branch.UseStatusCodePagesWithReExecute(
             "/not-found",
             createScopeForStatusCodePages: true);
-    }); app.UseHttpsRedirection();
+    });
+app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var path = context.Request.Path.Value ?? "";
+        var excluida =
+            path.StartsWith("/Account", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/_framework", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/_content", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/_blazor", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
+            Path.HasExtension(path);
+
+        if (!excluida)
+        {
+            var userManager = context.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.GetUserAsync(context.User);
+            if (user?.DebeCambiarContrasena == true)
+            {
+                context.Response.Redirect("/Account/CambiarContrasenaInicial");
+                return;
+            }
+        }
+    }
+
+    await next();
+});
+
 app.UseAntiforgery();
 
 app.MapStaticAssets();

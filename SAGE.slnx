@@ -3,4 +3,7 @@
     <Project Path="src/SAGE.Simulador/SAGE.Simulador.csproj" />
     <Project Path="src/SAGE.Web/SAGE.Web.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SAGE.Tests/SAGE.Tests.csproj" />
+  </Folder>
 </Solution>

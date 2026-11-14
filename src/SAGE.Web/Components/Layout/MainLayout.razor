@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager NavigationManager
+@inject SAGE.Web.Servicios.Seguridad.IUsuarioActual UsuarioActual
 
 <MudThemeProvider Theme="_temaSage" />
 <MudPopoverProvider />
@@ -17,6 +18,32 @@
         <MudSpacer />
         <AuthorizeView>
             <Authorized>
+                @if (UsuarioActual.EsOperador)
+                {
+                    <span class="sage-toolbar__chip">Operador SAGE</span>
+                }
+                else if (UsuarioActual.Empresas.Count == 1)
+                {
+                    <span class="sage-toolbar__chip">@UsuarioActual.Empresas[0].Nombre</span>
+                }
+                else if (UsuarioActual.Empresas.Count > 1)
+                {
+                    <MudSelect T="int"
+                               Dense="true"
+                               Margin="Margin.Dense"
+                               Class="sage-toolbar__empresa"
+                               Value="UsuarioActual.EmpresaActivaId ?? 0"
+                               ValueChanged="CambiarEmpresa"
+                               Variant="Variant.Outlined"
+                               AnchorOrigin="Origin.BottomCenter"
+                               TransformOrigin="Origin.TopCenter"
+                               aria-label="Empresa activa">
+                        @foreach (var e in UsuarioActual.Empresas)
+                        {
+                            <MudSelectItem T="int" Value="@e.Id">@e.Nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
                 <span class="sage-toolbar__user">@context.User.Identity?.Name</span>
                 <form action="Account/Logout" method="post" class="sage-toolbar__logout">
                     <AntiforgeryToken />
@@ -41,7 +68,9 @@
     </MudDrawer>
 
     <MudMainContent Class="sage-main">
-        @Body
+        <div @key="UsuarioActual.EmpresaActivaId">
+            @Body
+        </div>
     </MudMainContent>
 </MudLayout>
 
@@ -78,11 +107,26 @@
         }
     };
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
+        UsuarioActual.EmpresaCambiada += OnEmpresaCambiada;
+
+        await UsuarioActual.CargarAsync();
+
+        if (UsuarioActual.DebeCambiarContrasena)
+        {
+            NavigationManager.NavigateTo("/Account/CambiarContrasenaInicial", forceLoad: true);
+        }
     }
+
+    private async Task CambiarEmpresa(int empresaId)
+    {
+        await UsuarioActual.SeleccionarEmpresaAsync(empresaId);
+    }
+
+    private void OnEmpresaCambiada() => InvokeAsync(StateHasChanged);
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
@@ -95,5 +139,6 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+        UsuarioActual.EmpresaCambiada -= OnEmpresaCambiada;
     }
 }

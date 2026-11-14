@@ -11,7 +11,9 @@ public class ApplicationUser : IdentityUser
 
     public bool Activo { get; set; } = true;
 
-    public int? EmpresaId { get; set; }
+    public bool DebeCambiarContrasena { get; set; }
 
-    public Empresa? Empresa { get; set; }
+    public int? UltimaEmpresaId { get; set; }
+
+    public ICollection<UsuarioEmpresa> Empresas { get; set; } = new List<UsuarioEmpresa>();
 }

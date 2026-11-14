@@ -1,197 +1,188 @@
 ﻿@page "/usuarios"
-@attribute [Authorize(Roles = "Administrador")]
-@using System.Security.Claims
+@attribute [Authorize(Roles = "Operador,Administrador")]
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.DependencyInjection
+@using SAGE.Web.Servicios.Seguridad
 @inject IServiceScopeFactory ScopeFactory
-@inject AuthenticationStateProvider AuthStateProvider
+@inject IUsuarioActual UsuarioActual
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
 <PageTitle>Usuarios — SAGE</PageTitle>
 
-<MudStack Spacing="3">
-    <MudText Typo="Typo.h4">Usuarios</MudText>
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">@(UsuarioActual.EsOperador ? "Operador SAGE" : "Administración")</p>
+            <h1 class="page-title">Usuarios</h1>
+            @if (!UsuarioActual.EsOperador && UsuarioActual.EmpresaActiva is not null)
+            {
+                <p class="page-meta">@UsuarioActual.EmpresaActiva.Nombre</p>
+            }
+            else if (UsuarioActual.EsOperador)
+            {
+                <p class="page-meta">Administradores de empresas cliente</p>
+            }
+        </div>
+        <div class="page-actions">
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       OnClick="NuevoUsuario"
+                       Disabled="@(_cargando || _ocupado)">
+                @(UsuarioActual.EsOperador ? "Nuevo administrador" : "Nuevo usuario")
+            </MudButton>
+        </div>
+    </header>
 
-    <MudButton Color="Color.Primary"
-               Variant="Variant.Filled"
-               StartIcon="@Icons.Material.Filled.PersonAdd"
-               OnClick="NuevoUsuario"
-               Disabled="@(_cargando || _cambiandoEstado)">
-        Nuevo usuario
-    </MudButton>
-
-    <MudGrid>
-        <MudItem xs="12" md="6">
-            <MudTextField T="string"
-                          @bind-Value="_busqueda"
-                          Label="Buscar por nombre o correo"
-                          Variant="Variant.Outlined"
-                          Immediate="true"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search" />
-        </MudItem>
-
-        <MudItem xs="12" md="3">
-            <MudSelect T="int"
-                       @bind-Value="_empresaFiltro"
-                       Label="Empresa"
-                       Variant="Variant.Outlined">
-                <MudSelectItem T="int" Value="0">
-                    Todas las empresas
-                </MudSelectItem>
-
-                @foreach (var empresa in _empresas)
-                {
-                    <MudSelectItem T="int" Value="@empresa.Id">
-                        @empresa.Nombre
-                    </MudSelectItem>
-                }
-            </MudSelect>
-        </MudItem>
-
-        <MudItem xs="12" md="3">
-            <MudSelect T="string"
-                       @bind-Value="_rolFiltro"
-                       Label="Rol"
-                       Variant="Variant.Outlined">
-                <MudSelectItem T="string" Value="@("")">
-                    Todos los roles
-                </MudSelectItem>
-
-                <MudSelectItem T="string" Value="@("Administrador")">
-                    Administrador
-                </MudSelectItem>
-
-                <MudSelectItem T="string" Value="@("Tecnico")">
-                    Técnico
-                </MudSelectItem>
-
-                <MudSelectItem T="string" Value="@("Consulta")">
-                    Consulta
-                </MudSelectItem>
-            </MudSelect>
-        </MudItem>
-    </MudGrid>
+    <div class="page-filters">
+        <MudTextField T="string"
+                      @bind-Value="_busqueda"
+                      Label="Buscar por nombre o correo"
+                      Variant="Variant.Outlined"
+                      Immediate="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" />
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <MudAlert Severity="Severity.Error">
-            @_error
-        </MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
     }
 
-    <MudTable T="UsuarioFila"
-              Items="@UsuariosFiltrados"
-              Loading="_cargando"
-              Hover="true"
-              Striped="true"
-              Breakpoint="Breakpoint.Sm"
-              Elevation="1">
-        <HeaderContent>
-            <MudTh>Nombre completo</MudTh>
-            <MudTh>Correo</MudTh>
-            <MudTh>Rol</MudTh>
-            <MudTh>Empresa</MudTh>
-            <MudTh>Estado</MudTh>
-            <MudTh>Acciones</MudTh>
-        </HeaderContent>
+    <div class="page-panel">
+        <MudTable T="UsuarioFila"
+                  Items="@UsuariosFiltrados"
+                  Loading="_cargando"
+                  Hover="true"
+                  Breakpoint="Breakpoint.Sm"
+                  Elevation="0">
+            <HeaderContent>
+                <MudTh>Persona</MudTh>
+                @if (UsuarioActual.EsOperador)
+                {
+                    <MudTh>Empresas</MudTh>
+                }
+                else
+                {
+                    <MudTh>Rol</MudTh>
+                }
+                <MudTh>Estado</MudTh>
+                <MudTh>Acciones</MudTh>
+            </HeaderContent>
 
-        <RowTemplate>
-            <MudTd DataLabel="Nombre completo">
-                @context.NombreCompleto
-            </MudTd>
+            <RowTemplate>
+                <MudTd DataLabel="Persona">
+                    <div class="sage-person">
+                        <span class="sage-person__name">
+                            @context.NombreCompleto
+                            @if (context.EsYo)
+                            {
+                                <span class="sage-chip sage-chip--muted">Vos</span>
+                            }
+                        </span>
+                        <span class="sage-person__mail">@context.Correo</span>
+                    </div>
+                </MudTd>
+                @if (UsuarioActual.EsOperador)
+                {
+                    <MudTd DataLabel="Empresas">
+                        <div class="sage-chips">
+                            @foreach (var empresa in context.Empresas)
+                            {
+                                <span class="sage-chip">@empresa</span>
+                            }
+                        </div>
+                    </MudTd>
+                }
+                else
+                {
+                    <MudTd DataLabel="Rol">
+                        <span class="sage-chip @ClaseRol(context.Rol)">
+                            @(context.Rol == "Tecnico" ? "Técnico" : context.Rol)
+                        </span>
+                    </MudTd>
+                }
+                <MudTd DataLabel="Estado">
+                    <span class="sage-chip @(context.Activo ? "sage-chip--ok" : "sage-chip--off")">
+                        @(context.Activo ? "Activo" : "Inactivo")
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Acciones">
+                    @if (context.SoloLectura)
+                    {
+                        <span class="sage-person__mail">Lo gestiona SAGE</span>
+                    }
+                    else
+                    {
+                        <div class="sage-row-actions">
+                            @if (UsuarioActual.EsOperador)
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(() => GestionarEmpresas(context))"
+                                           Disabled="@(_cargando || _ocupado)">
+                                    Empresas
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(() => EditarUsuario(context))"
+                                           Disabled="@(_cargando || _ocupado)">
+                                    Editar
+                                </MudButton>
+                            }
 
-            <MudTd DataLabel="Correo">
-                @context.Correo
-            </MudTd>
+                            <MudButton Variant="Variant.Text"
+                                       Color="@(context.Activo ? Color.Warning : Color.Success)"
+                                       Size="Size.Small"
+                                       OnClick="@(() => CambiarEstado(context))"
+                                       Disabled="@(_cargando || _ocupado || context.EsYo)">
+                                @(context.Activo ? "Desactivar" : "Activar")
+                            </MudButton>
 
-            <MudTd DataLabel="Rol">
-                <MudChip T="string"
-                         Color="@ColorRol(context.Rol)"
-                         Size="Size.Small">
-                    @(context.Rol == "Tecnico" ? "Técnico" : context.Rol)
-                </MudChip>
-            </MudTd>
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                                       OnClick="@(() => RestablecerContrasena(context))"
+                                       Disabled="@(_cargando || _ocupado)">
+                                Contraseña
+                            </MudButton>
+                        </div>
+                    }
+                </MudTd>
+            </RowTemplate>
 
-            <MudTd DataLabel="Empresa">
-                @context.EmpresaNombre
-            </MudTd>
+            <NoRecordsContent>
+                <div class="sage-empty">
+                    <p class="sage-empty__title">Sin resultados</p>
+                    <p class="sage-empty__text">Probá otra búsqueda o creá un usuario nuevo.</p>
+                </div>
+            </NoRecordsContent>
 
-            <MudTd DataLabel="Estado">
-                <MudChip T="string"
-                         Color="@(context.Activo ? Color.Success : Color.Default)"
-                         Size="Size.Small">
-                    @(context.Activo ? "Activo" : "Inactivo")
-                </MudChip>
-            </MudTd>
-
-            <MudTd DataLabel="Acciones">
-                <MudStack Spacing="1">
-                    <MudButton Color="Color.Primary"
-                               Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Edit"
-                               OnClick="@(() => EditarUsuario(context))"
-                               Disabled="@(_cargando || _cambiandoEstado)">
-                        Editar
-                    </MudButton>
-
-                    <MudButton Color="@(context.Activo ? Color.Warning : Color.Success)"
-                               Size="Size.Small"
-                               StartIcon="@(context.Activo
-                                                           ? Icons.Material.Filled.Block
-                                                       : Icons.Material.Filled.CheckCircle)"
-                               OnClick="@(() => CambiarEstadoUsuario(context))"
-                               Disabled="@(_cargando || _cambiandoEstado)">
-                        @(context.Activo ? "Desactivar" : "Activar")
-                    </MudButton>
-
-                    <MudButton Color="Color.Secondary"
-                               Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.LockReset"
-                               OnClick="@(() => RestablecerContrasena(context))"
-                               Disabled="@(_cargando || _cambiandoEstado)">
-                        Restablecer contraseña
-                    </MudButton>
-                </MudStack>
-            </MudTd>
-        </RowTemplate>
-
-        <NoRecordsContent>
-            <MudText>No se encontraron usuarios.</MudText>
-        </NoRecordsContent>
-
-        <PagerContent>
-            <MudTablePager RowsPerPageString="Filas por página"
-                           InfoFormat="{first_item}-{last_item} de {all_items}" />
-        </PagerContent>
-    </MudTable>
-</MudStack>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Filas por página"
+                               InfoFormat="{first_item}-{last_item} de {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </div>
+</div>
 
 @code {
     private List<UsuarioFila> _usuarios = new();
-    private List<Empresa> _empresas = new();
-
     private string _busqueda = string.Empty;
-    private string _rolFiltro = string.Empty;
-    private int _empresaFiltro;
     private bool _cargando = true;
-    private bool _cambiandoEstado;
+    private bool _ocupado;
     private string? _error;
 
     private IEnumerable<UsuarioFila> UsuariosFiltrados =>
         _usuarios.Where(u =>
-            (string.IsNullOrWhiteSpace(_busqueda) ||
-             u.NombreCompleto.Contains(
-                 _busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
-             u.Correo.Contains(
-                 _busqueda.Trim(), StringComparison.OrdinalIgnoreCase)) &&
-            (_empresaFiltro == 0 || u.EmpresaId == _empresaFiltro) &&
-            (string.IsNullOrEmpty(_rolFiltro) || u.Rol == _rolFiltro));
+            string.IsNullOrWhiteSpace(_busqueda) ||
+            u.NombreCompleto.Contains(_busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+            u.Correo.Contains(_busqueda.Trim(), StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
+        await UsuarioActual.CargarAsync();
         await CargarUsuarios();
     }
 
@@ -199,71 +190,92 @@
     {
         _cargando = true;
         _error = null;
-        _usuarios.Clear();
-        _empresas.Clear();
+        _usuarios = new();
 
         try
         {
             using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-            var db = scope.ServiceProvider
-                .GetRequiredService<ApplicationDbContext>();
+            var adminRoleId = await db.Roles
+                .Where(r => r.Name == DatosIniciales.RolAdministrador)
+                .Select(r => r.Id).FirstOrDefaultAsync();
+            var operadorRoleId = await db.Roles
+                .Where(r => r.Name == DatosIniciales.RolOperador)
+                .Select(r => r.Id).FirstOrDefaultAsync();
 
-            var userManager = scope.ServiceProvider
-                .GetRequiredService<UserManager<ApplicationUser>>();
-
-            var estado = await AuthStateProvider.GetAuthenticationStateAsync();
-
-            var administradorId = estado.User
-                .FindFirstValue(ClaimTypes.NameIdentifier);
-
-            var administrador = administradorId is null
-                ? null
-                : await userManager.FindByIdAsync(administradorId);
-
-            if (administrador is null ||
-                !administrador.Activo ||
-                !await userManager.IsInRoleAsync(administrador, "Administrador"))
+            if (UsuarioActual.EsOperador)
             {
-                _error = "No tenés permiso para consultar los usuarios.";
-                return;
-            }
+                var adminIds = await db.UserRoles
+                    .Where(ur => ur.RoleId == adminRoleId)
+                    .Select(ur => ur.UserId).ToListAsync();
 
-            _empresas = await db.Empresas
-                .AsNoTracking()
-                .OrderBy(e => e.Nombre)
-                .ToListAsync();
+                var usuarios = await db.Users.AsNoTracking()
+                    .Where(u => adminIds.Contains(u.Id))
+                    .Include(u => u.Empresas).ThenInclude(ue => ue.Empresa)
+                    .OrderBy(u => u.NombreCompleto)
+                    .ToListAsync();
 
-            var usuarios = await db.Users
-                .AsNoTracking()
-                .Include(u => u.Empresa)
-                .OrderBy(u => u.NombreCompleto)
-                .ToListAsync();
-
-            var filas = new List<UsuarioFila>();
-
-            foreach (var usuario in usuarios)
-            {
-                var roles = await userManager.GetRolesAsync(usuario);
-
-                filas.Add(new UsuarioFila
+                foreach (var u in usuarios)
                 {
-                    Id = usuario.Id,
-                    NombreCompleto = usuario.NombreCompleto,
-                    Correo = usuario.Email ?? string.Empty,
-                    Rol = roles.FirstOrDefault() ?? "Sin rol",
-                    EmpresaId = usuario.EmpresaId,
-                    EmpresaNombre = usuario.Empresa?.Nombre ?? "Sin empresa",
-                    Activo = usuario.Activo
-                });
+                    _usuarios.Add(new UsuarioFila
+                    {
+                        Id = u.Id,
+                        NombreCompleto = u.NombreCompleto,
+                        Correo = u.Email ?? string.Empty,
+                        Rol = DatosIniciales.RolAdministrador,
+                        Activo = u.Activo,
+                        Empresas = u.Empresas.Select(ue => ue.Empresa.Nombre).OrderBy(n => n).ToList(),
+                        EmpresaIds = u.Empresas.Select(ue => ue.EmpresaId).ToList(),
+                        SoloLectura = false,
+                        EsYo = false
+                    });
+                }
             }
+            else
+            {
+                if (UsuarioActual.EmpresaActivaId is not int empresaActiva)
+                {
+                    _error = "No tenés una empresa activa.";
+                    return;
+                }
 
-            _usuarios = filas;
+                var operadorIds = await db.UserRoles
+                    .Where(ur => ur.RoleId == operadorRoleId)
+                    .Select(ur => ur.UserId).ToListAsync();
+
+                var usuarios = await db.Users.AsNoTracking()
+                    .Where(u => u.Empresas.Any(ue => ue.EmpresaId == empresaActiva) && !operadorIds.Contains(u.Id))
+                    .Include(u => u.Empresas).ThenInclude(ue => ue.Empresa)
+                    .OrderBy(u => u.NombreCompleto)
+                    .ToListAsync();
+
+                foreach (var u in usuarios)
+                {
+                    var roles = await userManager.GetRolesAsync(u);
+                    var rol = roles.FirstOrDefault() ?? "Sin rol";
+                    var esYo = u.Id == UsuarioActual.UsuarioId;
+                    var esOtroAdmin = rol == DatosIniciales.RolAdministrador && !esYo;
+
+                    _usuarios.Add(new UsuarioFila
+                    {
+                        Id = u.Id,
+                        NombreCompleto = u.NombreCompleto,
+                        Correo = u.Email ?? string.Empty,
+                        Rol = rol,
+                        Activo = u.Activo,
+                        Empresas = u.Empresas.Select(ue => ue.Empresa.Nombre).OrderBy(n => n).ToList(),
+                        EmpresaIds = u.Empresas.Select(ue => ue.EmpresaId).ToList(),
+                        SoloLectura = esOtroAdmin,
+                        EsYo = esYo
+                    });
+                }
+            }
         }
         catch
         {
             _error = "No se pudieron cargar los usuarios.";
-            Snackbar.Add(_error, Severity.Error);
         }
         finally
         {
@@ -271,11 +283,38 @@
         }
     }
 
-    private Task NuevoUsuario()
+    private async Task<List<EmpresaOpcion>> EmpresasParaCrearAsync()
     {
-        return AbrirFormulario(
-            new UsuarioFormModel(),
-            "Nuevo usuario");
+        if (UsuarioActual.EsOperador)
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            return await db.Empresas.AsNoTracking()
+                .Where(e => e.Activa)
+                .OrderBy(e => e.Nombre)
+                .Select(e => new EmpresaOpcion(e.Id, e.Nombre))
+                .ToListAsync();
+        }
+
+        return UsuarioActual.Empresas.ToList();
+    }
+
+    private async Task NuevoUsuario()
+    {
+        var empresas = await EmpresasParaCrearAsync();
+        var modelo = new UsuarioFormModel
+        {
+            Rol = UsuarioActual.EsOperador ? "Administrador" : "Tecnico",
+            EmpresaId = UsuarioActual.EsOperador
+                ? empresas.FirstOrDefault()?.Id
+                : (UsuarioActual.EmpresaActivaId ?? empresas.FirstOrDefault()?.Id)
+        };
+
+        await AbrirFormulario(
+            UsuarioActual.EsOperador ? "NuevoAdministrador" : "NuevoUsuario",
+            modelo,
+            empresas,
+            UsuarioActual.EsOperador ? "Nuevo administrador" : "Nuevo usuario");
     }
 
     private Task EditarUsuario(UsuarioFila usuario)
@@ -285,31 +324,23 @@
             Id = usuario.Id,
             NombreCompleto = usuario.NombreCompleto,
             Correo = usuario.Correo,
-            Rol = usuario.Rol,
-            EmpresaId = usuario.EmpresaId
+            Rol = usuario.Rol == "Consulta" ? "Consulta" : "Tecnico"
         };
 
-        return AbrirFormulario(modelo, "Editar usuario");
+        return AbrirFormulario("Editar", modelo, new(), "Editar usuario");
     }
 
-    private async Task AbrirFormulario(
-        UsuarioFormModel modelo, string titulo)
+    private async Task AbrirFormulario(string modo, UsuarioFormModel modelo, List<EmpresaOpcion> empresas, string titulo)
     {
-        var parametros = new DialogParameters
+        var parametros = new DialogParameters<UsuarioDialog>
         {
-            [nameof(UsuarioDialog.Modelo)] = modelo
+            { x => x.Modo, modo },
+            { x => x.Modelo, modelo },
+            { x => x.EmpresasDisponibles, empresas }
         };
 
-        var opciones = new DialogOptions
-        {
-            FullWidth = true,
-            MaxWidth = MaxWidth.Small,
-            CloseButton = true
-        };
-
-        var dialogo = await DialogService.ShowAsync<UsuarioDialog>(
-            titulo, parametros, opciones);
-
+        var opciones = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+        var dialogo = await DialogService.ShowAsync<UsuarioDialog>(titulo, parametros, opciones);
         var resultado = await dialogo.Result;
 
         if (resultado is not null && !resultado.Canceled)
@@ -318,144 +349,103 @@
         }
     }
 
-    private async Task CambiarEstadoUsuario(UsuarioFila fila)
+    private async Task GestionarEmpresas(UsuarioFila usuario)
     {
-        if (_cambiandoEstado)
+        var parametros = new DialogParameters<EmpresasAdminDialog>
+        {
+            { x => x.AdministradorId, usuario.Id },
+            { x => x.NombreAdministrador, usuario.NombreCompleto }
+        };
+
+        var opciones = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+        var dialogo = await DialogService.ShowAsync<EmpresasAdminDialog>("Empresas del administrador", parametros, opciones);
+        var resultado = await dialogo.Result;
+
+        if (resultado is not null && !resultado.Canceled && resultado.Data is true)
+        {
+            await CargarUsuarios();
+        }
+    }
+
+    private async Task CambiarEstado(UsuarioFila fila)
+    {
+        if (_ocupado)
             return;
 
-        _cambiandoEstado = true;
+        if (fila.EsYo)
+        {
+            Snackbar.Add("No podés desactivar tu propia cuenta.", Severity.Warning);
+            return;
+        }
 
+        _ocupado = true;
         try
         {
-            var estado = await AuthStateProvider.GetAuthenticationStateAsync();
-
-            var administradorId = estado.User
-                .FindFirstValue(ClaimTypes.NameIdentifier);
-
-            if (fila.Id == administradorId)
-            {
-                Snackbar.Add(
-                    "No podés desactivar tu propia cuenta.",
-                    Severity.Warning);
-                return;
-            }
-
             var nuevoEstado = !fila.Activo;
             var accion = nuevoEstado ? "activar" : "desactivar";
 
             var parametros = new DialogParameters
             {
-                ["Contenido"] =
-                    $"¿Querés {accion} al usuario {fila.NombreCompleto}?"
+                ["Contenido"] = $"¿Querés {accion} al usuario {fila.NombreCompleto}?"
             };
-
             var dialogo = await DialogService.ShowAsync<
-                SAGE.Web.Components.Pages.Empresas.ConfirmDialog>(
-                    "Confirmar cambio de estado",
-                    parametros);
-
+                SAGE.Web.Components.Pages.Empresas.ConfirmDialog>("Confirmar cambio de estado", parametros);
             var confirmacion = await dialogo.Result;
-
             if (confirmacion is null || confirmacion.Canceled)
                 return;
 
             using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-            var userManager = scope.ServiceProvider
-                .GetRequiredService<UserManager<ApplicationUser>>();
-
-            var db = scope.ServiceProvider
-                .GetRequiredService<ApplicationDbContext>();
-
-            // Verificar los permisos antes de modificar los datos.
-            var administrador = administradorId is null
-                ? null
-                : await userManager.FindByIdAsync(administradorId);
-
-            if (administrador is null ||
-                !administrador.Activo ||
-                !await userManager.IsInRoleAsync(administrador, "Administrador"))
+            if (!UsuarioActual.EsOperador && !UsuarioActual.EsAdministrador)
             {
-                Snackbar.Add(
-                    "No tenés permiso para modificar usuarios.",
-                    Severity.Error);
+                Snackbar.Add("No tenés permiso para modificar usuarios.", Severity.Error);
                 return;
             }
 
             var usuario = await userManager.FindByIdAsync(fila.Id);
-
             if (usuario is null)
             {
-                Snackbar.Add(
-                    "El usuario ya no existe.",
-                    Severity.Error);
+                Snackbar.Add("El usuario ya no existe.", Severity.Error);
                 return;
             }
 
-            if (usuario.Id == administrador.Id)
+            if (usuario.Id == UsuarioActual.UsuarioId)
             {
-                Snackbar.Add(
-                    "No podés desactivar tu propia cuenta.",
-                    Severity.Warning);
+                Snackbar.Add("No podés desactivar tu propia cuenta.", Severity.Warning);
                 return;
             }
 
-            if (usuario.Activo == nuevoEstado)
+            // El Administrador no puede tocar a otro Administrador u Operador.
+            if (!UsuarioActual.EsOperador)
             {
-                Snackbar.Add(
-                    "El usuario ya tiene ese estado.",
-                    Severity.Info);
-
-                await CargarUsuarios();
-                return;
-            }
-
-            await using (var transaccion =
-                await db.Database.BeginTransactionAsync())
-            {
-                usuario.Activo = nuevoEstado;
-
-                var resultado = await userManager.UpdateAsync(usuario);
-
-                if (!resultado.Succeeded)
+                var roles = await userManager.GetRolesAsync(usuario);
+                if (roles.Contains("Administrador") || roles.Contains("Operador"))
                 {
-                    Snackbar.Add(
-                        "No se pudo cambiar el estado. Recargá la lista e intentá nuevamente.",
-                        Severity.Error);
+                    Snackbar.Add("Este usuario lo gestiona SAGE.", Severity.Error);
                     return;
                 }
-
-                var resultadoSesion =
-                    await userManager.UpdateSecurityStampAsync(usuario);
-
-                if (!resultadoSesion.Succeeded)
-                {
-                    Snackbar.Add(
-                        "No se pudo completar el cambio de estado.",
-                        Severity.Error);
-                    return;
-                }
-
-                await transaccion.CommitAsync();
             }
 
-            Snackbar.Add(
-                nuevoEstado
-                    ? "Usuario activado correctamente."
-                    : "Usuario desactivado correctamente.",
-                Severity.Success);
+            usuario.Activo = nuevoEstado;
+            if (!(await userManager.UpdateAsync(usuario)).Succeeded)
+            {
+                Snackbar.Add("No se pudo cambiar el estado.", Severity.Error);
+                return;
+            }
 
+            await userManager.UpdateSecurityStampAsync(usuario);
+
+            Snackbar.Add(nuevoEstado ? "Usuario activado." : "Usuario desactivado.", Severity.Success);
             await CargarUsuarios();
         }
         catch
         {
-            Snackbar.Add(
-                "No se pudo cambiar el estado del usuario.",
-                Severity.Error);
+            Snackbar.Add("No se pudo cambiar el estado del usuario.", Severity.Error);
         }
         finally
         {
-            _cambiandoEstado = false;
+            _ocupado = false;
         }
     }
 
@@ -466,29 +456,17 @@
             [nameof(RestablecerContrasenaDialog.UsuarioId)] = usuario.Id,
             [nameof(RestablecerContrasenaDialog.Correo)] = usuario.Correo
         };
-
-        var opciones = new DialogOptions
-        {
-            FullWidth = true,
-            MaxWidth = MaxWidth.Small,
-            CloseButton = true
-        };
-
-        var dialogo =
-            await DialogService.ShowAsync<RestablecerContrasenaDialog>(
-                "Restablecer contraseña",
-                parametros,
-                opciones);
-
+        var opciones = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+        var dialogo = await DialogService.ShowAsync<RestablecerContrasenaDialog>("Restablecer contraseña", parametros, opciones);
         await dialogo.Result;
     }
 
-    private static Color ColorRol(string rol) => rol switch
+    private static string ClaseRol(string rol) => rol switch
     {
-        "Administrador" => Color.Primary,
-        "Tecnico" => Color.Warning,
-        "Consulta" => Color.Info,
-        _ => Color.Default
+        "Administrador" => "",
+        "Tecnico" => "sage-chip--warn",
+        "Consulta" => "sage-chip--info",
+        _ => "sage-chip--muted"
     };
 
     private sealed class UsuarioFila
@@ -497,8 +475,10 @@
         public string NombreCompleto { get; set; } = string.Empty;
         public string Correo { get; set; } = string.Empty;
         public string Rol { get; set; } = string.Empty;
-        public int? EmpresaId { get; set; }
-        public string EmpresaNombre { get; set; } = string.Empty;
         public bool Activo { get; set; }
+        public List<string> Empresas { get; set; } = new();
+        public List<int> EmpresaIds { get; set; } = new();
+        public bool SoloLectura { get; set; }
+        public bool EsYo { get; set; }
     }
 }

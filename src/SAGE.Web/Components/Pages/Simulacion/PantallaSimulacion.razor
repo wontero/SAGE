@@ -1,0 +1,774 @@
+@page "/simulacion"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Servicios.Simulacion
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject ISnackbar Snackbar
+
+<PageTitle>Simulación económica — SAGE</PageTitle>
+
+@* // Patrón: Builder — rol: director *@
+
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Simulación económica</p>
+            <h1 class="page-title">Simulación</h1>
+            @if (UsuarioActual.EmpresaActiva is not null)
+            {
+                <p class="page-meta">@UsuarioActual.EmpresaActiva.Nombre</p>
+            }
+        </div>
+    </header>
+
+    @if (_cargando)
+    {
+        <div class="page-panel">
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else
+    {
+        <section class="home-group" aria-label="Tarifa de la empresa">
+            <h2 class="home-group__title">Tarifa de la empresa</h2>
+            <div class="page-panel sage-panel-pad">
+                <div class="sage-tarifa">
+                    <div>
+                        <p class="sage-tarifa__caption">
+                            @(_tarifaPropia is not null ? "Tarifa propia" : "Tarifa general")
+                        </p>
+                        <p class="sage-tarifa__value">
+                            @((_tarifaPropia ?? _tarifaGeneral).ToString("N2", FacturaReglas.Cultura))
+                            <span style="font-size:0.95rem;font-weight:600;color:var(--sage-muted);">Bs/kWh</span>
+                        </p>
+                    </div>
+
+                    @if (_puedeFijarTarifa)
+                    {
+                        <div class="sage-tarifa__form">
+                            <MudNumericField T="decimal" @bind-Value="_nuevaTarifa" Label="Nueva tarifa" Variant="Variant.Outlined"
+                                             Min="0.10m" Max="5.00m" Step="0.05m" HelperText="0,10 a 5,00" Style="min-width:160px;" />
+                            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="FijarTarifa" Disabled="_guardandoTarifa">
+                                @(_guardandoTarifa ? "Guardando…" : "Fijar tarifa")
+                            </MudButton>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+
+        @if (_puedeSimular)
+        {
+            <div class="page-panel sage-panel-pad">
+                <h2 class="home-group__title">Nueva simulación</h2>
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField T="decimal" @bind-Value="_kwpMixto" Label="Potencia mixta (kWp)" Variant="Variant.Outlined" Min="0.1m" Step="0.5m" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField T="int" @bind-Value="_horizonte" Label="Horizonte (años)" Variant="Variant.Outlined" Min="1" Max="25" />
+                    </MudItem>
+                </MudGrid>
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+                }
+
+                <div class="page-actions mt-3">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Simular" Disabled="_simulando">
+                        @(_simulando ? "Calculando…" : "Simular")
+                    </MudButton>
+                    @if (_resultado is not null)
+                    {
+                        <MudButton Color="Color.Default" Variant="Variant.Outlined" OnClick="Guardar" Disabled="_guardando">
+                            @(_guardando ? "Guardando…" : "Guardar resultado")
+                        </MudButton>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_resultado is not null)
+        {
+            <div class="page-panel sage-panel-pad">
+                <div class="sage-sim-head">
+                    <span class="sage-sim-badge">
+                        <MudIcon Icon="@Icons.Material.Filled.Science" Size="Size.Small" />
+                        Simulación
+                    </span>
+                    <span class="sage-person__mail">Horizonte @_resultado.HorizonteAnios años · params v@_resultado.ParametrosVersion</span>
+                </div>
+
+                <div class="sage-scenarios">
+                    @foreach (var fila in _filasResultado)
+                    {
+                        <div class="sage-scenario @(fila.Nombre == "Solar" ? "sage-scenario--best" : null)">
+                            <p class="sage-scenario__name">@fila.Nombre</p>
+                            <div class="sage-scenario__stat"><span>kWp</span><span>@fila.Kwp</span></div>
+                            <div class="sage-scenario__stat"><span>Inversión</span><span>@fila.Inversion.ToString("N0", FacturaReglas.Cultura)</span></div>
+                            <div class="sage-scenario__stat"><span>Costo anual</span><span>@fila.CostoAnual.ToString("N0", FacturaReglas.Cultura)</span></div>
+                            <div class="sage-scenario__stat"><span>Acum. @_resultado.HorizonteAnios a.</span><span>@fila.CostoAcum.ToString("N0", FacturaReglas.Cultura)</span></div>
+                            <div class="sage-scenario__stat"><span>Ahorro vs red</span><span>@fila.AhorroAcum.ToString("N0", FacturaReglas.Cultura)</span></div>
+                            <div class="sage-scenario__stat"><span>Recuperación</span><span>@fila.Recuperacion</span></div>
+                        </div>
+                    }
+                </div>
+
+                @if (_grafico is not null)
+                {
+                    var focusIdx = _hoverAnio ?? (_grafico.Puntos.Count - 1);
+                    var focus = _grafico.Puntos[focusIdx];
+                    var deltaSolar = focus.Red - focus.Solar;
+                    var deltaMixto = focus.Red - focus.Mixto;
+                    var inv = System.Globalization.CultureInfo.InvariantCulture;
+                    var tipLeft = Math.Clamp(focus.X / _grafico.W * 100, 12, 78);
+
+                    <div class="sage-chart" aria-label="Costo acumulado por escenario">
+                        <div class="sage-chart__head">
+                            <div>
+                                <h3 class="sage-chart__title">Costo acumulado</h3>
+                                <p class="sage-chart__hint">Tocá los puntos para fijar un año y ver el desglose</p>
+                            </div>
+                        </div>
+
+                        <div class="sage-chart__canvas">
+                            <svg class="sage-chart__svg" viewBox="0 0 @_grafico.W @_grafico.H" role="img" preserveAspectRatio="xMidYMid meet">
+                                <defs>
+                                    <linearGradient id="sageFillAhorro" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#34C759" stop-opacity="0.22" />
+                                        <stop offset="100%" stop-color="#34C759" stop-opacity="0.03" />
+                                    </linearGradient>
+                                    <linearGradient id="sageFillRed" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#007AFF" stop-opacity="0.14" />
+                                        <stop offset="100%" stop-color="#007AFF" stop-opacity="0" />
+                                    </linearGradient>
+                                    <clipPath id="sagePastClip">
+                                        <rect x="0" y="0" width="@focus.X.ToString("0.##", inv)" height="@_grafico.H.ToString("0.##", inv)" />
+                                    </clipPath>
+                                </defs>
+
+                                @foreach (var tick in _grafico.YTicks)
+                                {
+                                    <line class="sage-chart__grid" x1="@_grafico.PadL" y1="@tick.Y" x2="@(_grafico.W - _grafico.PadR)" y2="@tick.Y" />
+                                    @SvgText(_grafico.PadL - 8, tick.Y + 3, "sage-chart__axis", tick.Label, "end")
+                                }
+
+                                <g class="sage-chart__future" opacity="0.28">
+                                    <path class="sage-chart__line sage-chart__line--red" d="@_grafico.PathRed" />
+                                    <path class="sage-chart__line sage-chart__line--solar" d="@_grafico.PathSolar" />
+                                    <path class="sage-chart__line sage-chart__line--mixto" d="@_grafico.PathMixto" />
+                                </g>
+
+                                <g clip-path="url(#sagePastClip)">
+                                    <path class="sage-chart__area sage-chart__area--ahorro" d="@_grafico.PathAhorro" fill="url(#sageFillAhorro)" />
+                                    <path class="sage-chart__area" d="@_grafico.PathRedArea" fill="url(#sageFillRed)" />
+                                    <path class="sage-chart__line sage-chart__line--red" d="@_grafico.PathRed" />
+                                    <path class="sage-chart__line sage-chart__line--solar" d="@_grafico.PathSolar" />
+                                    <path class="sage-chart__line sage-chart__line--mixto" d="@_grafico.PathMixto" />
+                                </g>
+
+                                @* Puntos tocables en cada año *@
+                                @for (var i = 0; i < _grafico.Puntos.Count; i++)
+                                {
+                                    var pt = _grafico.Puntos[i];
+                                    var activo = i == focusIdx;
+                                    <circle cx="@pt.X" cy="@pt.YRed" r="@(activo ? 6 : 3.2)" class="sage-chart__dot sage-chart__dot--red @(activo ? "is-active" : null)" />
+                                    <circle cx="@pt.X" cy="@pt.YSolar" r="@(activo ? 6 : 3.2)" class="sage-chart__dot sage-chart__dot--solar @(activo ? "is-active" : null)" />
+                                    <circle cx="@pt.X" cy="@pt.YMixto" r="@(activo ? 6 : 3.2)" class="sage-chart__dot sage-chart__dot--mixto @(activo ? "is-active" : null)" />
+                                }
+
+                                <line class="sage-chart__scrub" x1="@focus.X" y1="@_grafico.PadT" x2="@focus.X" y2="@(_grafico.H - _grafico.PadB)" />
+
+                                @for (var i = 0; i < _grafico.Puntos.Count; i++)
+                                {
+                                    var pt = _grafico.Puntos[i];
+                                    var idx = i;
+                                    <rect class="sage-chart__hit"
+                                          x="@(pt.X - _grafico.HitW / 2)"
+                                          y="@_grafico.PadT"
+                                          width="@_grafico.HitW"
+                                          height="@(_grafico.H - _grafico.PadT - _grafico.PadB)"
+                                          @onmouseenter="@(() => SeleccionarAnio(idx, hover: true))"
+                                          @onclick="@(() => SeleccionarAnio(idx, hover: false))"
+                                          @onfocus="@(() => SeleccionarAnio(idx, hover: false))"
+                                          tabindex="0"
+                                          role="button"
+                                          aria-label="@pt.Etiqueta" />
+                                    @if (i == 0 || i == _grafico.Puntos.Count - 1 || i % Math.Max(1, _grafico.Puntos.Count / 5) == 0)
+                                    {
+                                        @SvgText(pt.X, _grafico.H - 10, "sage-chart__axis sage-chart__axis--x", pt.EtiquetaCorta, "middle")
+                                    }
+                                }
+                            </svg>
+
+                            <div @key="_tipKey" class="sage-chart__tip @(_anioFijado ? "is-locked" : null)" style="@($"left:{tipLeft.ToString("0.##", inv)}%")">
+                                <p class="sage-chart__tip-year">@focus.Etiqueta@(_anioFijado ? " · fijado" : "")</p>
+                                <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--red"></span><span>Red</span><b>@Bs(focus.Red)</b></div>
+                                <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--solar"></span><span>Solar</span><b>@Bs(focus.Solar)</b></div>
+                                <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--mixto"></span><span>Mixto</span><b>@Bs(focus.Mixto)</b></div>
+                            </div>
+                        </div>
+
+                        <div class="sage-delta" role="list">
+                            <div class="sage-delta__row" role="listitem">
+                                <div class="sage-delta__left">
+                                    <span class="sage-chart__swatch sage-chart__swatch--red"></span>
+                                    <div>
+                                        <p class="sage-delta__name">Red</p>
+                                        <p class="sage-delta__sub">Escenario base</p>
+                                    </div>
+                                </div>
+                                <div class="sage-delta__right">
+                                    <p class="sage-delta__value">@Bs(focus.Red)</p>
+                                    <p class="sage-delta__note">Referencia</p>
+                                </div>
+                            </div>
+                            <div class="sage-delta__row" role="listitem">
+                                <div class="sage-delta__left">
+                                    <span class="sage-chart__swatch sage-chart__swatch--solar"></span>
+                                    <div>
+                                        <p class="sage-delta__name">Solar</p>
+                                        <p class="sage-delta__sub">Comparado con red</p>
+                                    </div>
+                                </div>
+                                <div class="sage-delta__right">
+                                    <p class="sage-delta__value">@Bs(focus.Solar)</p>
+                                    <p class="sage-delta__note @(deltaSolar >= 0 ? "is-save" : "is-spend")">
+                                        @(deltaSolar >= 0 ? "Ahorrás" : "Gastás") @Bs(Math.Abs(deltaSolar))
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="sage-delta__row" role="listitem">
+                                <div class="sage-delta__left">
+                                    <span class="sage-chart__swatch sage-chart__swatch--mixto"></span>
+                                    <div>
+                                        <p class="sage-delta__name">Mixto</p>
+                                        <p class="sage-delta__sub">Comparado con red</p>
+                                    </div>
+                                </div>
+                                <div class="sage-delta__right">
+                                    <p class="sage-delta__value">@Bs(focus.Mixto)</p>
+                                    <p class="sage-delta__note @(deltaMixto >= 0 ? "is-save" : "is-spend")">
+                                        @(deltaMixto >= 0 ? "Ahorrás" : "Gastás") @Bs(Math.Abs(deltaMixto))
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <h3 class="home-group__title" style="margin-top:1.25rem;">Supuestos</h3>
+                <ul class="sage-assumptions">
+                    <li>Tarifa usada: @_resultado.TarifaUsadaBsKwh.ToString("N2", FacturaReglas.Cultura) Bs/kWh</li>
+                    <li>Consumo mensual: @_resultado.ConsumoMensualKwh.ToString("N2", FacturaReglas.Cultura) kWh (@_resultado.MesesBase meses base)</li>
+                    <li>Sin inflación, sin degradación del panel, sin baterías.</li>
+                    <li>Los excedentes solares no se venden; costos en Bs de hoy.</li>
+                    <li>Los resultados no usan mediciones de la maqueta.</li>
+                    @foreach (var adv in _resultado.Advertencias)
+                    {
+                        <li class="is-warn">@adv</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <section class="home-group" aria-label="Simulaciones guardadas">
+            <h2 class="home-group__title">Simulaciones guardadas</h2>
+            <div class="page-panel">
+                <MudTable Items="_guardadas" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Fecha</MudTh>
+                        <MudTh>Consumo</MudTh>
+                        <MudTh>Solar</MudTh>
+                        <MudTh>Mixto</MudTh>
+                        <MudTh>Horizonte</MudTh>
+                        <MudTh>Tarifa</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Fecha">@FechaLocal(context.Fecha)</MudTd>
+                        <MudTd DataLabel="Consumo">@context.ConsumoMensualKwh.ToString("N1", FacturaReglas.Cultura) kWh/mes</MudTd>
+                        <MudTd DataLabel="Solar">@context.KwpSolar.ToString("N1", FacturaReglas.Cultura) kWp</MudTd>
+                        <MudTd DataLabel="Mixto">@context.KwpMixto.ToString("N1", FacturaReglas.Cultura) kWp</MudTd>
+                        <MudTd DataLabel="Horizonte">@context.HorizonteAnios años</MudTd>
+                        <MudTd DataLabel="Tarifa">@context.TarifaUsadaBsKwh.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <div class="sage-empty">
+                            <p class="sage-empty__title">Todavía no hay guardadas</p>
+                            <p class="sage-empty__text">Simulá y guardá para comparar después.</p>
+                        </div>
+                    </NoRecordsContent>
+                </MudTable>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private bool _cargando = true;
+    private bool _simulando;
+    private bool _guardando;
+    private bool _guardandoTarifa;
+    private bool _puedeSimular;
+    private bool _puedeFijarTarifa;
+    private string? _error;
+
+    private decimal _tarifaGeneral = 0.90m;
+    private decimal? _tarifaPropia;
+    private decimal _nuevaTarifa = 0.90m;
+
+    private decimal _kwpMixto = 3m;
+    private int _horizonte = 10;
+
+    private Data.Simulacion? _resultado;
+    private List<FilaResultado> _filasResultado = new();
+    private GraficoAcumulado? _grafico;
+    private int? _hoverAnio;
+    private bool _anioFijado;
+    private int _tipKey;
+
+    private List<Data.Simulacion> _guardadas = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UsuarioActual.CargarAsync();
+        _puedeSimular = UsuarioActual.EsAdministrador || UsuarioActual.EsTecnico;
+        _puedeFijarTarifa = UsuarioActual.EsAdministrador;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        try
+        {
+            if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            {
+                return;
+            }
+
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var parametros = await db.ParametrosEconomicos.AsNoTracking()
+                .OrderByDescending(p => p.Version)
+                .FirstOrDefaultAsync();
+            _tarifaGeneral = parametros?.TarifaBsKwh ?? 0.90m;
+
+            _tarifaPropia = await db.TarifasEmpresa.AsNoTracking()
+                .Where(t => t.EmpresaId == empresaId)
+                .OrderByDescending(t => t.VigenteDesde)
+                .Select(t => (decimal?)t.TarifaBsKwh)
+                .FirstOrDefaultAsync();
+
+            _nuevaTarifa = _tarifaPropia ?? _tarifaGeneral;
+
+            _guardadas = await db.Simulaciones.AsNoTracking()
+                .Where(s => s.EmpresaId == empresaId)
+                .OrderByDescending(s => s.Fecha)
+                .ToListAsync();
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task Simular()
+    {
+        if (_simulando)
+            return;
+
+        _error = null;
+        _simulando = true;
+        try
+        {
+            if (UsuarioActual.EmpresaActivaId is not int empresaId || !UsuarioActual.PuedeVerEmpresa(empresaId))
+            {
+                _error = "No tenés una empresa activa válida.";
+                return;
+            }
+
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var empresa = await db.Empresas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == empresaId);
+            var parametros = await db.ParametrosEconomicos.AsNoTracking()
+                .OrderByDescending(p => p.Version)
+                .FirstOrDefaultAsync();
+
+            if (empresa is null || parametros is null)
+            {
+                _error = "Faltan parámetros económicos para simular.";
+                return;
+            }
+
+            var facturas = await db.Facturas.AsNoTracking()
+                .Where(f => f.EmpresaId == empresaId)
+                .OrderByDescending(f => f.Anio)
+                .ThenByDescending(f => f.Mes)
+                .Take(12)
+                .ToListAsync();
+
+            var tarifa = _tarifaPropia ?? parametros.TarifaBsKwh;
+
+            // Patrón: Builder — rol: director (la pantalla orquesta al constructor)
+            var simulacion = new SimulacionBuilder()
+                .ParaEmpresa(empresa)
+                .ConParametros(parametros)
+                .ConConsumo(facturas)
+                .ConTarifa(tarifa)
+                .ConPotenciaMixta(_kwpMixto)
+                .ConHorizonte(_horizonte)
+                .Construir();
+
+            _resultado = simulacion;
+            ConstruirTabla(simulacion);
+            ConstruirGrafico(simulacion);
+            _hoverAnio = _grafico?.Puntos.Count > 0 ? _grafico.Puntos.Count - 1 : null;
+            _anioFijado = false;
+            _tipKey++;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _resultado = null;
+            _grafico = null;
+            _hoverAnio = null;
+            _error = ex.Message;
+        }
+        catch
+        {
+            _resultado = null;
+            _grafico = null;
+            _hoverAnio = null;
+            _error = "No se pudo completar la simulación.";
+        }
+        finally
+        {
+            _simulando = false;
+        }
+    }
+
+    private void ConstruirTabla(Data.Simulacion s)
+    {
+        _filasResultado = new()
+        {
+            new FilaResultado("Red", "—", 0m, s.CostoAnualRedBs, s.CostoAcumRedBs, 0m, "—"),
+            new FilaResultado("Solar", s.KwpSolar.ToString("N1", FacturaReglas.Cultura), s.InversionSolarBs, s.CostoAnualSolarBs, s.CostoAcumSolarBs,
+                s.CostoAcumRedBs - s.CostoAcumSolarBs, Recuperacion(s.RecuperacionSolarAnios)),
+            new FilaResultado("Mixto", s.KwpMixto.ToString("N1", FacturaReglas.Cultura), s.InversionMixtoBs, s.CostoAnualMixtoBs, s.CostoAcumMixtoBs,
+                s.CostoAcumRedBs - s.CostoAcumMixtoBs, Recuperacion(s.RecuperacionMixtoAnios))
+        };
+    }
+
+    private void ConstruirGrafico(Data.Simulacion s)
+    {
+        const double w = 920;
+        const double h = 340;
+        const double padL = 64;
+        const double padR = 28;
+        const double padT = 18;
+        const double padB = 36;
+
+        // Año 0 = inversión inicial; después el acumulado año a año.
+        var n = s.HorizonteAnios;
+        var red = new double[n + 1];
+        var solar = new double[n + 1];
+        var mixto = new double[n + 1];
+        red[0] = 0;
+        solar[0] = (double)s.InversionSolarBs;
+        mixto[0] = (double)s.InversionMixtoBs;
+
+        for (var y = 1; y <= n; y++)
+        {
+            red[y] = (double)(y * s.CostoAnualRedBs);
+            solar[y] = (double)(s.InversionSolarBs + y * s.CostoAnualSolarBs);
+            mixto[y] = (double)(s.InversionMixtoBs + y * s.CostoAnualMixtoBs);
+        }
+
+        var maxY = Math.Max(1, red.Concat(solar).Concat(mixto).Max()) * 1.08;
+        var plotW = w - padL - padR;
+        var plotH = h - padT - padB;
+        double X(int i) => padL + (n == 0 ? 0 : plotW * i / n);
+        double Y(double v) => padT + plotH * (1 - v / maxY);
+
+        var puntos = new List<GraficoPunto>(n + 1);
+        for (var i = 0; i <= n; i++)
+        {
+            puntos.Add(new GraficoPunto(
+                i,
+                i == 0 ? "Hoy" : $"Año {i}",
+                i == 0 ? "0" : i.ToString(),
+                X(i),
+                Y(red[i]),
+                Y(solar[i]),
+                Y(mixto[i]),
+                red[i],
+                solar[i],
+                mixto[i]));
+        }
+
+        string LinePath(Func<GraficoPunto, double> sel)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (var i = 0; i < puntos.Count; i++)
+            {
+                sb.Append(i == 0 ? "M" : "L")
+                  .Append(puntos[i].X.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))
+                  .Append(' ')
+                  .Append(sel(puntos[i]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))
+                  .Append(' ');
+            }
+            return sb.ToString().Trim();
+        }
+
+        string AreaPath(Func<GraficoPunto, double> sel)
+        {
+            var line = LinePath(sel);
+            var yBase = Y(0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            var x0 = puntos[0].X.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            var xn = puntos[^1].X.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            return $"{line} L{xn} {yBase} L{x0} {yBase} Z";
+        }
+
+        // Franja de ahorro: entre Red y Solar (solo donde Red > Solar).
+        var ahorro = new System.Text.StringBuilder();
+        ahorro.Append('M')
+              .Append(puntos[0].X.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)).Append(' ')
+              .Append(puntos[0].YRed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        for (var i = 1; i < puntos.Count; i++)
+        {
+            ahorro.Append(" L")
+                  .Append(puntos[i].X.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)).Append(' ')
+                  .Append(puntos[i].YRed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        for (var i = puntos.Count - 1; i >= 0; i--)
+        {
+            ahorro.Append(" L")
+                  .Append(puntos[i].X.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)).Append(' ')
+                  .Append(puntos[i].YSolar.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        ahorro.Append(" Z");
+
+        var yTicks = new List<GraficoTick>();
+        for (var t = 0; t <= 4; t++)
+        {
+            var val = maxY * t / 4;
+            yTicks.Add(new GraficoTick(Y(val), BsCorto(val)));
+        }
+
+        _grafico = new GraficoAcumulado(
+            W: w,
+            H: h,
+            PadL: padL,
+            PadR: padR,
+            PadT: padT,
+            PadB: padB,
+            HitW: Math.Max(18, plotW / Math.Max(1, n) * 0.9),
+            PathRed: LinePath(p => p.YRed),
+            PathSolar: LinePath(p => p.YSolar),
+            PathMixto: LinePath(p => p.YMixto),
+            PathRedArea: AreaPath(p => p.YRed),
+            PathSolarArea: AreaPath(p => p.YSolar),
+            PathAhorro: ahorro.ToString(),
+            EndX: puntos[^1].X,
+            EndRedY: puntos[^1].YRed,
+            EndSolarY: puntos[^1].YSolar,
+            EndMixtoY: puntos[^1].YMixto,
+            Puntos: puntos,
+            YTicks: yTicks);
+    }
+
+    private void SeleccionarAnio(int idx, bool hover)
+    {
+        if (_grafico is null)
+            return;
+
+        idx = Math.Clamp(idx, 0, _grafico.Puntos.Count - 1);
+
+        if (hover && _anioFijado)
+            return;
+
+        if (!hover)
+        {
+            if (_anioFijado && _hoverAnio == idx)
+            {
+                _anioFijado = false;
+            }
+            else
+            {
+                _anioFijado = true;
+                _hoverAnio = idx;
+            }
+
+            _tipKey++;
+            return;
+        }
+
+        _hoverAnio = idx;
+    }
+
+    private static string Bs(double v) =>
+        v.ToString("N0", FacturaReglas.Cultura) + " Bs";
+
+    private static string BsCorto(double v)
+    {
+        if (v >= 1_000_000)
+            return (v / 1_000_000d).ToString("0.#", FacturaReglas.Cultura) + " M";
+        if (v >= 1_000)
+            return (v / 1_000d).ToString("0.#", FacturaReglas.Cultura) + " mil";
+        return v.ToString("N0", FacturaReglas.Cultura);
+    }
+
+    // Blazor reserva <text>; el SVG se emite como MarkupString.
+    private static MarkupString SvgText(double x, double y, string css, string content, string anchor = "start")
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var safe = System.Net.WebUtility.HtmlEncode(content);
+        return new MarkupString(
+            $"<text class=\"{css}\" x=\"{x.ToString("0.##", inv)}\" y=\"{y.ToString("0.##", inv)}\" text-anchor=\"{anchor}\">{safe}</text>");
+    }
+
+    private async Task Guardar()
+    {
+        if (_guardando || _resultado is null)
+            return;
+
+        _guardando = true;
+        try
+        {
+            if (UsuarioActual.UsuarioId is not string usuarioId)
+            {
+                Snackbar.Add("No se pudo identificar al usuario.", Severity.Error);
+                return;
+            }
+
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var copia = new Data.Simulacion
+            {
+                EmpresaId = _resultado.EmpresaId,
+                UsuarioId = usuarioId,
+                Fecha = DateTime.UtcNow,
+                ParametrosVersion = _resultado.ParametrosVersion,
+                TarifaUsadaBsKwh = _resultado.TarifaUsadaBsKwh,
+                ConsumoMensualKwh = _resultado.ConsumoMensualKwh,
+                MesesBase = _resultado.MesesBase,
+                KwpSolar = _resultado.KwpSolar,
+                KwpMixto = _resultado.KwpMixto,
+                HorizonteAnios = _resultado.HorizonteAnios,
+                InversionSolarBs = _resultado.InversionSolarBs,
+                InversionMixtoBs = _resultado.InversionMixtoBs,
+                CostoAnualRedBs = _resultado.CostoAnualRedBs,
+                CostoAnualSolarBs = _resultado.CostoAnualSolarBs,
+                CostoAnualMixtoBs = _resultado.CostoAnualMixtoBs,
+                CostoAcumRedBs = _resultado.CostoAcumRedBs,
+                CostoAcumSolarBs = _resultado.CostoAcumSolarBs,
+                CostoAcumMixtoBs = _resultado.CostoAcumMixtoBs,
+                RecuperacionSolarAnios = _resultado.RecuperacionSolarAnios,
+                RecuperacionMixtoAnios = _resultado.RecuperacionMixtoAnios,
+                Advertencias = _resultado.Advertencias.ToList()
+            };
+
+            db.Simulaciones.Add(copia);
+            await db.SaveChangesAsync();
+            Snackbar.Add("Simulación guardada.", Severity.Success);
+            await CargarAsync();
+        }
+        catch
+        {
+            Snackbar.Add("No se pudo guardar la simulación.", Severity.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private async Task FijarTarifa()
+    {
+        if (_guardandoTarifa)
+            return;
+
+        if (_nuevaTarifa < 0.10m || _nuevaTarifa > 5.00m)
+        {
+            Snackbar.Add("La tarifa debe estar entre 0,10 y 5,00 Bs/kWh.", Severity.Error);
+            return;
+        }
+
+        _guardandoTarifa = true;
+        try
+        {
+            if (!UsuarioActual.EsAdministrador ||
+                UsuarioActual.EmpresaActivaId is not int empresaId ||
+                !UsuarioActual.PuedeVerEmpresa(empresaId) ||
+                UsuarioActual.UsuarioId is not string usuarioId)
+            {
+                Snackbar.Add("No tenés permiso para fijar la tarifa.", Severity.Error);
+                return;
+            }
+
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            db.TarifasEmpresa.Add(new TarifaEmpresa
+            {
+                EmpresaId = empresaId,
+                TarifaBsKwh = _nuevaTarifa,
+                VigenteDesde = DateTime.UtcNow,
+                CreadoPorId = usuarioId
+            });
+            await db.SaveChangesAsync();
+            Snackbar.Add("Tarifa de la empresa actualizada.", Severity.Success);
+            await CargarAsync();
+        }
+        catch
+        {
+            Snackbar.Add("No se pudo fijar la tarifa.", Severity.Error);
+        }
+        finally
+        {
+            _guardandoTarifa = false;
+        }
+    }
+
+    private static string Recuperacion(decimal? anios) =>
+        anios is decimal a ? $"{a.ToString("N1", FacturaReglas.Cultura)} años" : "No se recupera en el horizonte";
+
+    private static string FechaLocal(DateTime utc)
+    {
+        foreach (var id in new[] { "America/La_Paz", "SA Western Standard Time" })
+        {
+            try
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(id);
+                return TimeZoneInfo.ConvertTimeFromUtc(utc, tz).ToString("dd/MM/yyyy HH:mm");
+            }
+            catch (TimeZoneNotFoundException) { }
+            catch (InvalidTimeZoneException) { }
+        }
+        return utc.ToString("dd/MM/yyyy HH:mm");
+    }
+
+    private sealed record FilaResultado(
+        string Nombre, string Kwp, decimal Inversion, decimal CostoAnual, decimal CostoAcum, decimal AhorroAcum, string Recuperacion);
+
+    private sealed record GraficoPunto(
+        int Anio, string Etiqueta, string EtiquetaCorta,
+        double X, double YRed, double YSolar, double YMixto,
+        double Red, double Solar, double Mixto);
+
+    private sealed record GraficoTick(double Y, string Label);
+
+    private sealed record GraficoAcumulado(
+        double W, double H, double PadL, double PadR, double PadT, double PadB, double HitW,
+        string PathRed, string PathSolar, string PathMixto,
+        string PathRedArea, string PathSolarArea, string PathAhorro,
+        double EndX, double EndRedY, double EndSolarY, double EndMixtoY,
+        List<GraficoPunto> Puntos, List<GraficoTick> YTicks);
+}

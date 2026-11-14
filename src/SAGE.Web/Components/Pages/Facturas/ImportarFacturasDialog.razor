@@ -1,28 +1,27 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Servicios.Seguridad
 @inject ApplicationDbContext Db
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IUsuarioActual UsuarioActual
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="2">
+            @if (UsuarioActual.EmpresaActiva is not null)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Empresa destino: <b>@UsuarioActual.EmpresaActiva.Nombre</b>
+                </MudAlert>
+            }
+
             <MudText Typo="Typo.body2">
                 Sube un archivo .xlsx (máximo 1 MB) con los encabezados
                 <b>Año | Mes | Consumo (kWh) | Monto (Bs)</b>, una factura por fila.
                 Si alguna fila tiene errores, no se guarda ninguna.
             </MudText>
-
-            @if (EsAdmin)
-            {
-                <MudSelect T="int?" @bind-Value="_empresaId" Label="Empresa destino" Variant="Variant.Outlined" Required="true">
-                    @foreach (var empresa in Empresas)
-                    {
-                        <MudSelectItem T="int?" Value="@((int?)empresa.Id)">@empresa.Nombre</MudSelectItem>
-                    }
-                </MudSelect>
-            }
 
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
                 <MudButton HtmlTag="label"
@@ -76,13 +75,6 @@
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
-    [Parameter]
-    public bool EsAdmin { get; set; }
-
-    [Parameter]
-    public List<EmpresaOpcion> Empresas { get; set; } = new();
-
-    private int? _empresaId;
     private int? _importadas;
     private bool _procesando;
     private readonly List<string> _errores = new();
@@ -98,26 +90,23 @@
         {
             var archivo = e.File;
 
-            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var principal = auth.User;
-            var esAdmin = principal.IsInRole("Administrador");
-            if (!esAdmin && !principal.IsInRole("Tecnico"))
+            if (!UsuarioActual.EsAdministrador && !UsuarioActual.EsTecnico)
             {
                 _errores.Add("No tienes permiso para importar facturas.");
                 return;
             }
 
-            var usuario = await UserManager.GetUserAsync(principal);
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var usuario = await UserManager.GetUserAsync(auth.User);
             if (usuario is null)
             {
                 _errores.Add("No se pudo identificar al usuario.");
                 return;
             }
 
-            var empresaId = esAdmin ? _empresaId : usuario.EmpresaId;
-            if (empresaId is null)
+            if (UsuarioActual.EmpresaActivaId is not int empresaId || !UsuarioActual.PuedeVerEmpresa(empresaId))
             {
-                _errores.Add(esAdmin ? "Selecciona primero la empresa destino." : "Tu usuario no tiene una empresa asignada.");
+                _errores.Add("No tienes una empresa activa válida.");
                 return;
             }
 
@@ -141,7 +130,7 @@
 
             memoria.Position = 0;
             var resultado = await FacturaExcelImporter.ImportarAsync(
-                memoria, empresaId.Value, usuario.Id, Db);
+                memoria, empresaId, usuario.Id, Db);
 
             if (resultado.Errores.Count > 0)
             {

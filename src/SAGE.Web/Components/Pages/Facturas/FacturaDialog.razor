@@ -1,21 +1,20 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Servicios.Seguridad
 @inject ApplicationDbContext Db
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IUsuarioActual UsuarioActual
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="2">
-            @if (EsAdmin)
+            @if (UsuarioActual.EmpresaActiva is not null)
             {
-                <MudSelect T="int?" @bind-Value="_empresaId" Label="Empresa" Variant="Variant.Outlined" Required="true">
-                    @foreach (var empresa in Empresas)
-                    {
-                        <MudSelectItem T="int?" Value="@((int?)empresa.Id)">@empresa.Nombre</MudSelectItem>
-                    }
-                </MudSelect>
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Empresa: <b>@UsuarioActual.EmpresaActiva.Nombre</b>
+                </MudAlert>
             }
 
             <MudStack Row="true" Spacing="2">
@@ -49,13 +48,6 @@
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
-    [Parameter]
-    public bool EsAdmin { get; set; }
-
-    [Parameter]
-    public List<EmpresaOpcion> Empresas { get; set; } = new();
-
-    private int? _empresaId;
     private int _mes = FacturaReglas.HoyLocal().Month;
     private int _anio = FacturaReglas.HoyLocal().Year;
     private decimal _kwh;
@@ -72,28 +64,24 @@
         try
         {
             // Los permisos se vuelven a comprobar aquí: no basta con ocultar el botón.
-            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var principal = auth.User;
-            var esAdmin = principal.IsInRole("Administrador");
-
-            if (!esAdmin && !principal.IsInRole("Tecnico"))
+            if (!UsuarioActual.EsAdministrador && !UsuarioActual.EsTecnico)
             {
                 _error = "No tienes permiso para registrar facturas.";
                 return;
             }
 
-            var usuario = await UserManager.GetUserAsync(principal);
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var usuario = await UserManager.GetUserAsync(auth.User);
             if (usuario is null)
             {
                 _error = "No se pudo identificar al usuario.";
                 return;
             }
 
-            // El Técnico siempre usa su propia empresa; el Administrador elige.
-            var empresaId = esAdmin ? _empresaId : usuario.EmpresaId;
-            if (empresaId is null)
+            // Siempre se usa la empresa activa, y se reverifica el acceso en el servidor.
+            if (UsuarioActual.EmpresaActivaId is not int empresaId || !UsuarioActual.PuedeVerEmpresa(empresaId))
             {
-                _error = esAdmin ? "Selecciona una empresa." : "Tu usuario no tiene una empresa asignada.";
+                _error = "No tienes una empresa activa válida.";
                 return;
             }
 
@@ -121,7 +109,7 @@
 
             Db.Facturas.Add(new Factura
             {
-                EmpresaId = empresaId.Value,
+                EmpresaId = empresaId,
                 Anio = _anio,
                 Mes = _mes,
                 ConsumoKwh = _kwh,
@@ -137,7 +125,6 @@
             }
             catch (DbUpdateException)
             {
-                // Otra persona registró el mismo mes justo antes (índice único).
                 Db.ChangeTracker.Clear();
                 _error = "Ya existe la factura de ese mes";
                 return;

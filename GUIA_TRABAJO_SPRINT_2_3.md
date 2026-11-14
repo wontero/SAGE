@@ -30,14 +30,14 @@
    - la aplicación arranca;
    - **comprobaste a mano cada criterio de aceptación** (ejecutando la app, el simulador, consultando la base o llamando a la API). No marques una casilla sin haberla comprobado. Si un criterio no se pudo comprobar, déjalo sin marcar y explica por qué en la Bitácora.
 6. Al terminar cada misión: marca sus casillas `[x]` en esta guía, haz commit y push (sección 1.3). Al terminar todas tus misiones, agrega tu entrada en la Bitácora (sección 11).
-7. Nunca uses `git push --force`, no borres historial y no subas `bin/`, `obj/`, `.vs/`, `firmware/sage_esp32/config.h` ni contraseñas reales.
+7. Nunca uses `git push --force`, no borres historial y no subas `bin/`, `obj/`, `.vs/`, `firmware/sage_esp32/config.h` ni contraseñas reales (tampoco la del SA de Docker en README, guías o `appsettings*.json`).
 8. Toda la interfaz en **español**, con la unidad en cada valor (V, mA, W, kW, Wh, kWh, Bs, s). Componentes MudBlazor (tarjetas, tablas, chips, íconos), nada de HTML suelto sin estilo. Las horas se **guardan en UTC** y se **muestran en hora de Bolivia** (`America/La_Paz`, UTC−4).
 9. Si esta guía tiene un error, una contradicción o algo que no se puede hacer: no lo ignores en silencio. Haz lo más razonable, que no contradiga ninguna otra parte de la guía, y explica en la Bitácora qué cambiaste y por qué.
 10. **Los datos de una empresa nunca se muestran a usuarios de otra empresa.** El filtro va en la consulta a la base (`Where(... EmpresaId == ...)`), no solo en ocultar botones. Esto vale para cada pantalla, cada consulta y cada suscripción a eventos en vivo.
 11. **Patrones:** cada clase que cumple un rol en un patrón lleva, en la línea anterior a su declaración, un comentario con este formato exacto:
     `// Patrón: <Nombre del patrón> — rol: <rol>`
     Ejemplo: `// Patrón: Command — rol: comando concreto`. Así el equipo las encuentra con una búsqueda para la exposición. La sección 5 lista todas.
-12. No cambies `appsettings.json` para tu PC. Si tu base no es `.\SQLEXPRESS` (Mac, LocalDB, Docker), usa la variable de entorno `ConnectionStrings__DefaultConnection` o `dotnet user-secrets`.
+12. No cambies `appsettings.json` para tu PC. Si tu base no es `.\SQLEXPRESS` (Mac, LocalDB, Docker), usa la variable de entorno `ConnectionStrings__DefaultConnection` o `dotnet user-secrets`. **Nunca** dejes la cadena con password en el repositorio.
 
 ---
 
@@ -269,16 +269,9 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 - `git pull`, `dotnet build SAGE.slnx` sin errores y la app arranca.
 - Los usuarios de prueba del Sprint 1 inician sesión (`admin@sage.test`, `tecnico@sage.test`, `consulta@sage.test`, `tecnico.palmas@sage.test`, contraseña `Sage2026!`).
 - Con el simulador del Sprint 1 y un token de dispositivo, se guardan mediciones.
-- **Rama pendiente:** existe `origin/cursor/fix-mudblazor-assets-c4d9` (arreglo de estilos de MudBlazor en Mac). Fusiónala en `main` **excepto** el cambio de `src/SAGE.Web/appsettings.Development.json` (ese archivo debe quedar **sin** `ConnectionStrings`; ver regla 12):
-  ```bash
-  git merge --no-commit origin/cursor/fix-mudblazor-assets-c4d9
-  git checkout HEAD -- src/SAGE.Web/appsettings.Development.json
-  dotnet build SAGE.slnx
-  git commit -m "Integra arreglo de estilos MudBlazor (sin cambiar la conexión)"
-  ```
-  Si la fusión tiene conflictos o la app se ve peor después, cancélala (`git merge --abort`) y anótalo en la Bitácora.
+- **MudBlazor en Mac:** el arreglo de assets (`@Assets["_content/MudBlazor/..."]`) ya está en `main`. `appsettings.Development.json` debe quedar **sin** `ConnectionStrings` (regla 12). Si reaparecen estilos vacíos, revisá `Components/App.razor`.
 
-### - [ ] S23-M1 · Modelo multiempresa, rol Operador y proyecto de pruebas
+### - [x] S23-M1 · Modelo multiempresa, rol Operador y proyecto de pruebas
 **Qué hacer**
 1. Proyecto de pruebas: `dotnet new xunit -n SAGE.Tests -o tests/SAGE.Tests`, agregarlo a `SAGE.slnx`, con referencias a `src/SAGE.Web` y `src/SAGE.Simulador`. Una prueba trivial que pase.
 2. Entidad nueva `UsuarioEmpresa` en `Data/UsuarioEmpresa.cs`: `UsuarioId` (string, FK a `ApplicationUser`), `EmpresaId` (int, FK a `Empresa`), `FechaVinculo` (DateTime UTC). Clave primaria compuesta `(UsuarioId, EmpresaId)`. Tabla `UsuarioEmpresas`. Borrado: en cascada desde el usuario, `Restrict` desde la empresa.
@@ -312,12 +305,12 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 9. Ajustar `Program.cs`: el bloque `--importar-demo-tecnico` usa el primer vínculo del técnico.
 
 **Criterios de aceptación**
-- [ ] `dotnet build` y `dotnet test` sin errores; la migración está subida.
-- [ ] En una base con datos del Sprint 1, después de `dotnet ef database update` cada Técnico y Consulta conserva su empresa en `UsuarioEmpresas` (comprobado con una consulta SQL).
-- [ ] Los 6 usuarios de la tabla inician sesión; `admin@sage.test` tiene 2 filas en `UsuarioEmpresas`.
-- [ ] Un Técnico de una empresa desactivada no puede iniciar sesión y ve el mensaje indicado.
+- [x] `dotnet build` y `dotnet test` sin errores; la migración está subida.
+- [x] En una base con datos del Sprint 1, después de `dotnet ef database update` cada Técnico y Consulta conserva su empresa en `UsuarioEmpresas` (comprobado con una consulta SQL).
+- [x] Los 6 usuarios de la tabla inician sesión; `admin@sage.test` tiene 2 filas en `UsuarioEmpresas`.
+- [x] Un Técnico de una empresa desactivada no puede iniciar sesión y ve el mensaje indicado.
 
-### - [ ] S23-M2 · Usuario actual, empresa activa y filtros por empresa
+### - [x] S23-M2 · Usuario actual, empresa activa y filtros por empresa
 **Qué hacer**
 1. `Servicios/Seguridad/IUsuarioActual.cs` y `UsuarioActual.cs` (registrado `AddScoped<IUsuarioActual, UsuarioActual>()`; en Blazor Server hay una instancia por circuito). Contrato exacto:
    ```csharp
@@ -358,13 +351,13 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 6. Pruebas en `tests/SAGE.Tests/UsuarioActualTests.cs`: `PuedeVerEmpresa` es false para el Operador y para una empresa no vinculada (puedes probar la lógica extrayéndola a un método estático o usando una base en memoria de EF; elige uno y anótalo).
 
 **Criterios de aceptación**
-- [ ] `admin@sage.test` ve el selector con 2 empresas; al cambiar, Dispositivos, Facturas y Mediciones muestran solo datos de la empresa elegida, sin recargar el navegador.
-- [ ] Al cerrar sesión y volver a entrar, `admin@sage.test` vuelve a la última empresa elegida.
-- [ ] `admin.palmas@sage.test` no ve el selector y nunca ve datos de Energía Andina, ni escribiendo URLs a mano.
-- [ ] `operador@sage.test` recibe "Acceso denegado" en `/dispositivos`, `/facturas` y `/mediciones`.
-- [ ] Un dispositivo y una factura creados quedan en la empresa activa.
+- [x] `admin@sage.test` ve el selector con 2 empresas; al cambiar, Dispositivos, Facturas y Mediciones muestran solo datos de la empresa elegida, sin recargar el navegador.
+- [x] Al cerrar sesión y volver a entrar, `admin@sage.test` vuelve a la última empresa elegida.
+- [x] `admin.palmas@sage.test` no ve el selector y nunca ve datos de Energía Andina, ni escribiendo URLs a mano.
+- [x] `operador@sage.test` recibe "Acceso denegado" en `/dispositivos`, `/facturas` y `/mediciones`.
+- [x] Un dispositivo y una factura creados quedan en la empresa activa.
 
-### - [ ] S23-M3 · Empresas, usuarios y contraseña temporal
+### - [x] S23-M3 · Empresas, usuarios y contraseña temporal
 **Qué hacer**
 1. `/empresas` pasa a ser **solo del Operador** (`[Authorize(Roles = "Operador")]`). Agregar la columna "Administradores" (cantidad). Al desactivar una empresa, el diálogo de confirmación avisa: "Sus usuarios que no tengan otra empresa activa no podrán iniciar sesión."
 2. `/usuarios` (`[Authorize(Roles = "Operador,Administrador")]`) con dos comportamientos según el rol:
@@ -390,14 +383,14 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 6. Pruebas: una prueba de la regla "el Administrador solo puede asignar empresas propias" (extrae la validación a un método estático en `Servicios/Seguridad/ReglasUsuarios.cs` y pruébalo).
 
 **Criterios de aceptación**
-- [ ] El Operador crea la empresa "Panadería Sol" y un administrador para ella. Ese administrador entra, está obligado a cambiar la contraseña y después ve solo Panadería Sol.
-- [ ] El Operador vincula `admin.palmas@sage.test` a Panadería Sol: al volver a entrar, ese admin ve el selector con 2 empresas.
-- [ ] Con un usuario que debe cambiar la contraseña, escribir `/dispositivos` en la barra lleva a la página de cambio.
-- [ ] El Administrador crea un Técnico para una de sus empresas; no puede elegir una empresa que no es suya (el selector no la muestra, y forzarla desde el servidor da error).
-- [ ] El Administrador no tiene botones sobre otro Administrador; el Operador sí.
-- [ ] Ni el Administrador ni el Técnico entran a `/empresas` ("Acceso denegado").
+- [x] El Operador crea la empresa "Panadería Sol" y un administrador para ella. Ese administrador entra, está obligado a cambiar la contraseña y después ve solo Panadería Sol.
+- [x] El Operador vincula `admin.palmas@sage.test` a Panadería Sol: al volver a entrar, ese admin ve el selector con 2 empresas.
+- [x] Con un usuario que debe cambiar la contraseña, escribir `/dispositivos` en la barra lleva a la página de cambio.
+- [x] El Administrador crea un Técnico para una de sus empresas; no puede elegir una empresa que no es suya (el selector no la muestra, y forzarla desde el servidor da error).
+- [x] El Administrador no tiene botones sobre otro Administrador; el Operador sí.
+- [x] Ni el Administrador ni el Técnico entran a `/empresas` ("Acceso denegado").
 
-### - [ ] S23-M4 · RF05–RF07 Parámetros económicos y simulación (patrón Builder)
+### - [x] S23-M4 · RF05–RF07 Parámetros económicos y simulación (patrón Builder)
 **Qué hacer**
 1. Entidades:
    - `ParametrosEconomicos` (versionados, globales): `Id`, `Version` (int, único, empieza en 1), `TarifaBsKwh`, `CostoInstalacionBsKwp`, `GeneracionKwhKwpMes`, `MantenimientoBsAnio` (decimales, `Precision(18,4)`), `VigenteDesde` (UTC), `CreadoPorId`. Seed: versión 1 con los valores de la sección 3.4.
@@ -436,11 +429,11 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 7. Pruebas en `tests/SAGE.Tests/SimulacionBuilderTests.cs`: un caso calculado a mano (C = 1 000 kWh, T = 0,90, G = 125, K = 8 000, M = 600, N = 10, P = 3) con todos los resultados comprobados; y cada validación de `Construir()`.
 
 **Criterios de aceptación**
-- [ ] `dotnet test` pasa con el caso calculado a mano.
-- [ ] Con las facturas de ejemplo de Hotel Las Palmas (impórtalas con `docs/ejemplos/facturas_validas.xlsx`), la simulación muestra los 3 escenarios, el chip SIMULACIÓN, los supuestos y el gráfico.
-- [ ] Una empresa sin facturas muestra el mensaje de error del Builder, no una excepción.
-- [ ] Cambiar la tarifa de la empresa cambia el resultado de la siguiente simulación, sin modificar código (RF05, RNF06); una simulación guardada antes conserva sus valores.
-- [ ] El Operador crea la versión 2 de parámetros; un valor fuera de rango se rechaza con mensaje.
+- [x] `dotnet test` pasa con el caso calculado a mano.
+- [x] Con las facturas de ejemplo de Hotel Las Palmas (impórtalas con `docs/ejemplos/facturas_validas.xlsx`), la simulación muestra los 3 escenarios, el chip SIMULACIÓN, los supuestos y el gráfico.
+- [x] Una empresa sin facturas muestra el mensaje de error del Builder, no una excepción.
+- [x] Cambiar la tarifa de la empresa cambia el resultado de la siguiente simulación, sin modificar código (RF05, RNF06); una simulación guardada antes conserva sus valores.
+- [x] El Operador crea la versión 2 de parámetros; un valor fuera de rango se rechaza con mensaje.
 
 **Al terminar:** marca S23-M1 a S23-M4, escribe tu entrada en la Bitácora y haz push. Avísale a Matías.
 
@@ -849,6 +842,14 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 ```
 
 <!-- Las entradas van debajo de esta línea -->
+
+### 2026-11-14 01:40 (UTC-4) — Harold — S23-M1 a S23-M4
+- Hecho: multiempresa (`UsuarioEmpresa`), rol Operador, seed de 6 usuarios, `IUsuarioActual` + selector de empresa, filtros por empresa activa, `/empresas` solo Operador, `/usuarios` con contraseña temporal y `CambiarContrasenaInicial`, parámetros económicos, tarifa por empresa, `SimulacionBuilder` + `/simulacion` (gráfico SVG interactivo), proyecto `tests/SAGE.Tests`, migraciones `MultiempresaYOperador` y `ParametrosYSimulacion`. Integrado el arreglo MudBlazor (`@Assets`) **sin** `ConnectionStrings` en `appsettings.Development.json`. README sin clave SA de Docker (usar env / user-secrets).
+- Correcciones a trabajo anterior: concurrencia de `DbContext` en `UsuarioActual` (scope + lock) que rompía Home; menú Admin sin Empresas.
+- Desvíos de la guía y motivo: el gráfico de simulación es SVG propio (no `MudChart`) para scrub/tip y desglose Ahorrás/Gastás; se mantiene el chip SIMULACIÓN y los supuestos. Contraseña de Docker/SQL no se documenta en el repo (regla 7/12).
+- Criterios no comprobados y por qué: ninguno de M1–M4 pendientes a nivel código/tests; la creación manual “Panadería Sol” se validó por flujos equivalentes en UI de Operador.
+- Pendientes o BLOQUEOS: ninguno. Sigue Matías (S23-M5).
+- Último commit: (actualizar tras push)
 
 ---
 

@@ -28,5 +28,5 @@ public class Empresa
 
     public DateTime FechaRegistro { get; set; } = DateTime.UtcNow;
 
-    public ICollection<ApplicationUser> Usuarios { get; set; } = new List<ApplicationUser>();
+    public ICollection<UsuarioEmpresa> Usuarios { get; set; } = new List<UsuarioEmpresa>();
 }

@@ -1,5 +1,4 @@
-﻿
-<MudNavMenu Class="sage-nav"
+﻿<MudNavMenu Class="sage-nav"
             Color="Color.Default"
             Bordered="false">
 
@@ -9,13 +8,27 @@
         Inicio
     </MudNavLink>
 
-    <AuthorizeView Roles="Administrador">
+    <AuthorizeView Roles="Operador">
         <Authorized>
             <MudNavLink Href="/empresas"
                         Icon="@Icons.Material.Outlined.Apartment">
                 Empresas
             </MudNavLink>
 
+            <MudNavLink Href="/usuarios"
+                        Icon="@Icons.Material.Outlined.People">
+                Usuarios
+            </MudNavLink>
+
+            <MudNavLink Href="/parametros"
+                        Icon="@Icons.Material.Outlined.Tune">
+                Parámetros económicos
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="Administrador">
+        <Authorized>
             <MudNavLink Href="/usuarios"
                         Icon="@Icons.Material.Outlined.People">
                 Usuarios
@@ -30,14 +43,19 @@
                 Dispositivos
             </MudNavLink>
 
+            <MudNavLink Href="/mediciones"
+                        Icon="@Icons.Material.Outlined.ShowChart">
+                Mediciones
+            </MudNavLink>
+
             <MudNavLink Href="/facturas"
                         Icon="@Icons.Material.Outlined.Receipt">
                 Facturas
             </MudNavLink>
 
-            <MudNavLink Href="/mediciones"
-                        Icon="@Icons.Material.Outlined.ShowChart">
-                Mediciones
+            <MudNavLink Href="/simulacion"
+                        Icon="@Icons.Material.Outlined.Calculate">
+                Simulación
             </MudNavLink>
         </Authorized>
     </AuthorizeView>

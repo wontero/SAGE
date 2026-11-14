@@ -12,9 +12,10 @@
             <DataAnnotationsValidator />
 
             <MudStack Spacing="3">
-                <MudText>
-                    Nueva contraseña para: @Correo
-                </MudText>
+                <div class="sage-person">
+                    <span class="sage-person__name">Nueva contraseña temporal</span>
+                    <span class="sage-person__mail">@Correo</span>
+                </div>
 
                 <MudTextField T="string"
                               @bind-Value="_modelo.NuevaContrasena"
@@ -107,9 +108,12 @@
                 ? null
                 : await userManager.FindByIdAsync(administradorId);
 
-            if (administrador is null ||
-                !administrador.Activo ||
-                !await userManager.IsInRoleAsync(administrador, "Administrador"))
+            var esGestor = administrador is not null &&
+                administrador.Activo &&
+                (await userManager.IsInRoleAsync(administrador, "Operador") ||
+                 await userManager.IsInRoleAsync(administrador, "Administrador"));
+
+            if (!esGestor)
             {
                 _error = "No tenés permiso para restablecer contraseñas.";
                 return;
@@ -139,6 +143,10 @@
 
                 return;
             }
+
+            // Contraseña temporal: debe cambiarla en el próximo inicio de sesión.
+            usuario.DebeCambiarContrasena = true;
+            await userManager.UpdateAsync(usuario);
 
             _modelo.NuevaContrasena = string.Empty;
             _modelo.Confirmacion = string.Empty;

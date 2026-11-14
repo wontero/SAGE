@@ -1,0 +1,286 @@
+@page "/parametros"
+@attribute [Authorize(Roles = "Operador")]
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@using SAGE.Web.Servicios.Seguridad
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject ISnackbar Snackbar
+
+<PageTitle>Parámetros económicos — SAGE</PageTitle>
+
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Operador SAGE</p>
+            <h1 class="page-title">Parámetros económicos</h1>
+            <p class="page-meta">Valores globales usados en la simulación económica</p>
+        </div>
+    </header>
+
+    @if (_vigente is { Version: 1 })
+    {
+        <div class="sage-callout" role="status">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Class="sage-callout__icon" />
+            <div class="sage-callout__body">
+                <p class="sage-callout__title">Supuesto — verificar</p>
+                <p class="sage-callout__text">Confirmá estos valores con la tarifa vigente de la AETN/CRE antes de usarlos en producción.</p>
+            </div>
+        </div>
+    }
+
+    @if (_cargando)
+    {
+        <div class="page-panel sage-panel-pad">
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else
+    {
+        <section class="home-group" aria-label="Versión vigente">
+            <h2 class="home-group__title">
+                Versión vigente
+                @if (_vigente is not null)
+                {
+                    <span class="sage-chip">v@_vigente.Version</span>
+                }
+            </h2>
+
+            @if (_vigente is not null)
+            {
+                <div class="sage-metrics">
+                    <div class="sage-metric">
+                        <span class="sage-metric__label">Tarifa</span>
+                        <span class="sage-metric__value">@_vigente.TarifaBsKwh.ToString("N2", FacturaReglas.Cultura)</span>
+                        <span class="sage-metric__hint">Bs/kWh</span>
+                    </div>
+                    <div class="sage-metric">
+                        <span class="sage-metric__label">Instalación</span>
+                        <span class="sage-metric__value">@_vigente.CostoInstalacionBsKwp.ToString("N0", FacturaReglas.Cultura)</span>
+                        <span class="sage-metric__hint">Bs/kWp</span>
+                    </div>
+                    <div class="sage-metric">
+                        <span class="sage-metric__label">Generación</span>
+                        <span class="sage-metric__value">@_vigente.GeneracionKwhKwpMes.ToString("N0", FacturaReglas.Cultura)</span>
+                        <span class="sage-metric__hint">kWh/kWp/mes</span>
+                    </div>
+                    <div class="sage-metric">
+                        <span class="sage-metric__label">Mantenimiento</span>
+                        <span class="sage-metric__value">@_vigente.MantenimientoBsAnio.ToString("N0", FacturaReglas.Cultura)</span>
+                        <span class="sage-metric__hint">Bs/año</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="page-panel sage-panel-pad">
+                    <div class="sage-empty">
+                        <p class="sage-empty__title">Sin parámetros</p>
+                        <p class="sage-empty__text">Cargá la primera versión para habilitar la simulación.</p>
+                    </div>
+                </div>
+            }
+        </section>
+
+        <div class="page-panel sage-panel-pad">
+            <h2 class="home-group__title">Nueva versión</h2>
+            <p class="page-meta" style="margin:-0.35rem 0 1rem;">No se editan versiones anteriores: cada guardado crea una nueva.</p>
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="_tarifa" Label="Tarifa (Bs/kWh)" Variant="Variant.Outlined"
+                                     Min="0.10m" Max="5.00m" Step="0.05m" HelperText="0,10 a 5,00" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="_costoInstalacion" Label="Costo de instalación (Bs/kWp)" Variant="Variant.Outlined"
+                                     Min="1000m" Max="50000m" Step="100m" HelperText="1 000 a 50 000" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="_generacion" Label="Generación solar (kWh/kWp/mes)" Variant="Variant.Outlined"
+                                     Min="50m" Max="250m" Step="1m" HelperText="50 a 250" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="_mantenimiento" Label="Mantenimiento (Bs/año)" Variant="Variant.Outlined"
+                                     Min="0m" Max="50000m" Step="50m" HelperText="0 a 50 000" />
+                </MudItem>
+            </MudGrid>
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+            }
+
+            <div class="page-actions mt-3">
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="GuardarNueva" Disabled="_guardando">
+                    @(_guardando ? "Guardando…" : "Guardar nueva versión")
+                </MudButton>
+            </div>
+        </div>
+
+        <section class="home-group" aria-label="Historial de versiones">
+            <h2 class="home-group__title">Historial</h2>
+            <div class="page-panel">
+                <MudTable Items="_historial" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Versión</MudTh>
+                        <MudTh>Tarifa</MudTh>
+                        <MudTh>Instalación</MudTh>
+                        <MudTh>Generación</MudTh>
+                        <MudTh>Mantenimiento</MudTh>
+                        <MudTh>Vigente desde</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Versión">
+                            <span class="sage-person__name">v@context.Version</span>
+                            @if (_vigente?.Version == context.Version)
+                            {
+                                <span class="sage-chip sage-chip--ok">Vigente</span>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Tarifa">@context.TarifaBsKwh.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Instalación">@context.CostoInstalacionBsKwp.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Generación">@context.GeneracionKwhKwpMes.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Mantenimiento">@context.MantenimientoBsAnio.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Vigente desde">@FechaLocal(context.VigenteDesde)</MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <div class="sage-empty">
+                            <p class="sage-empty__title">Sin historial</p>
+                            <p class="sage-empty__text">Las versiones aparecerán acá.</p>
+                        </div>
+                    </NoRecordsContent>
+                </MudTable>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private ParametrosEconomicos? _vigente;
+    private List<ParametrosEconomicos> _historial = new();
+    private bool _cargando = true;
+    private bool _guardando;
+    private string? _error;
+
+    private decimal _tarifa = 0.90m;
+    private decimal _costoInstalacion = 8000m;
+    private decimal _generacion = 125m;
+    private decimal _mantenimiento = 600m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UsuarioActual.CargarAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            _historial = await db.ParametrosEconomicos.AsNoTracking()
+                .OrderByDescending(p => p.Version)
+                .ToListAsync();
+
+            _vigente = _historial.FirstOrDefault();
+
+            if (_vigente is not null)
+            {
+                _tarifa = _vigente.TarifaBsKwh;
+                _costoInstalacion = _vigente.CostoInstalacionBsKwp;
+                _generacion = _vigente.GeneracionKwhKwpMes;
+                _mantenimiento = _vigente.MantenimientoBsAnio;
+            }
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task GuardarNueva()
+    {
+        if (_guardando)
+            return;
+
+        _error = null;
+
+        if (_tarifa < 0.10m || _tarifa > 5.00m)
+        {
+            _error = "La tarifa debe estar entre 0,10 y 5,00 Bs/kWh.";
+            return;
+        }
+        if (_costoInstalacion < 1000m || _costoInstalacion > 50000m)
+        {
+            _error = "El costo de instalación debe estar entre 1 000 y 50 000 Bs/kWp.";
+            return;
+        }
+        if (_generacion < 50m || _generacion > 250m)
+        {
+            _error = "La generación solar debe estar entre 50 y 250 kWh/kWp/mes.";
+            return;
+        }
+        if (_mantenimiento < 0m || _mantenimiento > 50000m)
+        {
+            _error = "El mantenimiento debe estar entre 0 y 50 000 Bs/año.";
+            return;
+        }
+
+        if (UsuarioActual.UsuarioId is not string creadoPorId)
+        {
+            _error = "No se pudo identificar al operador.";
+            return;
+        }
+
+        _guardando = true;
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var ultimaVersion = await db.ParametrosEconomicos.AnyAsync()
+                ? await db.ParametrosEconomicos.MaxAsync(p => p.Version)
+                : 0;
+
+            db.ParametrosEconomicos.Add(new ParametrosEconomicos
+            {
+                Version = ultimaVersion + 1,
+                TarifaBsKwh = _tarifa,
+                CostoInstalacionBsKwp = _costoInstalacion,
+                GeneracionKwhKwpMes = _generacion,
+                MantenimientoBsAnio = _mantenimiento,
+                VigenteDesde = DateTime.UtcNow,
+                CreadoPorId = creadoPorId
+            });
+
+            await db.SaveChangesAsync();
+            Snackbar.Add($"Versión {ultimaVersion + 1} guardada.", Severity.Success);
+            await CargarAsync();
+        }
+        catch
+        {
+            _error = "No se pudo guardar la nueva versión.";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private static string FechaLocal(DateTime utc)
+    {
+        foreach (var id in new[] { "America/La_Paz", "SA Western Standard Time" })
+        {
+            try
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(id);
+                return TimeZoneInfo.ConvertTimeFromUtc(utc, tz).ToString("dd/MM/yyyy HH:mm");
+            }
+            catch (TimeZoneNotFoundException) { }
+            catch (InvalidTimeZoneException) { }
+        }
+        return utc.ToString("dd/MM/yyyy HH:mm");
+    }
+}

@@ -1,5 +1,6 @@
 @page "/empresas"
-@attribute [Authorize(Roles = "Administrador")]
+@attribute [Authorize(Roles = "Operador")]
+@using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext Db
 @inject IDialogService DialogService
@@ -7,54 +8,102 @@
 
 <PageTitle>Empresas — SAGE</PageTitle>
 
-<MudStack Spacing="3">
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-        <MudText Typo="Typo.h4">Empresas</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNueva">
-            Nueva empresa
-        </MudButton>
-    </MudStack>
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Operador SAGE</p>
+            <h1 class="page-title">Empresas</h1>
+            <p class="page-meta">Clientes del servicio y sus administradores</p>
+        </div>
+        <div class="page-actions">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNueva">
+                Nueva empresa
+            </MudButton>
+        </div>
+    </header>
 
-    <MudTextField @bind-Value="_busqueda"
-                  Label="Buscar por nombre o NIT"
-                  Variant="Variant.Outlined"
-                  Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Filled.Search"
-                  Immediate="true"
-                  DebounceInterval="300"
-                  OnDebounceIntervalElapsed="Recargar" />
+    <div class="sage-metrics" aria-label="Resumen de empresas">
+        <div class="sage-metric">
+            <span class="sage-metric__label">Activas</span>
+            <span class="sage-metric__value">@_empresas.Count(e => e.Activa)</span>
+        </div>
+        <div class="sage-metric">
+            <span class="sage-metric__label">Inactivas</span>
+            <span class="sage-metric__value">@_empresas.Count(e => !e.Activa)</span>
+        </div>
+        <div class="sage-metric">
+            <span class="sage-metric__label">Administradores</span>
+            <span class="sage-metric__value">@_empresas.Sum(e => e.CantidadAdministradores)</span>
+        </div>
+        <div class="sage-metric">
+            <span class="sage-metric__label">Usuarios</span>
+            <span class="sage-metric__value">@_empresas.Sum(e => e.CantidadUsuarios)</span>
+        </div>
+    </div>
 
-    <MudTable Items="_empresas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <MudTh>Nombre</MudTh>
-            <MudTh>NIT</MudTh>
-            <MudTh>Teléfono</MudTh>
-            <MudTh>Usuarios</MudTh>
-            <MudTh>Estado</MudTh>
-            <MudTh>Acciones</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
-            <MudTd DataLabel="NIT">@context.Nit</MudTd>
-            <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
-            <MudTd DataLabel="Usuarios">@context.CantidadUsuarios</MudTd>
-            <MudTd DataLabel="Estado">
-                <MudChip T="string" Size="Size.Small" Color="@(context.Activa ? Color.Success : Color.Default)">
-                    @(context.Activa ? "Activa" : "Inactiva")
-                </MudChip>
-            </MudTd>
-            <MudTd DataLabel="Acciones">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => AbrirEditar(context))" />
-                <MudIconButton Icon="@(context.Activa ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
-                               Color="@(context.Activa ? Color.Warning : Color.Success)"
-                               OnClick="@(() => CambiarEstado(context))" />
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText>No hay empresas para mostrar.</MudText>
-        </NoRecordsContent>
-    </MudTable>
-</MudStack>
+    <div class="page-filters">
+        <MudTextField @bind-Value="_busqueda"
+                      Label="Buscar por nombre o NIT"
+                      Variant="Variant.Outlined"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      DebounceInterval="300"
+                      OnDebounceIntervalElapsed="Recargar" />
+    </div>
+
+    <div class="page-panel">
+        <MudTable Items="_empresas" Dense="true" Hover="true" Loading="_cargando" Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>Empresa</MudTh>
+                <MudTh>NIT</MudTh>
+                <MudTh>Teléfono</MudTh>
+                <MudTh>Admins</MudTh>
+                <MudTh>Usuarios</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh>Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Empresa">
+                    <div class="sage-person">
+                        <span class="sage-person__name">@context.Nombre</span>
+                        @if (!string.IsNullOrWhiteSpace(context.CorreoContacto))
+                        {
+                            <span class="sage-person__mail">@context.CorreoContacto</span>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="NIT">@context.Nit</MudTd>
+                <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
+                <MudTd DataLabel="Admins">@context.CantidadAdministradores</MudTd>
+                <MudTd DataLabel="Usuarios">@context.CantidadUsuarios</MudTd>
+                <MudTd DataLabel="Estado">
+                    <span class="sage-chip @(context.Activa ? "sage-chip--ok" : "sage-chip--off")">
+                        @(context.Activa ? "Activa" : "Inactiva")
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Acciones">
+                    <div class="sage-row-actions">
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="@(() => AbrirEditar(context))">Editar</MudButton>
+                        <MudButton Variant="Variant.Text"
+                                   Color="@(context.Activa ? Color.Warning : Color.Success)"
+                                   Size="Size.Small"
+                                   OnClick="@(() => CambiarEstado(context))">
+                            @(context.Activa ? "Desactivar" : "Activar")
+                        </MudButton>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <div class="sage-empty">
+                    <p class="sage-empty__title">Sin empresas</p>
+                    <p class="sage-empty__text">Creá la primera empresa cliente para empezar.</p>
+                </div>
+            </NoRecordsContent>
+        </MudTable>
+    </div>
+</div>
 
 @code {
     private List<EmpresaListaItem> _empresas = new();
@@ -75,6 +124,16 @@
                 query = query.Where(e => e.Nombre.Contains(termino) || e.Nit.Contains(termino));
             }
 
+            // Usuarios vinculados con rol Administrador (Identity guarda los roles aparte).
+            var adminRoleId = await Db.Roles
+                .Where(r => r.Name == DatosIniciales.RolAdministrador)
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync();
+
+            var adminUserIds = Db.UserRoles
+                .Where(ur => ur.RoleId == adminRoleId)
+                .Select(ur => ur.UserId);
+
             _empresas = await query
                 .OrderBy(e => e.Nombre)
                 .Select(e => new EmpresaListaItem
@@ -86,7 +145,8 @@
                     Activa = e.Activa,
                     Direccion = e.Direccion,
                     CorreoContacto = e.CorreoContacto,
-                    CantidadUsuarios = e.Usuarios.Count
+                    CantidadUsuarios = e.Usuarios.Count,
+                    CantidadAdministradores = e.Usuarios.Count(ue => adminUserIds.Contains(ue.UsuarioId))
                 })
                 .ToListAsync();
         }
@@ -137,9 +197,15 @@
     private async Task CambiarEstado(EmpresaListaItem item)
     {
         var accion = item.Activa ? "desactivar" : "activar";
+        var contenido = $"¿Seguro que deseas {accion} la empresa \"{item.Nombre}\"?";
+        if (item.Activa)
+        {
+            contenido += " Sus usuarios que no tengan otra empresa activa no podrán iniciar sesión.";
+        }
+
         var parameters = new DialogParameters<ConfirmDialog>
         {
-            { x => x.Contenido, $"¿Seguro que deseas {accion} la empresa \"{item.Nombre}\"?" }
+            { x => x.Contenido, contenido }
         };
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar", parameters);
         var result = await dialog.Result;
@@ -171,5 +237,6 @@
         public string? CorreoContacto { get; set; }
         public bool Activa { get; set; }
         public int CantidadUsuarios { get; set; }
+        public int CantidadAdministradores { get; set; }
     }
 }
