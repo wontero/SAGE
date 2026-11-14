@@ -849,7 +849,7 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 - Desvíos de la guía y motivo: el gráfico de simulación es SVG propio (no `MudChart`) para scrub/tip y desglose Ahorrás/Gastás; se mantiene el chip SIMULACIÓN y los supuestos. Contraseña de Docker/SQL no se documenta en el repo (regla 7/12).
 - Criterios no comprobados y por qué: ninguno de M1–M4 pendientes a nivel código/tests; la creación manual “Panadería Sol” se validó por flujos equivalentes en UI de Operador.
 - Pendientes o BLOQUEOS: ninguno. Sigue Matías (S23-M5).
-- Último commit: (actualizar tras push)
+- Último commit: 4464c04
 
 ---
 
