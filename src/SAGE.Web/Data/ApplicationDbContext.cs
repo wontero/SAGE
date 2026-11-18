@@ -1,3 +1,4 @@
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Dispositivo> Dispositivos => Set<Dispositivo>();
 
     public DbSet<Medicion> Mediciones => Set<Medicion>();
+
+    // S23-M5: Registro de eventos de dispositivos
+    public DbSet<Evento> Eventos => Set<Evento>();
 
     public DbSet<Factura> Facturas => Set<Factura>();
 
@@ -73,9 +77,30 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // S23-M5: Configuración de la entidad Evento
+        builder.Entity<Evento>(entity =>
+        {
+            entity.HasIndex(e => new
+            {
+                e.DispositivoId,
+                e.BootId,
+                e.Seq
+            }).IsUnique();
+
+            entity.HasOne(e => e.Dispositivo)
+                .WithMany()
+                .HasForeignKey(e => e.DispositivoId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         builder.Entity<Factura>(entity =>
         {
-            entity.HasIndex(f => new { f.EmpresaId, f.Anio, f.Mes }).IsUnique();
+            entity.HasIndex(f => new
+            {
+                f.EmpresaId,
+                f.Anio,
+                f.Mes
+            }).IsUnique();
 
             entity.Property(f => f.Origen)
                 .HasConversion<string>()
@@ -95,10 +120,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<ParametrosEconomicos>(entity =>
         {
             entity.HasIndex(p => p.Version).IsUnique();
-            entity.Property(p => p.TarifaBsKwh).HasPrecision(18, 4);
-            entity.Property(p => p.CostoInstalacionBsKwp).HasPrecision(18, 4);
-            entity.Property(p => p.GeneracionKwhKwpMes).HasPrecision(18, 4);
-            entity.Property(p => p.MantenimientoBsAnio).HasPrecision(18, 4);
+
+            entity.Property(p => p.TarifaBsKwh)
+                .HasPrecision(18, 4);
+
+            entity.Property(p => p.CostoInstalacionBsKwp)
+                .HasPrecision(18, 4);
+
+            entity.Property(p => p.GeneracionKwhKwpMes)
+                .HasPrecision(18, 4);
+
+            entity.Property(p => p.MantenimientoBsAnio)
+                .HasPrecision(18, 4);
 
             entity.HasOne(p => p.CreadoPor)
                 .WithMany()
@@ -108,7 +141,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         builder.Entity<TarifaEmpresa>(entity =>
         {
-            entity.Property(t => t.TarifaBsKwh).HasPrecision(18, 4);
+            entity.Property(t => t.TarifaBsKwh)
+                .HasPrecision(18, 4);
 
             entity.HasOne(t => t.Empresa)
                 .WithMany()
@@ -123,27 +157,58 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         builder.Entity<Simulacion>(entity =>
         {
-            entity.Property(s => s.TarifaUsadaBsKwh).HasPrecision(18, 4);
-            entity.Property(s => s.ConsumoMensualKwh).HasPrecision(18, 4);
-            entity.Property(s => s.KwpSolar).HasPrecision(18, 4);
-            entity.Property(s => s.KwpMixto).HasPrecision(18, 4);
-            entity.Property(s => s.InversionSolarBs).HasPrecision(18, 4);
-            entity.Property(s => s.InversionMixtoBs).HasPrecision(18, 4);
-            entity.Property(s => s.CostoAnualRedBs).HasPrecision(18, 4);
-            entity.Property(s => s.CostoAnualSolarBs).HasPrecision(18, 4);
-            entity.Property(s => s.CostoAnualMixtoBs).HasPrecision(18, 4);
-            entity.Property(s => s.CostoAcumRedBs).HasPrecision(18, 4);
-            entity.Property(s => s.CostoAcumSolarBs).HasPrecision(18, 4);
-            entity.Property(s => s.CostoAcumMixtoBs).HasPrecision(18, 4);
-            entity.Property(s => s.RecuperacionSolarAnios).HasPrecision(18, 4);
-            entity.Property(s => s.RecuperacionMixtoAnios).HasPrecision(18, 4);
+            entity.Property(s => s.TarifaUsadaBsKwh)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.ConsumoMensualKwh)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.KwpSolar)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.KwpMixto)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.InversionSolarBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.InversionMixtoBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.CostoAnualRedBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.CostoAnualSolarBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.CostoAnualMixtoBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.CostoAcumRedBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.CostoAcumSolarBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.CostoAcumMixtoBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.RecuperacionSolarAnios)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.RecuperacionMixtoAnios)
+                .HasPrecision(18, 4);
 
             entity.Property(s => s.Advertencias)
                 .HasConversion(
                     v => string.Join('\n', v),
                     v => string.IsNullOrEmpty(v)
                         ? new List<string>()
-                        : v.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList());
+                        : v.Split(
+                            '\n',
+                            StringSplitOptions.RemoveEmptyEntries
+                        ).ToList()
+                );
 
             entity.HasOne(s => s.Empresa)
                 .WithMany()

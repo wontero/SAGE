@@ -1,0 +1,173 @@
+﻿@page "/eventos"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios.Seguridad
+
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+
+<PageTitle>Eventos — SAGE</PageTitle>
+
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Telemetría</p>
+            <h1 class="page-title">Eventos</h1>
+            <p class="page-meta">
+                Últimos 50 eventos registrados
+            </p>
+        </div>
+    </header>
+
+    @if (cargando)
+    {
+        <div class="page-panel">
+            <div class="home-row home-row--muted">
+                <span class="home-row__label">
+                    Cargando eventos…
+                </span>
+            </div>
+        </div>
+    }
+    else if (error is not null)
+    {
+        <MudAlert Severity="Severity.Error">
+            @error
+        </MudAlert>
+    }
+    else if (eventos.Count == 0)
+    {
+        <div class="home-list">
+            <div class="home-row home-row--muted">
+                <span class="home-row__label">
+                    No hay eventos registrados
+                    para esta empresa.
+                </span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="page-panel">
+            <MudTable Items="eventos"
+                      Dense="true"
+                      Hover="true"
+                      Breakpoint="Breakpoint.Md"
+                      Elevation="0"
+                      RowsPerPage="10">
+
+                <HeaderContent>
+                    <MudTh>Dispositivo</MudTh>
+                    <MudTh>Servidor (UTC)</MudTh>
+                    <MudTh>Boot</MudTh>
+                    <MudTh>Seq</MudTh>
+                    <MudTh>Tipo</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>De</MudTh>
+                    <MudTh>A</MudTh>
+                    <MudTh>Motivo</MudTh>
+                    <MudTh>Origen</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd DataLabel="Dispositivo">
+                        @context.DispositivoId
+                    </MudTd>
+
+                    <MudTd DataLabel="Servidor (UTC)">
+                        @context.TsServidor.ToString("dd/MM/yyyy HH:mm:ss")
+                    </MudTd>
+
+                    <MudTd DataLabel="Boot">
+                        @context.BootId
+                    </MudTd>
+
+                    <MudTd DataLabel="Seq">
+                        @context.Seq
+                    </MudTd>
+
+                    <MudTd DataLabel="Tipo">
+                        @context.Tipo
+                    </MudTd>
+
+                    <MudTd DataLabel="Estado">
+                        @context.Estado
+                    </MudTd>
+
+                    <MudTd DataLabel="De">
+                        @(context.De ?? "-")
+                    </MudTd>
+
+                    <MudTd DataLabel="A">
+                        @(context.A ?? "-")
+                    </MudTd>
+
+                    <MudTd DataLabel="Motivo">
+                        @context.Motivo
+                    </MudTd>
+
+                    <MudTd DataLabel="Origen">
+                        @context.Origen
+                    </MudTd>
+                </RowTemplate>
+
+                <PagerContent>
+                    <MudTablePager />
+                </PagerContent>
+            </MudTable>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Evento> eventos = new();
+
+    private bool cargando = true;
+
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Obtener el usuario y la empresa seleccionada.
+            await UsuarioActual.CargarAsync();
+
+            if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            {
+                error = "No tenés una empresa activa.";
+                return;
+            }
+
+            // Crear un ámbito para consultar SQL Server.
+            await using var scope =
+                ScopeFactory.CreateAsyncScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            // RNF01: consultar únicamente los eventos
+            // de dispositivos de la empresa activa.
+            eventos = await db.Eventos
+                .AsNoTracking()
+                .Where(e =>
+                    e.Dispositivo.EmpresaId == empresaId)
+                .OrderByDescending(e => e.TsServidor)
+                .ThenByDescending(e => e.Id)
+                .Take(50)
+                .ToListAsync();
+        }
+        catch (Exception)
+        {
+            error = "No se pudieron cargar los eventos.";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+}

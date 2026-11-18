@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SAGE.Simulador": {
+      "commandName": "Project",
+      "commandLineArgs": "--url https://localhost:7001 --token SF4bvbvxq03EYbk8tGe_W5hUj-YjOuIeGMy2WRT1Lb4 --intervalo 2 --hora 12"
+    }
+  }
+}

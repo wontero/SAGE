@@ -365,6 +365,71 @@ namespace SAGE.Web.Data.Migrations
                     b.ToTable("Empresas");
                 });
 
+            modelBuilder.Entity("SAGE.Web.Data.Evento", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("A")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<long>("BootId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("De")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("DispositivoId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<long?>("OrdenId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("Ts")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("TsServidor")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("TsValida")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DispositivoId", "BootId", "Seq")
+                        .IsUnique();
+
+                    b.ToTable("Eventos");
+                });
+
             modelBuilder.Entity("SAGE.Web.Data.Factura", b =>
                 {
                     b.Property<int>("Id")
@@ -794,6 +859,17 @@ namespace SAGE.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("SAGE.Web.Data.Evento", b =>
+                {
+                    b.HasOne("SAGE.Web.Data.Dispositivo", "Dispositivo")
+                        .WithMany()
+                        .HasForeignKey("DispositivoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Dispositivo");
                 });
 
             modelBuilder.Entity("SAGE.Web.Data.Factura", b =>
