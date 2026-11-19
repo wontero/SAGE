@@ -1,0 +1,293 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@using MudBlazor
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Ensayos
+@using SAGE.Web.Servicios.Seguridad
+
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject ISnackbar Snackbar
+
+@* S23-M12: crear un ensayo (Admin y Técnico). Las horas se escriben en hora de Bolivia y se guardan en UTC. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            @if (UsuarioActual.EmpresaActiva is not null)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Empresa: <b>@UsuarioActual.EmpresaActiva.Nombre</b>
+                </MudAlert>
+            }
+
+            <MudSelect T="int?"
+                       @bind-Value="_dispositivoId"
+                       Label="Dispositivo"
+                       Variant="Variant.Outlined"
+                       Required="true"
+                       RequiredError="Elija un dispositivo.">
+                @foreach (var d in _dispositivos)
+                {
+                    <MudSelectItem T="int?" Value="@d.Id">@d.Nombre</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField T="string"
+                          @bind-Value="_carga"
+                          Label="Carga"
+                          Placeholder="Ej.: lámpara LED USB de 1 W"
+                          Variant="Variant.Outlined"
+                          MaxLength="200"
+                          Counter="200"
+                          Required="true" />
+
+            <MudTextField T="string"
+                          @bind-Value="_condiciones"
+                          Label="Condiciones"
+                          Placeholder="Ej.: cielo despejado, panel a 30°, sombra a los 2 min"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          MaxLength="500"
+                          Counter="500"
+                          Required="true" />
+
+            <MudTextField T="string"
+                          @bind-Value="_notas"
+                          Label="Notas (opcional)"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          MaxLength="1000"
+                          Counter="1000" />
+
+            <MudText Typo="Typo.subtitle2">Inicio (hora de Bolivia)</MudText>
+
+            <MudStack Row="true" Spacing="2">
+                <MudDatePicker @bind-Date="_inicioFecha"
+                               Label="Fecha"
+                               DateFormat="dd/MM/yyyy"
+                               Editable="true"
+                               Variant="Variant.Outlined" />
+                <MudTimePicker @bind-Time="_inicioHora"
+                               Label="Hora"
+                               AmPm="false"
+                               Editable="true"
+                               Variant="Variant.Outlined" />
+            </MudStack>
+
+            <MudCheckBox T="bool"
+                         @bind-Value="_conFin"
+                         Label="Ya tiene fin (si no, queda en curso)"
+                         Color="Color.Primary" />
+
+            @if (_conFin)
+            {
+                <MudText Typo="Typo.subtitle2">Fin (hora de Bolivia)</MudText>
+
+                <MudStack Row="true" Spacing="2">
+                    <MudDatePicker @bind-Date="_finFecha"
+                                   Label="Fecha"
+                                   DateFormat="dd/MM/yyyy"
+                               Editable="true"
+                                   Variant="Variant.Outlined" />
+                    <MudTimePicker @bind-Time="_finHora"
+                                   Label="Hora"
+                                   AmPm="false"
+                               Editable="true"
+                                   Variant="Variant.Outlined" />
+                </MudStack>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            }
+
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancelar" Disabled="_guardando">
+            Cancelar
+        </MudButton>
+
+        <MudButton OnClick="GuardarAsync"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="_guardando">
+            @(_guardando ? "Guardando..." : "Crear ensayo")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private sealed record OpcionDispositivo(int Id, string Nombre);
+
+    private List<OpcionDispositivo> _dispositivos = new();
+
+    private int? _dispositivoId;
+    private string _carga = string.Empty;
+    private string _condiciones = string.Empty;
+    private string? _notas;
+
+    private DateTime? _inicioFecha;
+    private TimeSpan? _inicioHora;
+
+    private bool _conFin;
+    private DateTime? _finFecha;
+    private TimeSpan? _finHora;
+
+    private bool _guardando;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Inicio = ahora por defecto (editable).
+        var ahoraLocal = Formato.ALocal(DateTime.UtcNow);
+        _inicioFecha = ahoraLocal.Date;
+        _inicioHora = new TimeSpan(ahoraLocal.Hour, ahoraLocal.Minute, 0);
+        _finFecha = ahoraLocal.Date;
+        _finHora = _inicioHora;
+
+        await UsuarioActual.CargarAsync();
+
+        if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            return;
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        _dispositivos = await db.Dispositivos
+            .AsNoTracking()
+            .Where(d => d.EmpresaId == empresaId && d.Activo)
+            .OrderBy(d => d.Nombre)
+            .Select(d => new OpcionDispositivo(d.Id, d.Nombre))
+            .ToListAsync();
+
+        if (_dispositivos.Count == 1)
+            _dispositivoId = _dispositivos[0].Id;
+    }
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    private async Task GuardarAsync()
+    {
+        if (_guardando)
+            return;
+
+        _error = null;
+
+        if (!UsuarioActual.EsAdministrador && !UsuarioActual.EsTecnico)
+        {
+            _error = "Su rol no permite crear ensayos.";
+            return;
+        }
+
+        if (_dispositivoId is not int dispositivoId)
+        {
+            _error = "Elija un dispositivo.";
+            return;
+        }
+
+        var carga = (_carga ?? string.Empty).Trim();
+        var condiciones = (_condiciones ?? string.Empty).Trim();
+        var notas = string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim();
+
+        if (carga.Length == 0 || condiciones.Length == 0)
+        {
+            _error = "La carga y las condiciones son obligatorias.";
+            return;
+        }
+
+        if (carga.Length > 200 || condiciones.Length > 500 || (notas?.Length ?? 0) > 1000)
+        {
+            _error = "Revise el largo de los textos (carga 200, condiciones 500, notas 1000).";
+            return;
+        }
+
+        if (_inicioFecha is null || _inicioHora is null)
+        {
+            _error = "Indique la fecha y hora de inicio.";
+            return;
+        }
+
+        var inicio = Formato.DesdeLocal(_inicioFecha.Value.Date + _inicioHora.Value);
+        DateTime? fin = null;
+
+        if (_conFin)
+        {
+            if (_finFecha is null || _finHora is null)
+            {
+                _error = "Indique la fecha y hora de fin.";
+                return;
+            }
+
+            fin = Formato.DesdeLocal(_finFecha.Value.Date + _finHora.Value);
+        }
+
+        _guardando = true;
+
+        try
+        {
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // El dispositivo tiene que ser de la empresa activa (se comprueba en el servidor).
+            var empresaId = UsuarioActual.EmpresaActivaId;
+
+            var dispositivo = await db.Dispositivos
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == dispositivoId && d.EmpresaId == empresaId);
+
+            if (dispositivo is null || !UsuarioActual.PuedeVerEmpresa(dispositivo.EmpresaId))
+            {
+                _error = "El dispositivo no pertenece a su empresa activa.";
+                return;
+            }
+
+            var otros = await db.Ensayos
+                .AsNoTracking()
+                .Where(e => e.DispositivoId == dispositivoId)
+                .Select(e => new IntervaloEnsayo(e.Id, e.Inicio, e.Fin))
+                .ToListAsync();
+
+            var error = ReglasEnsayo.Validar(inicio, fin, DateTime.UtcNow, otros);
+
+            if (error is not null)
+            {
+                _error = error;
+                return;
+            }
+
+            db.Ensayos.Add(new Ensayo
+            {
+                DispositivoId = dispositivoId,
+                CreadoPorId = UsuarioActual.UsuarioId!,
+                Inicio = inicio,
+                Fin = fin,
+                CargaDescripcion = carga,
+                Condiciones = condiciones,
+                Notas = notas
+            });
+
+            await db.SaveChangesAsync();
+
+            Snackbar.Add("Ensayo creado.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (DbUpdateException)
+        {
+            _error = "No se pudo guardar el ensayo. Intente nuevamente.";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+}

@@ -1,0 +1,280 @@
+@page "/ensayos"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Ensayos
+@using SAGE.Web.Servicios.Seguridad
+
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Ensayos — SAGE</PageTitle>
+
+@* S23-M12: ensayos de los dispositivos de la empresa activa (RF17). *@
+
+<div class="page">
+
+    <header class="page-head">
+
+        <div class="page-head__text">
+            <p class="page-kicker">Pruebas</p>
+            <h1 class="page-title">Ensayos</h1>
+
+            @if (UsuarioActual.EmpresaActiva is not null)
+            {
+                <p class="page-meta">@UsuarioActual.EmpresaActiva.Nombre</p>
+            }
+        </div>
+
+        <div class="page-actions">
+
+            @if (PuedeEditar)
+            {
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="NuevoEnsayoAsync"
+                           Disabled="@(_cargando || _ocupado)">
+                    Nuevo ensayo
+                </MudButton>
+            }
+
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="CargarAsync"
+                       Disabled="@(_cargando || _ocupado)">
+                Actualizar
+            </MudButton>
+
+        </div>
+
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
+    }
+
+    <div class="page-panel">
+
+        <MudTable T="EnsayoFila"
+                  Items="_ensayos"
+                  Loading="_cargando"
+                  Hover="true"
+                  Breakpoint="Breakpoint.Sm"
+                  Elevation="0"
+                  RowsPerPage="20"
+                  OnRowClick="@(e => Navigation.NavigateTo($"/ensayos/{e.Item!.Id}"))"
+                  RowStyle="cursor:pointer">
+
+            <HeaderContent>
+                <MudTh>Dispositivo</MudTh>
+                <MudTh>Inicio</MudTh>
+                <MudTh>Fin</MudTh>
+                <MudTh>Duración</MudTh>
+                <MudTh>Carga</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="Dispositivo">@context.Dispositivo</MudTd>
+
+                <MudTd DataLabel="Inicio">@Formato.HoraLocal(context.Inicio)</MudTd>
+
+                <MudTd DataLabel="Fin">
+                    @if (context.Fin is DateTime fin)
+                    {
+                        @Formato.HoraLocal(fin)
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
+                            En curso
+                        </MudChip>
+                    }
+                </MudTd>
+
+                <MudTd DataLabel="Duración">
+                    @Formato.Duracion((context.Fin ?? DateTime.UtcNow) - context.Inicio)
+                </MudTd>
+
+                <MudTd DataLabel="Carga">@context.Carga</MudTd>
+
+                <MudTd>
+                    @if (PuedeEditar && context.Fin is null)
+                    {
+                        @* stopPropagation: el clic en el botón no abre el detalle de la fila. *@
+                        <span @onclick:stopPropagation="true">
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Outlined"
+                                       Color="Color.Secondary"
+                                       StartIcon="@Icons.Material.Outlined.Stop"
+                                       Disabled="_ocupado"
+                                       OnClick="@(() => FinalizarAsync(context.Id))">
+                                Finalizar ahora
+                            </MudButton>
+                        </span>
+                    }
+                </MudTd>
+            </RowTemplate>
+
+            <NoRecordsContent>
+                <MudText>No hay ensayos para esta empresa.</MudText>
+            </NoRecordsContent>
+
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Filas por página" />
+            </PagerContent>
+
+        </MudTable>
+
+    </div>
+
+</div>
+
+@code {
+    private sealed record EnsayoFila(int Id, string Dispositivo, DateTime Inicio, DateTime? Fin, string Carga);
+
+    private List<EnsayoFila> _ensayos = new();
+
+    private bool _cargando = true;
+    private bool _ocupado;
+    private string? _error;
+
+    private bool PuedeEditar => UsuarioActual.EsAdministrador || UsuarioActual.EsTecnico;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+
+        try
+        {
+            await UsuarioActual.CargarAsync();
+
+            if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            {
+                _ensayos = new();
+                return;
+            }
+
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // RNF01: solo ensayos de dispositivos de la empresa activa.
+            _ensayos = await db.Ensayos
+                .AsNoTracking()
+                .Where(e => e.Dispositivo.EmpresaId == empresaId)
+                .OrderByDescending(e => e.Inicio)
+                .Select(e => new EnsayoFila(e.Id, e.Dispositivo.Nombre, e.Inicio, e.Fin, e.CargaDescripcion))
+                .ToListAsync();
+        }
+        catch (Exception)
+        {
+            _error = "No se pudieron cargar los ensayos.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task NuevoEnsayoAsync()
+    {
+        if (!PuedeEditar)
+            return;
+
+        _ocupado = true;
+
+        try
+        {
+            var opciones = new DialogOptions
+            {
+                FullWidth = true,
+                MaxWidth = MaxWidth.Small,
+                CloseButton = true
+            };
+
+            var dialogo = await DialogService.ShowAsync<EnsayoDialog>("Nuevo ensayo", opciones);
+            var resultado = await dialogo.Result;
+
+            if (resultado is { Canceled: false })
+                await CargarAsync();
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+
+    private async Task FinalizarAsync(int ensayoId)
+    {
+        if (!PuedeEditar)
+            return;
+
+        _ocupado = true;
+
+        try
+        {
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var empresaId = UsuarioActual.EmpresaActivaId;
+
+            var ensayo = await db.Ensayos
+                .Include(e => e.Dispositivo)
+                .FirstOrDefaultAsync(e => e.Id == ensayoId && e.Dispositivo.EmpresaId == empresaId);
+
+            if (ensayo is null || !UsuarioActual.PuedeVerEmpresa(ensayo.Dispositivo.EmpresaId))
+            {
+                Snackbar.Add("El ensayo no existe.", Severity.Error);
+                return;
+            }
+
+            if (ensayo.Fin is not null)
+            {
+                Snackbar.Add("El ensayo ya estaba finalizado.", Severity.Info);
+                await CargarAsync();
+                return;
+            }
+
+            var ahora = DateTime.UtcNow;
+
+            var otros = await db.Ensayos
+                .AsNoTracking()
+                .Where(e => e.DispositivoId == ensayo.DispositivoId)
+                .Select(e => new IntervaloEnsayo(e.Id, e.Inicio, e.Fin))
+                .ToListAsync();
+
+            var error = ReglasEnsayo.Validar(ensayo.Inicio, ahora, ahora, otros, ensayo.Id);
+
+            if (error is not null)
+            {
+                Snackbar.Add(error, Severity.Warning);
+                return;
+            }
+
+            ensayo.Fin = ahora;
+            await db.SaveChangesAsync();
+
+            Snackbar.Add("Ensayo finalizado.", Severity.Success);
+            await CargarAsync();
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+}

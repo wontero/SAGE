@@ -430,6 +430,51 @@ namespace SAGE.Web.Data.Migrations
                     b.ToTable("Empresas");
                 });
 
+            modelBuilder.Entity("SAGE.Web.Data.Ensayo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CargaDescripcion")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Condiciones")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CreadoPorId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DispositivoId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("Fin")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Inicio")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notas")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreadoPorId");
+
+                    b.HasIndex("DispositivoId", "Inicio");
+
+                    b.ToTable("Ensayos");
+                });
+
             modelBuilder.Entity("SAGE.Web.Data.Evento", b =>
                 {
                     b.Property<long>("Id")
@@ -996,6 +1041,25 @@ namespace SAGE.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("SAGE.Web.Data.Ensayo", b =>
+                {
+                    b.HasOne("SAGE.Web.Data.ApplicationUser", "CreadoPor")
+                        .WithMany()
+                        .HasForeignKey("CreadoPorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SAGE.Web.Data.Dispositivo", "Dispositivo")
+                        .WithMany()
+                        .HasForeignKey("DispositivoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreadoPor");
+
+                    b.Navigation("Dispositivo");
                 });
 
             modelBuilder.Entity("SAGE.Web.Data.Evento", b =>

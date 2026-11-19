@@ -705,7 +705,7 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 - [x] `W` (sin Wi-Fi) + `S` → el simulador conmuta igual; al volver con `W`, los eventos aparecen una sola vez en `/eventos` (RNF07, RF13).
 - [x] Reiniciar el simulador → nuevo `boot_id`, evento "Arranque del dispositivo" y vuelve al modo guardado.
 
-### - [ ] S23-M12 · RF17 Ensayos
+### - [x] S23-M12 · RF17 Ensayos
 **Qué hacer**
 1. Entidad `Ensayo`: `Id`, `DispositivoId`, `CreadoPorId`, `Inicio` (UTC), `Fin` (UTC?, null = en curso), `CargaDescripcion` (obligatoria, máx. 200), `Condiciones` (obligatoria, máx. 500), `Notas` (máx. 1000). Migración `AgregarEnsayos`.
 2. Página `/ensayos` (Admin, Técnico, Consulta; en el menú, ícono `Science`): ensayos de los dispositivos de la empresa activa; columnas Dispositivo, Inicio, Fin (o chip "En curso"), Duración, Carga.
@@ -715,9 +715,9 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 4. Prueba de la regla de superposición.
 
 **Criterios de aceptación**
-- [ ] Un ensayo de 2 minutos con el simulador muestra solo las mediciones de esos 2 minutos (≈ 120) (RF17).
-- [ ] No se puede crear un ensayo superpuesto ni con Fin antes que Inicio.
-- [ ] Consulta ve los ensayos sin botones.
+- [x] Un ensayo de 2 minutos con el simulador muestra solo las mediciones de esos 2 minutos (≈ 120) (RF17).
+- [x] No se puede crear un ensayo superpuesto ni con Fin antes que Inicio.
+- [x] Consulta ve los ensayos sin botones.
 
 **Al terminar:** marca S23-M9 a S23-M12, escribe tu entrada en la Bitácora y haz push. Avísale a Mateo.
 

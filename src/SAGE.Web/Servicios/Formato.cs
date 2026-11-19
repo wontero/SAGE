@@ -31,6 +31,43 @@ public static class Formato
         return local.ToString("dd/MM/yyyy HH:mm:ss", Cultura);
     }
 
+    // S23-M12 (Ethan): "dd/MM HH:mm" en hora de Bolivia.
+    public static string FechaCorta(DateTime utc)
+    {
+        return ALocal(utc).ToString("dd/MM HH:mm", Cultura);
+    }
+
+    // S23-M12 (Ethan): UTC → hora de Bolivia (para formularios de fecha y hora).
+    public static DateTime ALocal(DateTime utc)
+    {
+        var fecha = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+        return DateTime.SpecifyKind(
+            TimeZoneInfo.ConvertTimeFromUtc(fecha, ZonaBolivia),
+            DateTimeKind.Unspecified);
+    }
+
+    // S23-M12 (Ethan): hora de Bolivia escrita en un formulario → UTC (para guardar).
+    public static DateTime DesdeLocal(DateTime local)
+    {
+        var fecha = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(fecha, ZonaBolivia);
+    }
+
+    // S23-M12 (Ethan): duración "1 h 05 min", "2 min 10 s", "45 s".
+    public static string Duracion(TimeSpan duracion)
+    {
+        if (duracion < TimeSpan.Zero)
+            duracion = TimeSpan.Zero;
+
+        if (duracion.TotalHours >= 1)
+            return $"{(int)duracion.TotalHours} h {duracion.Minutes:00} min";
+
+        if (duracion.TotalMinutes >= 1)
+            return $"{(int)duracion.TotalMinutes} min {duracion.Seconds:00} s";
+
+        return $"{(int)duracion.TotalSeconds} s";
+    }
+
     public static string Potencia(decimal mw, decimal factor = 1m)
     {
         var watts = mw * factor / 1000m;

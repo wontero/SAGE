@@ -24,6 +24,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     // S23-M9: Órdenes a los dispositivos (patrón Command)
     public DbSet<Orden> Ordenes => Set<Orden>();
 
+    // S23-M12: Ensayos (RF17)
+    public DbSet<Ensayo> Ensayos => Set<Ensayo>();
+
     public DbSet<Factura> Facturas => Set<Factura>();
 
     public DbSet<ParametrosEconomicos> ParametrosEconomicos
@@ -160,6 +163,29 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasOne(o => o.Usuario)
                 .WithMany()
                 .HasForeignKey(o => o.UsuarioId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // =====================================================
+        // S23-M12: ENSAYOS
+        // =====================================================
+
+        builder.Entity<Ensayo>(entity =>
+        {
+            entity.HasIndex(e => new
+            {
+                e.DispositivoId,
+                e.Inicio
+            });
+
+            entity.HasOne(e => e.Dispositivo)
+                .WithMany()
+                .HasForeignKey(e => e.DispositivoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.CreadoPor)
+                .WithMany()
+                .HasForeignKey(e => e.CreadoPorId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

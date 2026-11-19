@@ -1,0 +1,208 @@
+@page "/ensayos/{Id:int}"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Components.Shared
+
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+
+<PageTitle>Ensayo — SAGE</PageTitle>
+
+@* S23-M12: datos del ensayo y las mediciones de su intervalo (RF17). *@
+
+<div class="page">
+
+    <MudButton Href="/ensayos"
+               Variant="Variant.Text"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Outlined.ArrowBack">
+        Volver a ensayos
+    </MudButton>
+
+    @if (_cargando)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_ensayo is null)
+    {
+        <MudAlert Severity="Severity.Warning">No encontrado.</MudAlert>
+    }
+    else
+    {
+        <MudStack Spacing="3" Class="mt-2">
+
+            <MudPaper Class="pa-4" Elevation="1">
+
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="flex-wrap:wrap">
+                    <MudText Typo="Typo.h5">Ensayo en @_ensayo.Dispositivo.Nombre</MudText>
+
+                    @if (_ensayo.Fin is null)
+                    {
+                        <MudChip T="string" Color="Color.Info" Variant="Variant.Filled">En curso</MudChip>
+                    }
+
+                    <ChipEscala Factor="@_ensayo.Dispositivo.FactorEscala" />
+                </MudStack>
+
+                <MudGrid Spacing="2" Class="mt-2">
+                    <MudItem xs="12" sm="6">
+                        <MudText><b>Inicio:</b> @Formato.HoraLocal(_ensayo.Inicio)</MudText>
+                        <MudText>
+                            <b>Fin:</b>
+                            @(_ensayo.Fin is DateTime fin ? Formato.HoraLocal(fin) : "En curso")
+                        </MudText>
+                        <MudText>
+                            <b>Duración:</b>
+                            @Formato.Duracion((_ensayo.Fin ?? DateTime.UtcNow) - _ensayo.Inicio)
+                        </MudText>
+                        <MudText><b>Creado por:</b> @(_ensayo.CreadoPor?.NombreCompleto ?? "—")</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudText><b>Carga:</b> @_ensayo.CargaDescripcion</MudText>
+                        <MudText><b>Condiciones:</b> @_ensayo.Condiciones</MudText>
+                        @if (!string.IsNullOrWhiteSpace(_ensayo.Notas))
+                        {
+                            <MudText><b>Notas:</b> @_ensayo.Notas</MudText>
+                        }
+                    </MudItem>
+                </MudGrid>
+
+            </MudPaper>
+
+            <MudPaper Class="pa-4" Elevation="1">
+
+                <MudText Typo="Typo.h6">Mediciones del intervalo</MudText>
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    Total: <b>@_total</b> mediciones
+                    @(_ensayo.Fin is null ? "(hasta ahora)" : "")
+                </MudText>
+
+                <MudTable T="Medicion"
+                          @ref="_tabla"
+                          ServerData="CargarMedicionesAsync"
+                          Dense="true"
+                          Hover="true"
+                          Breakpoint="Breakpoint.Sm"
+                          Elevation="0"
+                          RowsPerPage="50">
+
+                    <HeaderContent>
+                        <MudTh>Hora</MudTh>
+                        <MudTh>Modo</MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh>Fuente</MudTh>
+                        <MudTh>Solar V</MudTh>
+                        <MudTh>Solar I</MudTh>
+                        <MudTh>Solar P</MudTh>
+                        <MudTh>Red V</MudTh>
+                        <MudTh>Red I</MudTh>
+                        <MudTh>Red P</MudTh>
+                    </HeaderContent>
+
+                    <RowTemplate>
+                        <MudTd DataLabel="Hora">@Formato.HoraLocal(context.Ts)</MudTd>
+                        <MudTd DataLabel="Modo">@Formato.Modo(context.Modo, context.FuenteSeleccionada)</MudTd>
+                        <MudTd DataLabel="Estado">@SAGE.Web.Servicios.Telemetria.TextosEventos.Estado(context.Estado)</MudTd>
+                        <MudTd DataLabel="Fuente">@Formato.Fuente(context.FuenteSeleccionada)</MudTd>
+                        <MudTd DataLabel="Solar V">@Formato.Tension(context.VSol)</MudTd>
+                        <MudTd DataLabel="Solar I">@Formato.Corriente(context.ISolMa)</MudTd>
+                        <MudTd DataLabel="Solar P">@Formato.Potencia(context.PSolMw, _ensayo.Dispositivo.FactorEscala)</MudTd>
+                        <MudTd DataLabel="Red V">@Formato.Tension(context.VRed)</MudTd>
+                        <MudTd DataLabel="Red I">@Formato.Corriente(context.IRedMa)</MudTd>
+                        <MudTd DataLabel="Red P">@Formato.Potencia(context.PRedMw, _ensayo.Dispositivo.FactorEscala)</MudTd>
+                    </RowTemplate>
+
+                    <NoRecordsContent>
+                        <MudText>No hay mediciones en el intervalo del ensayo.</MudText>
+                    </NoRecordsContent>
+
+                    <PagerContent>
+                        <MudTablePager RowsPerPageString="Filas por página" />
+                    </PagerContent>
+
+                </MudTable>
+
+            </MudPaper>
+
+        </MudStack>
+    }
+
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Ensayo? _ensayo;
+    private MudTable<Medicion>? _tabla;
+    private int _total;
+    private bool _cargando = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _cargando = true;
+        _ensayo = null;
+
+        try
+        {
+            await UsuarioActual.CargarAsync();
+
+            if (UsuarioActual.EmpresaActivaId is not int empresaId)
+                return;
+
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // Otra empresa → "No encontrado" (no revela que existe).
+            _ensayo = await db.Ensayos
+                .AsNoTracking()
+                .Include(e => e.Dispositivo)
+                .Include(e => e.CreadoPor)
+                .FirstOrDefaultAsync(e => e.Id == Id && e.Dispositivo.EmpresaId == empresaId);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task<TableData<Medicion>> CargarMedicionesAsync(TableState estado, CancellationToken ct)
+    {
+        if (_ensayo is null)
+            return new TableData<Medicion> { Items = Array.Empty<Medicion>(), TotalItems = 0 };
+
+        var empresaId = UsuarioActual.EmpresaActivaId;
+        var inicio = _ensayo.Inicio;
+        var fin = _ensayo.Fin ?? DateTime.UtcNow;
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var consulta = db.Mediciones
+            .AsNoTracking()
+            .Where(m =>
+                m.DispositivoId == _ensayo.DispositivoId &&
+                m.Dispositivo.EmpresaId == empresaId &&
+                m.Ts >= inicio &&
+                m.Ts <= fin);
+
+        _total = await consulta.CountAsync(ct);
+
+        var items = await consulta
+            .OrderBy(m => m.Ts)
+            .ThenBy(m => m.Seq)
+            .Skip(estado.Page * estado.PageSize)
+            .Take(estado.PageSize)
+            .ToListAsync(ct);
+
+        StateHasChanged();
+
+        return new TableData<Medicion> { Items = items, TotalItems = _total };
+    }
+}
