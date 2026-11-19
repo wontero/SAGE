@@ -653,7 +653,7 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 - [x] Una orden a un dispositivo sin telemetría pasa a "Expirada: No se entregó a tiempo" a los 30 s (± 2 s), y nunca se entrega después (RNF08).
 - [x] Consulta no ve los botones de control.
 
-### - [ ] S23-M10 · RF15 Parámetros del dispositivo
+### - [x] S23-M10 · RF15 Parámetros del dispositivo
 **Qué hacer**
 1. Ampliar `ParametrosFuente` con los **límites** del diseño §4.1 (`VMin` 4,0 a 4,9; `VRetorno` de `VMin + 0,2` a 5,3; `IMinMa` 5 a 100; `TFallaS` 0,5 a 5; `TEstableS` 10 a 300; `TPruebaS` 2 a 30) y `IReadOnlyList<string> Validar()` (lista de errores en español, vacía si es válido).
 2. `Dispositivo`: `ParametrosJson` (string?, null = predeterminados), `ParametrosVersion` (int, 0 = predeterminados de fábrica), `ParametrosVersionConfirmada` (int, la que informa el dispositivo en `parametros_version`). La fachada actualiza `ParametrosVersionConfirmada` con cada telemetría. Migración `AgregarParametrosDispositivo`.
@@ -662,10 +662,10 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 5. Pruebas en `OrdenTests.cs` o `ParametrosFuenteTests.cs`: cada límite, incluida la regla `VRetorno ≥ VMin + 0,2`.
 
 **Criterios de aceptación**
-- [ ] `VMin = 5,5` se rechaza con mensaje y no se crea orden.
-- [ ] Un valor válido crea la orden; cuando el simulador de S23-M11 la ejecuta, la pantalla pasa a "Aplicada" sin recargar.
+- [x] `VMin = 5,5` se rechaza con mensaje y no se crea orden.
+- [x] Un valor válido crea la orden; cuando el simulador de S23-M11 la ejecuta, la pantalla pasa a "Aplicada" sin recargar.
 
-### - [ ] S23-M11 · Simulador con máquina de estados (patrón State) y órdenes (Command)
+### - [x] S23-M11 · Simulador con máquina de estados (patrón State) y órdenes (Command)
 Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseño §4) y así se pueda hacer toda la demo sin hardware. Las clases son `public` (las prueba `SAGE.Tests`). Archivos sugeridos: `Planta.cs`, `ControladorFuente.cs`, `Estados.cs`, `Ordenes.cs`, `Cliente.cs`, `Program.cs`.
 
 **Qué hacer**
@@ -699,11 +699,11 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
    - Orden repetida (mismo id) → se ejecuta una sola vez.
 
 **Criterios de aceptación**
-- [ ] `dotnet test` pasa con los 5 casos.
-- [ ] Con el simulador y la plataforma: `S` → en ≤ 2 s `/monitoreo/{id}` muestra Red y el evento "Solar insuficiente"; `S` otra vez → tras ~30 s, "Intento de retorno a solar" y luego "Solar comprobada".
-- [ ] Panel sombreado + orden Solar desde la app → "Rechazada: Solar no disponible" en ≤ 5 s (RNF10).
-- [ ] `W` (sin Wi-Fi) + `S` → el simulador conmuta igual; al volver con `W`, los eventos aparecen una sola vez en `/eventos` (RNF07, RF13).
-- [ ] Reiniciar el simulador → nuevo `boot_id`, evento "Arranque del dispositivo" y vuelve al modo guardado.
+- [x] `dotnet test` pasa con los 5 casos.
+- [x] Con el simulador y la plataforma: `S` → en ≤ 2 s `/monitoreo/{id}` muestra Red y el evento "Solar insuficiente"; `S` otra vez → tras ~30 s, "Intento de retorno a solar" y luego "Solar comprobada".
+- [x] Panel sombreado + orden Solar desde la app → "Rechazada: Solar no disponible" en ≤ 5 s (RNF10).
+- [x] `W` (sin Wi-Fi) + `S` → el simulador conmuta igual; al volver con `W`, los eventos aparecen una sola vez en `/eventos` (RNF07, RF13).
+- [x] Reiniciar el simulador → nuevo `boot_id`, evento "Arranque del dispositivo" y vuelve al modo guardado.
 
 ### - [ ] S23-M12 · RF17 Ensayos
 **Qué hacer**

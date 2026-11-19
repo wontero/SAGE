@@ -58,9 +58,9 @@ Abre la URL que muestra la consola (por ejemplo `https://localhost:7xxx` o `http
 | consulta@sage.test | Sage2026! | Consulta | Energía Andina S.R.L. |
 | tecnico.palmas@sage.test | Sage2026! | Tecnico | Hotel Las Palmas |
 
-## Simulador del dispositivo (S1-M6)
+## Simulador del dispositivo (S1-M6, reescrito en S23-M11)
 
-Consola .NET 10 que imita al ESP32 y envía telemetría falsa a la plataforma.
+Consola .NET 10 que se comporta como el firmware del ESP32: máquina de estados de la fuente (patrón State), órdenes de la plataforma (patrón Command) y la planta física simulada (panel, cargador y lámpara).
 
 1. Inicia sesión como Administrador, crea un dispositivo marcado como **SIMULADO** y copia su token (se muestra una sola vez).
 2. Con la plataforma en marcha, ejecuta:
@@ -69,7 +69,19 @@ Consola .NET 10 que imita al ESP32 y envía telemetría falsa a la plataforma.
 dotnet run --project src/SAGE.Simulador -- --url http://localhost:5284 --token <TOKEN>
 ```
 
-Parámetros: `--url` y `--token` son obligatorios; `--intervalo <segundos>` (2 por defecto); `--hora <0-24>` es opcional y fija la hora del día simulada (por ejemplo `--hora 12` para probar con sol aunque sea de noche).
+Parámetros: `--url` y `--token` son obligatorios; `--intervalo <segundos>` (1 por defecto); `--hora <0-24>` es opcional y fija la hora del día simulada (por ejemplo `--hora 12` para probar con sol aunque sea de noche).
+
+Teclas mientras corre:
+
+| Tecla | Qué hace |
+|---|---|
+| `S` | Sombrea / descubre el panel |
+| `R` | Corta / restablece la red (cargador a 0 V) |
+| `N` | Noche forzada sí / no |
+| `W` | Corta / restablece el Wi-Fi (sigue conmutando y acumula eventos; al volver los envía) |
+| `Q` | Salir |
+
+La consola muestra una línea por segundo (hora, `seq`, modo, estado, fuente, V/P de cada rama, Wi-Fi y código HTTP) y una línea aparte por cada evento y cada orden. El modo, los parámetros, la última orden ejecutada y el `boot_id` se guardan en `simulador_estado_<8 caracteres del hash del token>.json` junto al ejecutable (imita la memoria `Preferences` del ESP32): al reiniciar, el `boot_id` aumenta y se vuelve al modo guardado.
 
 ## Facturas (S1-M7)
 

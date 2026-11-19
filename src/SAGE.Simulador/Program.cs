@@ -1,13 +1,12 @@
 using System.Globalization;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json;
+using SAGE.Simulador;
 
-// Simulador del dispositivo SAGE (imita al ESP32).
+// Simulador del dispositivo SAGE (S23-M11): se comporta como el firmware del ESP32,
+// con la máquina de estados (patrón State) y las órdenes (patrón Command).
 // Uso:
-// dotnet run --project src/SAGE.Simulador --
-// --url https://localhost:7001 --token <TOKEN>
-// [--intervalo 1] [--hora 12]
+// dotnet run --project src/SAGE.Simulador -- --url http://localhost:5284 --token <TOKEN>
+//     [--intervalo 1] [--hora 12]
 
 var opciones = Opciones.Leer(args);
 
@@ -25,94 +24,257 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-using var http = new HttpClient
-{
-    Timeout = TimeSpan.FromSeconds(5)
-};
+var sync = new object();
+var planta = new Planta(horaFija: opciones.HoraFija);
+var controlador = new ControladorFuente();
+var procesador = new ProcesadorOrdenes(controlador, ProcesadorOrdenes.RutaPara(opciones.Token));
+var resultadosPendientes = new List<ResultadoOrden>();
+var wifi = true;
 
-http.DefaultRequestHeaders.Authorization =
-    new AuthenticationHeaderValue(
-        "Bearer",
-        opciones.Token);
+// Arranque (diseño §4.4): boot_id = guardado + 1, parámetros guardados, relé en red.
+var persistido = procesador.Arrancar();
 
-var destino = new Uri(
-    new Uri(opciones.Url.TrimEnd('/') + "/"),
-    "api/dispositivo/telemetria");
+controlador.EventoAgregado += e =>
+    Console.WriteLine(
+        $"  Evento {e.Seq}: {e.Tipo} | {e.De ?? "-"} -> {e.A ?? "-"} | {e.Estado} | " +
+        $"{e.Motivo} | origen {e.Origen}" +
+        (e.OrdenId is long id ? $" | orden {id}" : ""));
 
-var generador = new Generador(opciones.HoraFija);
+using var cliente = new Cliente(opciones.Url, opciones.Token, TimeSpan.FromSeconds(2));
 
-var intervalo = TimeSpan.FromSeconds(
-    opciones.IntervaloSegundos);
-
+Console.WriteLine($"SAGE.Simulador -> {cliente.Destino} (cada {opciones.IntervaloSegundos} s)");
 Console.WriteLine(
-    $"SAGE.Simulador -> {destino} " +
-    $"(cada {opciones.IntervaloSegundos} s). " +
-    "Ctrl+C para salir.");
+    $"boot_id = {procesador.BootId} | modo guardado = {persistido.Modo} | " +
+    $"parámetros v{controlador.ParametrosVersion} | última orden = {procesador.UltimaEjecutada}");
+Console.WriteLine("Teclas: S sombra | R red | N noche | W Wi-Fi | Q salir");
+Console.WriteLine();
 
-Console.WriteLine($"boot_id = {generador.BootId}");
+lock (sync)
+{
+    controlador.Arrancar(DateTime.UtcNow, persistido.Modo, persistido.OrdenModoId);
+}
 
-using var reloj = new PeriodicTimer(intervalo);
+// La planta y la máquina de estados avanzan cada 100 ms, sin depender del Wi-Fi.
+var tareaPlanta = Task.Run(async () =>
+{
+    using var reloj = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+    var anterior = DateTime.UtcNow;
+
+    try
+    {
+        while (await reloj.WaitForNextTickAsync(cts.Token))
+        {
+            var ahora = DateTime.UtcNow;
+            var dt = (ahora - anterior).TotalSeconds;
+            anterior = ahora;
+
+            lock (sync)
+            {
+                var muestra = planta.Medir(controlador.ReleEnSolar, ahora, dt);
+                controlador.Paso(muestra, ahora);
+            }
+        }
+    }
+    catch (OperationCanceledException)
+    {
+    }
+});
+
+var tareaTeclas = Task.Run(() => LeerTeclasAsync(cts.Token));
+
+using var relojEnvio = new PeriodicTimer(TimeSpan.FromSeconds(opciones.IntervaloSegundos));
 
 try
 {
-    do
+    while (await relojEnvio.WaitForNextTickAsync(cts.Token))
     {
-        var medicion = generador.Siguiente(
-            opciones.IntervaloSegundos);
+        PaqueteTelemetria? paquete = null;
+        bool conWifi;
 
-        var hora = DateTime.Now.ToString(
-            "HH:mm:ss",
-            CultureInfo.InvariantCulture);
-
-        var potencia =
-            medicion.FuenteSeleccionada == "SOLAR"
-                ? medicion.Solar.PMw
-                : medicion.Cargador.PMw;
-
-        try
+        lock (sync)
         {
-            using var respuesta =
-                await http.PostAsJsonAsync(
-                    destino,
-                    medicion,
-                    cts.Token);
+            conWifi = wifi;
 
-            Console.WriteLine(
-                $"{hora} seq={medicion.Seq} " +
-                $"fuente={medicion.FuenteSeleccionada} " +
-                $"potencia={potencia.ToString("F0", CultureInfo.InvariantCulture)} mW " +
-                $"HTTP {(int)respuesta.StatusCode}");
+            if (conWifi)
+                paquete = ConstruirPaquete();
+        }
 
-            if (medicion.Eventos.Length > 0)
+        if (paquete is null)
+        {
+            lock (sync)
+                Console.WriteLine(LineaEstado(null, "Wi-Fi no", "HTTP -"));
+
+            continue;
+        }
+
+        var respuesta = await cliente.EnviarAsync(paquete, cts.Token);
+
+        lock (sync)
+        {
+            if (respuesta.Ok)
             {
-                Console.WriteLine(
-                    $"  Evento enviado: reinicio " +
-                    $"({medicion.Eventos.Length} evento).");
+                // Lo enviado ya está en el servidor: se saca de las colas.
+                controlador.QuitarEventos(paquete.Eventos.Select(e => e.Seq));
+
+                var enviados = paquete.ResultadosOrdenes.Select(r => r.OrdenId).ToHashSet();
+                resultadosPendientes.RemoveAll(r => enviados.Contains(r.OrdenId));
+
+                if (respuesta.Orden is JsonElement orden)
+                    ProcesarOrden(orden);
             }
-        }
-        catch (OperationCanceledException)
-            when (cts.IsCancellationRequested)
-        {
-            break;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(
-                $"{hora} seq={medicion.Seq} " +
-                $"ERROR de envío: " +
-                $"{ex.GetType().Name}: {ex.Message}");
+
+            var http = respuesta.Codigo is int c ? $"HTTP {c}" : $"ERROR {respuesta.Error}";
+            Console.WriteLine(LineaEstado(paquete.Seq, "Wi-Fi sí", http));
         }
     }
-    while (await reloj.WaitForNextTickAsync(cts.Token));
 }
 catch (OperationCanceledException)
 {
-    // Salida normal con Ctrl+C.
+    // Salida normal con Q o Ctrl+C.
 }
+
+lock (sync)
+    procesador.Guardar();
+
+await Task.WhenAll(tareaPlanta, Task.WhenAny(tareaTeclas, Task.Delay(200)));
 
 Console.WriteLine("Simulador detenido.");
 
 return 0;
+
+// =====================================================
+// FUNCIONES LOCALES
+// =====================================================
+
+PaqueteTelemetria ConstruirPaquete()
+{
+    var l = controlador.UltimasLecturas ?? default;
+
+    return new PaqueteTelemetria
+    {
+        BootId = procesador.BootId,
+        Seq = controlador.SiguienteSeq(),
+        Ts = PaqueteTelemetria.FormatoHora(DateTime.UtcNow),
+        TsValida = true,
+        Modo = controlador.Modo,
+        Estado = controlador.Estado.Nombre,
+        FuenteSeleccionada = controlador.FuenteSeleccionada,
+        AlimentacionComprobada = controlador.AlimentacionComprobada,
+        ParametrosVersion = controlador.ParametrosVersion,
+        Solar = RamaTelemetria.Desde(l.VSol, l.ISolMa, planta.WhSol),
+        Cargador = RamaTelemetria.Desde(l.VRed, l.IRedMa, planta.WhRed),
+        Eventos = controlador.Eventos.Select(EventoTelemetria.Desde).ToList(),
+        ResultadosOrdenes = resultadosPendientes.ToList()
+    };
+}
+
+void ProcesarOrden(JsonElement orden)
+{
+    var id = orden.TryGetProperty("id", out var i) ? i.ToString() : "?";
+    var tipo = orden.TryGetProperty("tipo", out var t) ? t.ToString() : "?";
+    var valor = orden.TryGetProperty("valor", out var v) ? v.ToString() : "?";
+
+    var resultado = procesador.Procesar(orden);
+
+    if (resultado is null)
+    {
+        Console.WriteLine($"  Orden {id} ({tipo} {valor}): ya ejecutada, se ignora.");
+        return;
+    }
+
+    resultadosPendientes.Add(resultado);
+
+    Console.WriteLine(
+        $"  Orden {id} ({tipo} {valor}): {resultado.Resultado}" +
+        (resultado.Motivo is null ? "" : $" / {resultado.Motivo}"));
+}
+
+string LineaEstado(long? seq, string textoWifi, string http)
+{
+    var l = controlador.UltimasLecturas ?? default;
+    var ci = CultureInfo.InvariantCulture;
+
+    return string.Format(
+        ci,
+        "{0:HH:mm:ss} seq={1} modo={2} estado={3} fuente={4} | sol {5:F2} V {6:F0} mW | red {7:F2} V {8:F0} mW | {9} | {10}",
+        DateTime.Now,
+        seq?.ToString(ci) ?? "-",
+        controlador.Modo,
+        controlador.Estado.Nombre,
+        controlador.FuenteSeleccionada,
+        l.VSol, l.VSol * l.ISolMa,
+        l.VRed, l.VRed * l.IRedMa,
+        textoWifi,
+        http);
+}
+
+void ProcesarTecla(char tecla)
+{
+    lock (sync)
+    {
+        switch (char.ToUpperInvariant(tecla))
+        {
+            case 'S':
+                planta.Sombreado = !planta.Sombreado;
+                Console.WriteLine(planta.Sombreado ? ">> Panel sombreado" : ">> Panel sin sombra");
+                break;
+
+            case 'R':
+                planta.RedCortada = !planta.RedCortada;
+                Console.WriteLine(planta.RedCortada ? ">> Red cortada (cargador a 0 V)" : ">> Red restablecida");
+                break;
+
+            case 'N':
+                planta.NocheForzada = !planta.NocheForzada;
+                Console.WriteLine(planta.NocheForzada ? ">> Noche forzada" : ">> Noche forzada desactivada");
+                break;
+
+            case 'W':
+                wifi = !wifi;
+                Console.WriteLine(wifi ? ">> Wi-Fi restablecido" : ">> Wi-Fi cortado (se acumulan eventos)");
+                break;
+
+            case 'Q':
+                Console.WriteLine(">> Saliendo...");
+                cts.Cancel();
+                break;
+        }
+    }
+}
+
+async Task LeerTeclasAsync(CancellationToken ct)
+{
+    try
+    {
+        if (!Console.IsInputRedirected)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                if (Console.KeyAvailable)
+                    ProcesarTecla(Console.ReadKey(intercept: true).KeyChar);
+                else
+                    await Task.Delay(50, ct);
+            }
+
+            return;
+        }
+
+        // Entrada redirigida (scripts de prueba): cada carácter de cada línea es una tecla.
+        while (!ct.IsCancellationRequested)
+        {
+            var linea = await Console.In.ReadLineAsync(ct);
+
+            if (linea is null)
+                return;
+
+            foreach (var tecla in linea)
+                ProcesarTecla(tecla);
+        }
+    }
+    catch (OperationCanceledException)
+    {
+    }
+}
 
 // =====================================================
 // OPCIONES DEL SIMULADOR
@@ -128,17 +290,12 @@ internal sealed record Opciones(
     {
         string? url = null;
         string? token = null;
-
-        // M6: intervalo predeterminado de 1 segundo.
         var intervalo = 1;
         double? hora = null;
 
         for (var i = 0; i < args.Length; i++)
         {
-            var valor =
-                i + 1 < args.Length
-                    ? args[i + 1]
-                    : null;
+            var valor = i + 1 < args.Length ? args[i + 1] : null;
 
             switch (args[i])
             {
@@ -153,17 +310,10 @@ internal sealed record Opciones(
                     break;
 
                 case "--intervalo":
-                    if (!int.TryParse(
-                            valor,
-                            NumberStyles.Integer,
-                            CultureInfo.InvariantCulture,
-                            out intervalo) ||
+                    if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out intervalo) ||
                         intervalo < 1)
                     {
-                        Console.WriteLine(
-                            "--intervalo debe ser un entero " +
-                            "de 1 o más segundos.");
-
+                        Console.WriteLine("--intervalo debe ser un entero de 1 o más segundos.");
                         return null;
                     }
 
@@ -171,17 +321,10 @@ internal sealed record Opciones(
                     break;
 
                 case "--hora":
-                    if (!double.TryParse(
-                            valor,
-                            NumberStyles.Float,
-                            CultureInfo.InvariantCulture,
-                            out var h) ||
-                        h < 0 ||
-                        h >= 24)
+                    if (!double.TryParse(valor, NumberStyles.Float, CultureInfo.InvariantCulture, out var h) ||
+                        h < 0 || h >= 24)
                     {
-                        Console.WriteLine(
-                            "--hora debe estar entre 0 y 24.");
-
+                        Console.WriteLine("--hora debe estar entre 0 y 24.");
                         return null;
                     }
 
@@ -190,325 +333,31 @@ internal sealed record Opciones(
                     break;
 
                 default:
-                    Console.WriteLine(
-                        $"Parámetro desconocido: {args[i]}");
-
+                    Console.WriteLine($"Parámetro desconocido: {args[i]}");
                     return null;
             }
         }
 
-        if (string.IsNullOrWhiteSpace(url) ||
-            string.IsNullOrWhiteSpace(token))
-        {
+        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(token))
             return null;
-        }
 
-        return new Opciones(
-            url,
-            token,
-            intervalo,
-            hora);
+        return new Opciones(url, token, intervalo, hora);
     }
 
     public static void MostrarUso()
     {
-        Console.WriteLine(
-            "Simulador del dispositivo SAGE");
-
+        Console.WriteLine("Simulador del dispositivo SAGE");
         Console.WriteLine();
-
         Console.WriteLine("Uso:");
-
         Console.WriteLine(
-            "dotnet run --project src/SAGE.Simulador -- " +
-            "--url <URL> --token <TOKEN> " +
+            "dotnet run --project src/SAGE.Simulador -- --url <URL> --token <TOKEN> " +
             "[--intervalo <segundos>] [--hora <0-24>]");
-
         Console.WriteLine();
-
-        Console.WriteLine(
-            "--url        Dirección de la plataforma.");
-
-        Console.WriteLine(
-            "--token      Token del dispositivo.");
-
-        Console.WriteLine(
-            "--intervalo  Segundos entre envíos.");
-
-        Console.WriteLine(
-            "--hora       Hora simulada del día.");
+        Console.WriteLine("--url        Dirección de la plataforma.");
+        Console.WriteLine("--token      Token del dispositivo.");
+        Console.WriteLine("--intervalo  Segundos entre envíos (por defecto 1).");
+        Console.WriteLine("--hora       Hora simulada del día (fija la irradiancia).");
+        Console.WriteLine();
+        Console.WriteLine("Teclas: S sombra | R red | N noche | W Wi-Fi | Q salir");
     }
-}
-
-// =====================================================
-// GENERADOR DE TELEMETRÍA
-// =====================================================
-
-internal sealed class Generador
-{
-    private readonly Random _azar = new();
-
-    private readonly double? _horaFija;
-
-    private double _whSol;
-    private double _whRed;
-
-    private int _nubeRestante;
-
-    public Generador(double? horaFija)
-    {
-        _horaFija = horaFija;
-
-        BootId = _azar.NextInt64(
-            1,
-            1_000_000_000);
-    }
-
-    public long BootId { get; }
-
-    private long _seq;
-
-    public Telemetria Siguiente(int intervaloSegundos)
-    {
-        _seq++;
-
-        var irradiancia = Irradiancia(
-            intervaloSegundos);
-
-        var haySol = irradiancia >= 0.25;
-
-        double vSol;
-        double iSol;
-        double vRed;
-        double iRed;
-
-        string estado;
-        string fuente;
-
-        if (haySol)
-        {
-            vSol = 4.9 + Ruido(0.03);
-
-            iSol = Math.Clamp(
-                150 + 50 * irradiancia + Ruido(4),
-                150,
-                200);
-
-            vRed = 5.05 + Ruido(0.02);
-
-            iRed = Math.Clamp(
-                0.3 + Ruido(0.2),
-                0,
-                1);
-
-            estado = "EN_SOLAR";
-            fuente = "SOLAR";
-        }
-        else
-        {
-            vSol = Math.Max(
-                0,
-                0.2 + 3 * irradiancia + Ruido(0.05));
-
-            iSol = 0;
-
-            vRed = 5.05 + Ruido(0.02);
-
-            iRed = Math.Clamp(
-                150 + Ruido(25),
-                150,
-                200);
-
-            estado = "EN_CARGADOR";
-            fuente = "CARGADOR";
-        }
-
-        var pSol = vSol * iSol;
-        var pRed = vRed * iRed;
-
-        // Energía acumulada en Wh.
-        _whSol +=
-            pSol / 1000 * intervaloSegundos / 3600;
-
-        _whRed +=
-            pRed / 1000 * intervaloSegundos / 3600;
-
-        // =================================================
-        // S23-M5: EVENTO DE PRUEBA
-        // =================================================
-
-        // Generamos un evento de reinicio únicamente
-        // en la primera medición del simulador.
-        object[] eventos = _seq == 1
-            ? new object[]
-            {
-                new
-                {
-                    seq = 1L,
-
-                    ts = DateTime.UtcNow.ToString(
-                        "O",
-                        CultureInfo.InvariantCulture),
-
-                    tipo = "reinicio",
-
-                    estado = estado,
-
-                    de = (string?)null,
-
-                    a = (string?)null,
-
-                    motivo = "arranque",
-
-                    origen = "arranque",
-
-                    orden_id = (long?)null
-                }
-            }
-            : Array.Empty<object>();
-
-        return new Telemetria
-        {
-            BootId = BootId,
-
-            Seq = _seq,
-
-            Ts = DateTime.UtcNow.ToString(
-                "yyyy-MM-dd'T'HH:mm:ss'Z'",
-                CultureInfo.InvariantCulture),
-
-            TsValida = true,
-
-            Modo = "AUTO",
-
-            Estado = estado,
-
-            FuenteSeleccionada = fuente,
-
-            AlimentacionComprobada = true,
-
-            Solar = new Fuente(
-                Math.Round(vSol, 3),
-                Math.Round(iSol, 1),
-                Math.Round(pSol, 0),
-                Math.Round(_whSol, 6)),
-
-            Cargador = new Fuente(
-                Math.Round(vRed, 3),
-                Math.Round(iRed, 1),
-                Math.Round(pRed, 0),
-                Math.Round(_whRed, 6)),
-
-            // Evento de arranque para probar S23-M5.
-            Eventos = eventos,
-
-            ResultadosOrdenes = []
-        };
-    }
-
-    // =====================================================
-    // SIMULACIÓN DE IRRADIANCIA SOLAR
-    // =====================================================
-
-    private double Irradiancia(int intervaloSegundos)
-    {
-        var hora =
-            _horaFija ?? ObtenerHoraLocal();
-
-        var curva =
-            hora is > 6 and < 18
-                ? Math.Sin(
-                    Math.PI * (hora - 6) / 12)
-                : 0;
-
-        if (_nubeRestante > 0)
-        {
-            _nubeRestante -= intervaloSegundos;
-        }
-        else if (_azar.NextDouble() < 0.02)
-        {
-            _nubeRestante = _azar.Next(
-                10,
-                31);
-        }
-
-        var factorNube =
-            _nubeRestante > 0 ? 0.1 : 1.0;
-
-        return Math.Clamp(
-            (curva + Ruido(0.03)) * factorNube,
-            0,
-            1);
-    }
-
-    private static double ObtenerHoraLocal()
-    {
-        var ahora = DateTime.Now;
-
-        return ahora.Hour +
-               ahora.Minute / 60.0 +
-               ahora.Second / 3600.0;
-    }
-
-    private double Ruido(double amplitud)
-    {
-        return (_azar.NextDouble() * 2 - 1) *
-               amplitud;
-    }
-}
-
-// =====================================================
-// CLASES DE DATOS
-// =====================================================
-
-internal sealed record Fuente(
-    [property: JsonPropertyName("v")]
-    double V,
-
-    [property: JsonPropertyName("i_ma")]
-    double IMa,
-
-    [property: JsonPropertyName("p_mw")]
-    double PMw,
-
-    [property: JsonPropertyName("wh_acum")]
-    double WhAcum);
-
-internal sealed class Telemetria
-{
-    [JsonPropertyName("boot_id")]
-    public long BootId { get; init; }
-
-    [JsonPropertyName("seq")]
-    public long Seq { get; init; }
-
-    [JsonPropertyName("ts")]
-    public string Ts { get; init; } = "";
-
-    [JsonPropertyName("ts_valida")]
-    public bool TsValida { get; init; }
-
-    [JsonPropertyName("modo")]
-    public string Modo { get; init; } = "";
-
-    [JsonPropertyName("estado")]
-    public string Estado { get; init; } = "";
-
-    [JsonPropertyName("fuente_seleccionada")]
-    public string FuenteSeleccionada { get; init; } = "";
-
-    [JsonPropertyName("alimentacion_comprobada")]
-    public bool AlimentacionComprobada { get; init; }
-
-    [JsonPropertyName("solar")]
-    public Fuente Solar { get; init; } = default!;
-
-    [JsonPropertyName("cargador")]
-    public Fuente Cargador { get; init; } = default!;
-
-    [JsonPropertyName("eventos")]
-    public object[] Eventos { get; init; } = [];
-
-    [JsonPropertyName("resultados_ordenes")]
-    public object[] ResultadosOrdenes { get; init; } = [];
 }
