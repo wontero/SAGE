@@ -1,4 +1,4 @@
-﻿
+
 using Microsoft.EntityFrameworkCore;
 using SAGE.Web.Data;
 using SAGE.Web.Servicios.Configuracion;
@@ -8,12 +8,10 @@ namespace SAGE.Web.Servicios.Alertas;
 public sealed class ServicioAlertas
 {
     private readonly ApplicationDbContext _db;
-    private readonly ParametrosFuente _parametros;
 
     public ServicioAlertas(ApplicationDbContext db)
     {
         _db = db;
-        _parametros = ParametrosFuente.Predeterminados;
     }
 
     public async Task<bool> EvaluarAsync(
@@ -23,6 +21,11 @@ public sealed class ServicioAlertas
         CancellationToken ct = default)
     {
         var ahora = DateTime.UtcNow;
+
+        // S23-M10: VMin de los parámetros del propio dispositivo.
+        var parametros = ParametrosFuente.DesdeJson(
+            dispositivo.ParametrosJson,
+            dispositivo.ParametrosVersion);
         var huboCambios = false;
 
         // Recuperar las alertas abiertas del dispositivo.
@@ -79,7 +82,7 @@ public sealed class ServicioAlertas
             }
 
             // Cerrar cuando se recupera la tensión.
-            if (medicion.VRed >= _parametros.VMin)
+            if (medicion.VRed >= parametros.VMin)
             {
                 huboCambios |= Cerrar(
                     "cargador_sin_tension");

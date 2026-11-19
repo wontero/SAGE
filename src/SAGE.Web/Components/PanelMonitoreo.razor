@@ -12,6 +12,7 @@
 @using SAGE.Web.Servicios.Seguridad
 @using SAGE.Web.Components.Shared
 @using SAGE.Web.Servicios.Ordenes
+@using SAGE.Web.Servicios.Telemetria
 
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
@@ -83,6 +84,16 @@
                 </MudText>
 
             </MudPaper>
+
+            <MudTabs Elevation="1"
+                     Rounded="true"
+                     ApplyEffectsToContainer="true"
+                     TabPanelsClass="pt-4">
+
+            <MudTabPanel Text="Monitoreo"
+                         Icon="@Icons.Material.Outlined.MonitorHeart">
+
+            <MudStack Spacing="3">
 
             <MudPaper Class="pa-4" Elevation="1">
 
@@ -369,19 +380,23 @@
                             </MudTd>
 
                             <MudTd DataLabel="Tipo">
-                                @context.Tipo
+                                @TextosEventos.Tipo(context.Tipo)
+                                @if (context.De is not null || context.A is not null)
+                                {
+                                    <span> (@TextosEventos.DeA(context.De, context.A))</span>
+                                }
                             </MudTd>
 
                             <MudTd DataLabel="Estado">
-                                @context.Estado
+                                @TextosEventos.Estado(context.Estado)
                             </MudTd>
 
                             <MudTd DataLabel="Motivo">
-                                @context.Motivo
+                                @TextosEventos.Motivo(context.Motivo)
                             </MudTd>
 
                             <MudTd DataLabel="Origen">
-                                @context.Origen
+                                @TextosEventos.Origen(context.Origen)
                             </MudTd>
                         </RowTemplate>
 
@@ -389,6 +404,162 @@
                 }
 
             </MudPaper>
+
+            </MudStack>
+
+            </MudTabPanel>
+
+            @* S23-M10: Pestaña Reglas (RF15). Admin y Técnico editan; Consulta solo ve. *@
+            <MudTabPanel Text="Reglas"
+                         Icon="@Icons.Material.Outlined.Rule">
+
+                <MudPaper Class="pa-4" Elevation="1">
+
+                    <MudStack Row="true"
+                              AlignItems="AlignItems.Center"
+                              Spacing="2"
+                              Style="flex-wrap:wrap">
+
+                        <MudText Typo="Typo.h6">
+                            Reglas de conmutación
+                        </MudText>
+
+                        <MudChip T="string"
+                                 Color="@(ParametrosAplicados ? Color.Success : Color.Warning)"
+                                 Variant="Variant.Filled">
+                            Versión @dispositivo.ParametrosVersion —
+                            @(ParametrosAplicados ? "Aplicada" : "Pendiente de aplicar")
+                        </MudChip>
+
+                    </MudStack>
+
+                    @if (dispositivo.ParametrosVersion == 0)
+                    {
+                        <MudText Typo="Typo.caption">
+                            Usa los valores de fábrica.
+                        </MudText>
+                    }
+
+                    <MudGrid Spacing="2" Class="mt-2">
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="decimal"
+                                             @bind-Value="formReglas.VMin"
+                                             Label="V_min"
+                                             Adornment="Adornment.End"
+                                             AdornmentText="V"
+                                             Step="0.05m"
+                                             Format="0.00"
+                                             ReadOnly="@(!PuedeControlar)"
+                                             HelperText="Mínima con carga (4,0 a 4,9 V)"
+                                             Variant="Variant.Outlined" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="decimal"
+                                             @bind-Value="formReglas.VRetorno"
+                                             Label="V_retorno"
+                                             Adornment="Adornment.End"
+                                             AdornmentText="V"
+                                             Step="0.05m"
+                                             Format="0.00"
+                                             ReadOnly="@(!PuedeControlar)"
+                                             HelperText="Para intentar volver a solar (V_min + 0,2 a 5,3 V)"
+                                             Variant="Variant.Outlined" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="decimal"
+                                             @bind-Value="formReglas.IMinMa"
+                                             Label="I_min"
+                                             Adornment="Adornment.End"
+                                             AdornmentText="mA"
+                                             Step="1m"
+                                             ReadOnly="@(!PuedeControlar)"
+                                             HelperText="Por debajo no hay consumo (5 a 100 mA)"
+                                             Variant="Variant.Outlined" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="decimal"
+                                             @bind-Value="formReglas.TFallaS"
+                                             Label="T_falla"
+                                             Adornment="Adornment.End"
+                                             AdornmentText="s"
+                                             Step="0.5m"
+                                             Format="0.0"
+                                             ReadOnly="@(!PuedeControlar)"
+                                             HelperText="Tiempo bajo V_min antes de abandonar solar (0,5 a 5 s)"
+                                             Variant="Variant.Outlined" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="decimal"
+                                             @bind-Value="formReglas.TEstableS"
+                                             Label="T_estable"
+                                             Adornment="Adornment.End"
+                                             AdornmentText="s"
+                                             Step="5m"
+                                             ReadOnly="@(!PuedeControlar)"
+                                             HelperText="Solar estable antes de intentar volver (10 a 300 s)"
+                                             Variant="Variant.Outlined" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudNumericField T="decimal"
+                                             @bind-Value="formReglas.TPruebaS"
+                                             Label="T_prueba"
+                                             Adornment="Adornment.End"
+                                             AdornmentText="s"
+                                             Step="1m"
+                                             ReadOnly="@(!PuedeControlar)"
+                                             HelperText="Solar sosteniendo la carga para quedar comprobada (2 a 30 s)"
+                                             Variant="Variant.Outlined" />
+                        </MudItem>
+
+                    </MudGrid>
+
+                    @if (erroresReglas.Count > 0)
+                    {
+                        <MudAlert Severity="Severity.Error" Class="mt-3">
+                            @foreach (var error in erroresReglas)
+                            {
+                                <div>@error</div>
+                            }
+                        </MudAlert>
+                    }
+
+                    @if (PuedeControlar)
+                    {
+                        <MudStack Row="true"
+                                  Spacing="2"
+                                  Class="mt-4"
+                                  Style="flex-wrap:wrap">
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Outlined.Save"
+                                       Disabled="@guardandoReglas"
+                                       OnClick="GuardarReglasAsync">
+                                Guardar y enviar al dispositivo
+                            </MudButton>
+
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Secondary"
+                                       StartIcon="@Icons.Material.Outlined.RestartAlt"
+                                       Disabled="@guardandoReglas"
+                                       OnClick="RestablecerFabricaAsync">
+                                Restablecer valores de fábrica
+                            </MudButton>
+
+                        </MudStack>
+                    }
+
+                </MudPaper>
+
+            </MudTabPanel>
+
+            </MudTabs>
 
         </MudStack>
     }
@@ -501,8 +672,151 @@
                 return;
 
             await CargarOrdenesAsync();
+            await RecargarVersionesParametrosAsync();
             StateHasChanged();
         });
+    }
+
+    // =====================================================
+    // S23-M10: PESTAÑA REGLAS
+    // =====================================================
+
+    private sealed class FormReglas
+    {
+        public decimal VMin { get; set; }
+        public decimal VRetorno { get; set; }
+        public decimal IMinMa { get; set; }
+        public decimal TFallaS { get; set; }
+        public decimal TEstableS { get; set; }
+        public decimal TPruebaS { get; set; }
+
+        public static FormReglas Desde(SAGE.Web.Servicios.Configuracion.ParametrosFuente p) => new()
+        {
+            VMin = p.VMin,
+            VRetorno = p.VRetorno,
+            IMinMa = p.IMinMa,
+            TFallaS = p.TFallaS,
+            TEstableS = p.TEstableS,
+            TPruebaS = p.TPruebaS
+        };
+
+        public SAGE.Web.Servicios.Configuracion.ParametrosFuente AParametros(int version) =>
+            new(VMin, VRetorno, IMinMa, TFallaS, TEstableS, TPruebaS) { Version = version };
+    }
+
+    private FormReglas formReglas = FormReglas.Desde(
+        SAGE.Web.Servicios.Configuracion.ParametrosFuente.Predeterminados);
+
+    private IReadOnlyList<string> erroresReglas = Array.Empty<string>();
+
+    private bool guardandoReglas;
+
+    private bool ParametrosAplicados =>
+        dispositivo is not null &&
+        dispositivo.ParametrosVersionConfirmada == dispositivo.ParametrosVersion;
+
+    private void CargarFormReglas()
+    {
+        if (dispositivo is null)
+            return;
+
+        formReglas = FormReglas.Desde(
+            SAGE.Web.Servicios.Configuracion.ParametrosFuente.DesdeJson(
+                dispositivo.ParametrosJson,
+                dispositivo.ParametrosVersion));
+    }
+
+    private async Task RecargarVersionesParametrosAsync()
+    {
+        if (dispositivo is null)
+            return;
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var versiones = await db.Dispositivos
+            .AsNoTracking()
+            .Where(d => d.Id == Id && d.EmpresaId == empresaId)
+            .Select(d => new { d.ParametrosVersion, d.ParametrosVersionConfirmada, d.ParametrosJson })
+            .FirstOrDefaultAsync();
+
+        if (versiones is null)
+            return;
+
+        dispositivo.ParametrosVersion = versiones.ParametrosVersion;
+        dispositivo.ParametrosVersionConfirmada = versiones.ParametrosVersionConfirmada;
+        dispositivo.ParametrosJson = versiones.ParametrosJson;
+    }
+
+    private async Task GuardarReglasAsync()
+    {
+        if (!PuedeControlar || dispositivo is null)
+            return;
+
+        guardandoReglas = true;
+
+        try
+        {
+            await RecargarVersionesParametrosAsync();
+
+            var nuevaVersion = dispositivo.ParametrosVersion + 1;
+            var parametros = formReglas.AParametros(nuevaVersion);
+
+            erroresReglas = parametros.Validar();
+
+            // Valores fuera de rango: no se guarda ni se crea orden.
+            if (erroresReglas.Count > 0)
+                return;
+
+            // Primero la orden: si hay una entregada esperando resultado, no se guarda nada.
+            await CanalOrdenes.EnviarParametrosAsync(dispositivo.Id, parametros);
+
+            await using (var scope = ScopeFactory.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // Vuelve a comprobar en el servidor que el dispositivo es de la empresa activa.
+                var entidad = await db.Dispositivos.FirstOrDefaultAsync(
+                    d => d.Id == Id && d.EmpresaId == empresaId);
+
+                if (entidad is null || !UsuarioActual.PuedeVerEmpresa(entidad.EmpresaId))
+                {
+                    Snackbar.Add("El dispositivo no pertenece a su empresa activa.", Severity.Error);
+                    return;
+                }
+
+                entidad.ParametrosJson = parametros.AJsonOrden();
+                entidad.ParametrosVersion = nuevaVersion;
+
+                await db.SaveChangesAsync();
+            }
+
+            await RecargarVersionesParametrosAsync();
+            await CargarOrdenesAsync();
+            CargarFormReglas();
+
+            Snackbar.Add($"Versión {nuevaVersion} guardada. Se aplica con la próxima telemetría.", Severity.Success);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            guardandoReglas = false;
+        }
+    }
+
+    private async Task RestablecerFabricaAsync()
+    {
+        formReglas = FormReglas.Desde(
+            SAGE.Web.Servicios.Configuracion.ParametrosFuente.Predeterminados);
+
+        await GuardarReglasAsync();
     }
 
     private bool EnLinea =>
@@ -649,6 +963,8 @@
             await CargarEventosAsync();
 
             await CargarOrdenesAsync();
+
+            CargarFormReglas();
         }
         finally
         {

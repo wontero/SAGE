@@ -26,6 +26,54 @@ public sealed record ParametrosFuente(
     public int Version { get; init; }
 
     // =====================================================
+    // S23-M10: LÍMITES (diseño §4.1)
+    // =====================================================
+
+    public const decimal VMinMinimo = 4.0m;
+    public const decimal VMinMaximo = 4.9m;
+    public const decimal HisteresisMinima = 0.2m;   // VRetorno ≥ VMin + 0,2
+    public const decimal VRetornoMaximo = 5.3m;
+    public const decimal IMinMinimo = 5m;
+    public const decimal IMinMaximo = 100m;
+    public const decimal TFallaMinimo = 0.5m;
+    public const decimal TFallaMaximo = 5m;
+    public const decimal TEstableMinimo = 10m;
+    public const decimal TEstableMaximo = 300m;
+    public const decimal TPruebaMinimo = 2m;
+    public const decimal TPruebaMaximo = 30m;
+
+    // Lista de errores en español; vacía si todos los valores son válidos.
+    public IReadOnlyList<string> Validar()
+    {
+        var errores = new List<string>();
+
+        if (VMin < VMinMinimo || VMin > VMinMaximo)
+            errores.Add($"V_min debe estar entre {N(VMinMinimo)} y {N(VMinMaximo)} V.");
+
+        var vRetornoMinimo = VMin + HisteresisMinima;
+
+        if (VRetorno < vRetornoMinimo || VRetorno > VRetornoMaximo)
+            errores.Add($"V_retorno debe estar entre V_min + 0,2 ({N(vRetornoMinimo)} V) y {N(VRetornoMaximo)} V.");
+
+        if (IMinMa < IMinMinimo || IMinMa > IMinMaximo)
+            errores.Add($"I_min debe estar entre {N(IMinMinimo)} y {N(IMinMaximo)} mA.");
+
+        if (TFallaS < TFallaMinimo || TFallaS > TFallaMaximo)
+            errores.Add($"T_falla debe estar entre {N(TFallaMinimo)} y {N(TFallaMaximo)} s.");
+
+        if (TEstableS < TEstableMinimo || TEstableS > TEstableMaximo)
+            errores.Add($"T_estable debe estar entre {N(TEstableMinimo)} y {N(TEstableMaximo)} s.");
+
+        if (TPruebaS < TPruebaMinimo || TPruebaS > TPruebaMaximo)
+            errores.Add($"T_prueba debe estar entre {N(TPruebaMinimo)} y {N(TPruebaMaximo)} s.");
+
+        return errores;
+    }
+
+    private static string N(decimal valor) =>
+        valor.ToString("0.##", System.Globalization.CultureInfo.GetCultureInfo("es-BO"));
+
+    // =====================================================
     // S23-M9 / S23-M10: JSON de la orden "parametros" (sección 4)
     // =====================================================
 

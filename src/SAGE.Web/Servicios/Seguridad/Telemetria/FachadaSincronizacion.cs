@@ -106,6 +106,12 @@ public sealed class FachadaSincronizacion
             horaServidor,
             medicionNueva);
 
+        // S23-M10: versión de parámetros que el dispositivo tiene aplicada.
+        var parametrosConfirmadosCambiaron =
+            dispositivo.ParametrosVersionConfirmada != paquete.ParametrosVersion;
+
+        dispositivo.ParametrosVersionConfirmada = paquete.ParametrosVersion;
+
         // 5. Registrar únicamente eventos nuevos.
         var eventosNuevos = await RegistrarEventosAsync(
             dispositivo,
@@ -135,6 +141,9 @@ public sealed class FachadaSincronizacion
             ct);
 
         ordenesCambiaron |= ordenesEntregaCambiaron;
+
+        // La pestaña Reglas escucha el mismo aviso para pasar a "Aplicada".
+        ordenesCambiaron |= parametrosConfirmadosCambiaron;
 
         // 9. Guardar los cambios en SQL Server.
         await _db.SaveChangesAsync(ct);

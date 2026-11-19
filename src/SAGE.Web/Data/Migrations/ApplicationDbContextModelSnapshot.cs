@@ -356,6 +356,15 @@ namespace SAGE.Web.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("ParametrosJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ParametrosVersion")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ParametrosVersionConfirmada")
+                        .HasColumnType("int");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)

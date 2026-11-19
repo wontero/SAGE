@@ -46,4 +46,14 @@ public class Dispositivo
     // No modifica los valores reales guardados.
     [Range(1, 10000, ErrorMessage = "El factor debe estar entre 1 y 10000.")]
     public decimal FactorEscala { get; set; } = 1m;
+
+    // S23-M10: parámetros de la máquina de estados (RF15).
+    // null = predeterminados de fábrica.
+    public string? ParametrosJson { get; set; }
+
+    // 0 = predeterminados de fábrica.
+    public int ParametrosVersion { get; set; }
+
+    // La versión que informa el dispositivo en "parametros_version".
+    public int ParametrosVersionConfirmada { get; set; }
 }

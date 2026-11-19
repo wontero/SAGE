@@ -5,7 +5,9 @@
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
 @using SAGE.Web.Data
+@using SAGE.Web.Servicios
 @using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Servicios.Telemetria
 
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
@@ -61,57 +63,48 @@
                       RowsPerPage="10">
 
                 <HeaderContent>
+                    <MudTh>Hora (Bolivia)</MudTh>
                     <MudTh>Dispositivo</MudTh>
-                    <MudTh>Servidor (UTC)</MudTh>
-                    <MudTh>Boot</MudTh>
-                    <MudTh>Seq</MudTh>
                     <MudTh>Tipo</MudTh>
+                    <MudTh>De → A</MudTh>
                     <MudTh>Estado</MudTh>
-                    <MudTh>De</MudTh>
-                    <MudTh>A</MudTh>
                     <MudTh>Motivo</MudTh>
                     <MudTh>Origen</MudTh>
+                    <MudTh>Orden</MudTh>
                 </HeaderContent>
 
                 <RowTemplate>
+                    <MudTd DataLabel="Hora (Bolivia)">
+                        @* Hora del dispositivo si es válida (los eventos acumulados sin Wi-Fi llegan después). *@
+                        @Formato.HoraLocal(context.TsValida ? context.Ts : context.TsServidor)
+                    </MudTd>
+
                     <MudTd DataLabel="Dispositivo">
-                        @context.DispositivoId
-                    </MudTd>
-
-                    <MudTd DataLabel="Servidor (UTC)">
-                        @context.TsServidor.ToString("dd/MM/yyyy HH:mm:ss")
-                    </MudTd>
-
-                    <MudTd DataLabel="Boot">
-                        @context.BootId
-                    </MudTd>
-
-                    <MudTd DataLabel="Seq">
-                        @context.Seq
+                        @(context.Dispositivo?.Nombre ?? context.DispositivoId.ToString())
                     </MudTd>
 
                     <MudTd DataLabel="Tipo">
-                        @context.Tipo
+                        @TextosEventos.Tipo(context.Tipo)
+                    </MudTd>
+
+                    <MudTd DataLabel="De → A">
+                        @TextosEventos.DeA(context.De, context.A)
                     </MudTd>
 
                     <MudTd DataLabel="Estado">
-                        @context.Estado
-                    </MudTd>
-
-                    <MudTd DataLabel="De">
-                        @(context.De ?? "-")
-                    </MudTd>
-
-                    <MudTd DataLabel="A">
-                        @(context.A ?? "-")
+                        @TextosEventos.Estado(context.Estado)
                     </MudTd>
 
                     <MudTd DataLabel="Motivo">
-                        @context.Motivo
+                        @TextosEventos.Motivo(context.Motivo)
                     </MudTd>
 
                     <MudTd DataLabel="Origen">
-                        @context.Origen
+                        @TextosEventos.Origen(context.Origen)
+                    </MudTd>
+
+                    <MudTd DataLabel="Orden">
+                        @(context.OrdenId?.ToString() ?? "—")
                     </MudTd>
                 </RowTemplate>
 
@@ -154,10 +147,11 @@
             // de dispositivos de la empresa activa.
             eventos = await db.Eventos
                 .AsNoTracking()
+                .Include(e => e.Dispositivo)
                 .Where(e =>
                     e.Dispositivo.EmpresaId == empresaId)
                 .OrderByDescending(e => e.TsServidor)
-                .ThenByDescending(e => e.Id)
+                .ThenByDescending(e => e.Seq)
                 .Take(50)
                 .ToListAsync();
         }
