@@ -21,6 +21,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     // S23-M7: Alertas automáticas
     public DbSet<Alerta> Alertas => Set<Alerta>();
 
+    // S23-M9: Órdenes a los dispositivos (patrón Command)
+    public DbSet<Orden> Ordenes => Set<Orden>();
+
     public DbSet<Factura> Facturas => Set<Factura>();
 
     public DbSet<ParametrosEconomicos> ParametrosEconomicos
@@ -124,6 +127,39 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasOne(e => e.Dispositivo)
                 .WithMany()
                 .HasForeignKey(e => e.DispositivoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // S23-M9: el evento puede venir de una orden.
+            entity.HasOne(e => e.Orden)
+                .WithMany()
+                .HasForeignKey(e => e.OrdenId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // =====================================================
+        // S23-M9: ÓRDENES (patrón Command)
+        // =====================================================
+
+        builder.Entity<Orden>(entity =>
+        {
+            // Estado y fechas tienen setter privado: EF los asigna igual.
+            entity.Property(o => o.Estado).HasMaxLength(20);
+            entity.Property(o => o.Motivo).HasMaxLength(50);
+
+            entity.HasIndex(o => new
+            {
+                o.DispositivoId,
+                o.Estado
+            });
+
+            entity.HasOne(o => o.Dispositivo)
+                .WithMany()
+                .HasForeignKey(o => o.DispositivoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(o => o.Usuario)
+                .WithMany()
+                .HasForeignKey(o => o.UsuarioId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

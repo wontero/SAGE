@@ -618,7 +618,7 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 - Con el simulador a 1 s, `/monitoreo/{id}` se actualiza en vivo; al detenerlo aparece la alerta "Sin conexión".
 - Si algo falla, regla 3.
 
-### - [ ] S23-M9 · RF11 Órdenes de modo (patrón Command, lado servidor)
+### - [x] S23-M9 · RF11 Órdenes de modo (patrón Command, lado servidor)
 **Qué hacer**
 1. Entidad `Orden` en `Data/Orden.cs` (`// Patrón: Command — rol: comando`): `Id` (long), `DispositivoId`, `UsuarioId`, `Tipo` (`modo` o `parametros`), `ValorJson` (string: `"\"SOLAR\""` para modo; el objeto JSON de la sección 4 para parámetros), `Estado` (`pendiente`, `entregada`, `ejecutada`, `rechazada`, `expirada`), `Motivo` (string?, máx. 50), `Creada`, `Entregada?`, `Resuelta?` (UTC). Métodos de dominio (la entidad controla sus transiciones; nadie asigna `Estado` desde afuera):
    ```csharp
@@ -649,9 +649,9 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 6. Pruebas `tests/SAGE.Tests/OrdenTests.cs`: cada transición válida e inválida de `Orden`; `Vencida` a los 30 s y 60 s.
 
 **Criterios de aceptación**
-- [ ] Con `docs/api_telemetria.http`: crear una orden desde la pantalla → la siguiente telemetría la recibe en `orden` → un paquete con su resultado la marca ejecutada o rechazada, y la pantalla lo muestra sin recargar.
-- [ ] Una orden a un dispositivo sin telemetría pasa a "Expirada: No se entregó a tiempo" a los 30 s (± 2 s), y nunca se entrega después (RNF08).
-- [ ] Consulta no ve los botones de control.
+- [x] Con `docs/api_telemetria.http`: crear una orden desde la pantalla → la siguiente telemetría la recibe en `orden` → un paquete con su resultado la marca ejecutada o rechazada, y la pantalla lo muestra sin recargar.
+- [x] Una orden a un dispositivo sin telemetría pasa a "Expirada: No se entregó a tiempo" a los 30 s (± 2 s), y nunca se entrega después (RNF08).
+- [x] Consulta no ve los botones de control.
 
 ### - [ ] S23-M10 · RF15 Parámetros del dispositivo
 **Qué hacer**

@@ -22,6 +22,9 @@ public sealed class EstadoDispositivosEnVivo
     public event Action<int>? EventosRegistrados;
     public event Action<int>? AlertasCambiaron;
 
+    // S23-M9: dispositivoId cuyas órdenes cambiaron de estado.
+    public event Action<int>? OrdenesCambiaron;
+
     // =====================================================
     // ACTUALIZAR ESTADO
     // =====================================================
@@ -105,6 +108,17 @@ public sealed class EstadoDispositivosEnVivo
         Notificar(
             AlertasCambiaron,
             empresaId);
+    }
+
+    // =====================================================
+    // S23-M9: NOTIFICACIÓN DE ÓRDENES
+    // =====================================================
+
+    public void NotificarOrdenes(int dispositivoId)
+    {
+        Notificar(
+            OrdenesCambiaron,
+            dispositivoId);
     }
 
     // =====================================================

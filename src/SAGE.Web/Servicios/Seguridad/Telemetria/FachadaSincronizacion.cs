@@ -5,6 +5,7 @@ using SAGE.Web.Api;
 using SAGE.Web.Data;
 using SAGE.Web.Servicios.Alertas;
 using SAGE.Web.Servicios.EnVivo;
+using SAGE.Web.Servicios.Ordenes;
 using Dispositivo = SAGE.Web.Data.Dispositivo;
 
 namespace SAGE.Web.Servicios.Telemetria;
@@ -113,8 +114,10 @@ public sealed class FachadaSincronizacion
             ct);
 
         // 6. Resultados de órdenes (M9).
-        await ActualizarResultadosOrdenesAsync(
+        var ordenesCambiaron = await ActualizarResultadosOrdenesAsync(
+            dispositivo,
             paquete,
+            horaServidor,
             ct);
 
         // 7. Evaluar las alertas (M7).
@@ -126,9 +129,12 @@ public sealed class FachadaSincronizacion
                 ct);
 
         // 8. Órdenes pendientes (M9).
-        var orden = await EntregarOrdenPendienteAsync(
+        var (orden, ordenesEntregaCambiaron) = await EntregarOrdenPendienteAsync(
             dispositivo,
+            horaServidor,
             ct);
+
+        ordenesCambiaron |= ordenesEntregaCambiaron;
 
         // 9. Guardar los cambios en SQL Server.
         await _db.SaveChangesAsync(ct);
@@ -141,12 +147,11 @@ public sealed class FachadaSincronizacion
 
         if (medicionNueva)
         {
-            // Factor provisional 1 hasta implementar
-            // FactorEscala en Dispositivo (S23-M6).
+            // Corrección S23-M6 (Ethan): usar el factor real del dispositivo.
             var estado = EstadoDispositivo.Desde(
                 medicion,
                 dispositivo.EmpresaId,
-                1m);
+                dispositivo.FactorEscala);
 
             _enVivo.Actualizar(estado);
         }
@@ -154,6 +159,11 @@ public sealed class FachadaSincronizacion
         if (eventosNuevos.Count > 0)
         {
             _enVivo.NotificarEventos(dispositivo.Id);
+        }
+
+        if (ordenesCambiaron)
+        {
+            _enVivo.NotificarOrdenes(dispositivo.Id);
         }
 
         if (alertasCambiaron)
@@ -343,6 +353,22 @@ public sealed class FachadaSincronizacion
             if (existe)
                 continue;
 
+            // S23-M9: un orden_id que no es de este dispositivo no rompe el paquete.
+            if (evento.OrdenId is long ordenId &&
+                !await _db.Ordenes.AnyAsync(
+                    o => o.Id == ordenId && o.DispositivoId == dispositivo.Id,
+                    ct))
+            {
+                _logger.LogWarning(
+                    "Evento {Seq} del dispositivo {Id} trae la orden " +
+                    "{OrdenId}, que no es suya: se guarda sin orden.",
+                    recibido.Seq,
+                    dispositivo.Id,
+                    ordenId);
+
+                evento.OrdenId = null;
+            }
+
             _db.Eventos.Add(evento);
             eventosNuevos.Add(evento);
         }
@@ -354,24 +380,101 @@ public sealed class FachadaSincronizacion
     // S23-M9: RESULTADOS DE ÓRDENES
     // =====================================================
 
-    private static Task ActualizarResultadosOrdenesAsync(
+    // Por cada resultado de una orden DE ESTE dispositivo, Resolver(...).
+    // Los resultados de órdenes de otro dispositivo se ignoran con LogWarning.
+    private async Task<bool> ActualizarResultadosOrdenesAsync(
+        Dispositivo dispositivo,
         TelemetriaRequest paquete,
+        DateTime horaServidor,
         CancellationToken ct)
     {
-        // Pendiente: Ethan implementará M9.
-        return Task.CompletedTask;
+        if (paquete.ResultadosOrdenes is not { Count: > 0 } resultados)
+            return false;
+
+        var ids = resultados
+            .Where(r => r is not null)
+            .Select(r => r.OrdenId)
+            .Distinct()
+            .ToList();
+
+        var ordenes = await _db.Ordenes
+            .Where(o => ids.Contains(o.Id))
+            .ToListAsync(ct);
+
+        var cambiaron = false;
+
+        foreach (var resultado in resultados)
+        {
+            if (resultado is null)
+                continue;
+
+            var orden = ordenes.FirstOrDefault(o => o.Id == resultado.OrdenId);
+
+            if (orden is null || orden.DispositivoId != dispositivo.Id)
+            {
+                _logger.LogWarning(
+                    "Resultado ignorado: la orden {OrdenId} no pertenece " +
+                    "al dispositivo {Id}.",
+                    resultado.OrdenId,
+                    dispositivo.Id);
+
+                continue;
+            }
+
+            var estadoAnterior = orden.Estado;
+
+            orden.Resolver(
+                resultado.Resultado ?? string.Empty,
+                resultado.Motivo,
+                horaServidor);
+
+            cambiaron |= orden.Estado != estadoAnterior;
+        }
+
+        return cambiaron;
     }
 
     // =====================================================
     // S23-M9: ENTREGAR ÓRDENES
     // =====================================================
 
-    private static Task<object?> EntregarOrdenPendienteAsync(
+    // Primero expira las vencidas del dispositivo; después toma la
+    // pendiente más antigua, la entrega y la devuelve (formato sección 4).
+    private async Task<(object? Orden, bool Cambiaron)> EntregarOrdenPendienteAsync(
         Dispositivo dispositivo,
+        DateTime horaServidor,
         CancellationToken ct)
     {
-        // Pendiente: Ethan implementará M9.
-        return Task.FromResult<object?>(null);
+        var abiertas = await _db.Ordenes
+            .Where(o =>
+                o.DispositivoId == dispositivo.Id &&
+                (o.Estado == Orden.EstadoPendiente ||
+                 o.Estado == Orden.EstadoEntregada))
+            .OrderBy(o => o.Creada)
+            .ThenBy(o => o.Id)
+            .ToListAsync(ct);
+
+        var cambiaron = false;
+
+        foreach (var vencida in abiertas.Where(o => o.Vencida(horaServidor)))
+        {
+            vencida.ExpirarPorVencimiento(horaServidor);
+            cambiaron = true;
+        }
+
+        // Si ya hay una entregada esperando resultado, no se entrega otra.
+        if (abiertas.Any(o => o.Estado == Orden.EstadoEntregada))
+            return (null, cambiaron);
+
+        var pendiente = abiertas.FirstOrDefault(
+            o => o.Estado == Orden.EstadoPendiente);
+
+        if (pendiente is null)
+            return (null, cambiaron);
+
+        pendiente.Entregar(horaServidor);
+
+        return (TextosOrdenes.ARespuesta(pendiente), true);
     }
 
     // =====================================================

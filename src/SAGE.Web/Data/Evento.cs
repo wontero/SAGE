@@ -43,5 +43,8 @@ public class Evento
     [MaxLength(30)]
     public string Origen { get; set; } = string.Empty;
 
+    // S23-M9: FK a Orden (SetNull).
     public long? OrdenId { get; set; }
+
+    public Orden? Orden { get; set; }
 }

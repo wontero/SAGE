@@ -11,6 +11,7 @@ using SAGE.Web.Servicios.Seguridad;
 using SAGE.Web.Servicios.Telemetria;
 using SAGE.Web.Servicios.Alertas;
 using SAGE.Web.Servicios.EnVivo;
+using SAGE.Web.Servicios.Ordenes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -136,6 +137,18 @@ builder.Services.AddScoped<ServicioAlertas>();
 //
 // Solo se registra el vigilante nuevo.
 builder.Services.AddHostedService<VigilanteConexion>();
+
+// =====================================================
+// S23-M9: ÓRDENES (PATRÓN COMMAND)
+// =====================================================
+
+// Invocador del lado servidor: guarda la orden y la entrega
+// en la respuesta de la siguiente telemetría.
+builder.Services.AddScoped<ICanalOrdenes, CanalOrdenesBD>();
+
+// Cada 1 s expira las órdenes que no se entregaron (30 s)
+// o que no se confirmaron (60 s).
+builder.Services.AddHostedService<ExpiradorOrdenes>();
 
 // =====================================================
 // CONSTRUIR APLICACIÓN

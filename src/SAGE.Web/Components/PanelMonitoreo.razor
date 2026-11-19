@@ -11,10 +11,13 @@
 @using SAGE.Web.Servicios.EnVivo
 @using SAGE.Web.Servicios.Seguridad
 @using SAGE.Web.Components.Shared
+@using SAGE.Web.Servicios.Ordenes
 
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
 @inject EstadoDispositivosEnVivo EnVivo
+@inject ICanalOrdenes CanalOrdenes
+@inject ISnackbar Snackbar
 
 <PageTitle>Monitoreo de dispositivo - SAGE</PageTitle>
 
@@ -113,6 +116,110 @@
                 </MudStack>
 
             </MudPaper>
+
+            @* S23-M9: Control de fuente (patrón Command). Solo Admin y Técnico. *@
+            @if (PuedeControlar)
+            {
+                <MudPaper Class="pa-4" Elevation="1">
+
+                    <MudText Typo="Typo.h6">
+                        Control de fuente
+                    </MudText>
+
+                    <MudStack Row="true"
+                              Spacing="2"
+                              Class="mt-3"
+                              Style="flex-wrap:wrap">
+
+                        @foreach (var (modo, texto, icono) in BotonesModo)
+                        {
+                            var actual = ModoActual == modo;
+                            <MudButton Variant="@(actual ? Variant.Filled : Variant.Outlined)"
+                                       Color="Color.Primary"
+                                       StartIcon="@icono"
+                                       Disabled="@enviandoOrden"
+                                       OnClick="@(() => EnviarModoAsync(modo))">
+                                @texto
+                            </MudButton>
+                        }
+
+                    </MudStack>
+
+                    @if (ordenes.Count > 0)
+                    {
+                        var ultima = ordenes[0];
+                        <MudStack Row="true"
+                                  Spacing="2"
+                                  AlignItems="AlignItems.Center"
+                                  Class="mt-3">
+                            <MudText Typo="Typo.body2">
+                                Última orden (@TextosOrdenes.Descripcion(ultima)):
+                            </MudText>
+                            <MudChip T="string"
+                                     Color="@ColorOrden(ultima.Estado)"
+                                     Variant="Variant.Filled">
+                                @TextosOrdenes.EstadoConMotivo(ultima)
+                            </MudChip>
+                        </MudStack>
+                    }
+
+                </MudPaper>
+            }
+
+            @if (ordenes.Count > 0)
+            {
+                <MudPaper Class="pa-4" Elevation="1">
+
+                    <MudText Typo="Typo.h6">
+                        Últimas 10 órdenes
+                    </MudText>
+
+                    <MudTable T="Orden"
+                              Items="@ordenes"
+                              Dense="true"
+                              Hover="true"
+                              Class="mt-2">
+
+                        <HeaderContent>
+                            <MudTh>Hora</MudTh>
+                            <MudTh>Quién</MudTh>
+                            <MudTh>Orden</MudTh>
+                            <MudTh>Estado</MudTh>
+                            <MudTh>Motivo</MudTh>
+                            <MudTh>Tiempo hasta resolverse</MudTh>
+                        </HeaderContent>
+
+                        <RowTemplate>
+                            <MudTd DataLabel="Hora">
+                                @Formato.HoraLocal(context.Creada)
+                            </MudTd>
+                            <MudTd DataLabel="Quién">
+                                @(context.Usuario?.NombreCompleto ?? "—")
+                            </MudTd>
+                            <MudTd DataLabel="Orden">
+                                @TextosOrdenes.Descripcion(context)
+                            </MudTd>
+                            <MudTd DataLabel="Estado">
+                                <MudChip T="string"
+                                         Size="Size.Small"
+                                         Color="@ColorOrden(context.Estado)">
+                                    @TextosOrdenes.Estado(context.Estado)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Motivo">
+                                @TextosOrdenes.Motivo(context.Motivo)
+                            </MudTd>
+                            <MudTd DataLabel="Tiempo hasta resolverse">
+                                @(context.Resuelta is DateTime r
+                                    ? ((decimal)(r - context.Creada).TotalSeconds).ToString("N1", System.Globalization.CultureInfo.GetCultureInfo("es-BO")) + " s"
+                                    : "—")
+                            </MudTd>
+                        </RowTemplate>
+
+                    </MudTable>
+
+                </MudPaper>
+            }
 
             <MudGrid Spacing="3">
 
@@ -318,6 +425,86 @@
         decimal SolarMw,
         decimal RedMw);
 
+    // =====================================================
+    // S23-M9: ÓRDENES
+    // =====================================================
+
+    private List<Orden> ordenes = new();
+
+    private bool enviandoOrden;
+
+    private static readonly (string Modo, string Texto, string Icono)[] BotonesModo =
+    {
+        ("AUTO", "Automático", Icons.Material.Outlined.Autorenew),
+        ("SOLAR", "Solar", Icons.Material.Outlined.WbSunny),
+        ("CARGADOR", "Red", Icons.Material.Outlined.Power)
+    };
+
+    private bool PuedeControlar =>
+        UsuarioActual.EsAdministrador || UsuarioActual.EsTecnico;
+
+    private string ModoActual =>
+        (estado?.Modo ?? dispositivo?.ModoActual ?? "").ToUpperInvariant();
+
+    private static Color ColorOrden(string estadoOrden) => estadoOrden switch
+    {
+        Orden.EstadoEjecutada => Color.Success,
+        Orden.EstadoRechazada => Color.Error,
+        Orden.EstadoExpirada => Color.Warning,
+        Orden.EstadoEntregada => Color.Info,
+        _ => Color.Default
+    };
+
+    private async Task EnviarModoAsync(string modo)
+    {
+        if (!PuedeControlar || dispositivo is null)
+            return;
+
+        enviandoOrden = true;
+
+        try
+        {
+            await CanalOrdenes.EnviarModoAsync(dispositivo.Id, modo);
+            await CargarOrdenesAsync();
+            Snackbar.Add("Orden enviada. Se entrega con la próxima telemetría.", Severity.Info);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            enviandoOrden = false;
+        }
+    }
+
+    private async Task CargarOrdenesAsync()
+    {
+        if (dispositivo is null)
+            return;
+
+        ordenes = (await CanalOrdenes.UltimasAsync(dispositivo.Id, 10)).ToList();
+    }
+
+    private void AlCambiarOrdenes(int dispositivoId)
+    {
+        if (destruido || dispositivo is null || dispositivoId != Id)
+            return;
+
+        _ = InvokeAsync(async () =>
+        {
+            if (destruido)
+                return;
+
+            await CargarOrdenesAsync();
+            StateHasChanged();
+        });
+    }
+
     private bool EnLinea =>
         estado?.EnLinea ??
         (dispositivo?.UltimoContacto is DateTime ultima &&
@@ -364,6 +551,8 @@
         EnVivo.Cambio += AlCambiarEstado;
 
         EnVivo.EventosRegistrados += AlRegistrarEventos;
+
+        EnVivo.OrdenesCambiaron += AlCambiarOrdenes;
 
         _ = ActualizarTiempoAsync();
     }
@@ -458,6 +647,8 @@
             ActualizarGrafico();
 
             await CargarEventosAsync();
+
+            await CargarOrdenesAsync();
         }
         finally
         {
@@ -611,6 +802,8 @@
         EnVivo.Cambio -= AlCambiarEstado;
 
         EnVivo.EventosRegistrados -= AlRegistrarEventos;
+
+        EnVivo.OrdenesCambiaron -= AlCambiarOrdenes;
 
         cancelacion.Cancel();
 

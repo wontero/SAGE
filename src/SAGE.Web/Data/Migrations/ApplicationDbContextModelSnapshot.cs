@@ -480,6 +480,8 @@ namespace SAGE.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OrdenId");
+
                     b.HasIndex("DispositivoId", "BootId", "Seq")
                         .IsUnique();
 
@@ -615,6 +617,58 @@ namespace SAGE.Web.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Mediciones");
+                });
+
+            modelBuilder.Entity("SAGE.Web.Data.Orden", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("Creada")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DispositivoId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("Entregada")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Motivo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("Resuelta")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("UsuarioId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ValorJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("DispositivoId", "Estado");
+
+                    b.ToTable("Ordenes");
                 });
 
             modelBuilder.Entity("SAGE.Web.Data.ParametrosEconomicos", b =>
@@ -943,7 +997,14 @@ namespace SAGE.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SAGE.Web.Data.Orden", "Orden")
+                        .WithMany()
+                        .HasForeignKey("OrdenId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Dispositivo");
+
+                    b.Navigation("Orden");
                 });
 
             modelBuilder.Entity("SAGE.Web.Data.Factura", b =>
@@ -974,6 +1035,25 @@ namespace SAGE.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Dispositivo");
+                });
+
+            modelBuilder.Entity("SAGE.Web.Data.Orden", b =>
+                {
+                    b.HasOne("SAGE.Web.Data.Dispositivo", "Dispositivo")
+                        .WithMany()
+                        .HasForeignKey("DispositivoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SAGE.Web.Data.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Dispositivo");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("SAGE.Web.Data.ParametrosEconomicos", b =>
