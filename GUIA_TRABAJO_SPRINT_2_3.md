@@ -866,7 +866,7 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
   8. **Migración extra `OrdenEstadoConcurrencia`** (vacía en la base): `Orden.Estado` es token de concurrencia para que la telemetría y el expirador no se pisen; una orden expirada nunca se entrega (RNF08).
   9. **Ensayos:** inicio y fin con precisión de minutos (selector HH:mm); "inicio futuro" con 1 min de tolerancia; las mediciones del intervalo se filtran por `Ts` (hora del dispositivo).
 - Criterios no comprobados y por qué: ninguno.
-- Pendientes o BLOQUEOS: Matías debe marcar S23-M5 a S23-M8, escribir su entrada y subir su rama a `main`; después se une `ethan-sprint23`. En `/eventos` (S23-M5) faltan los filtros por dispositivo, tipo y fechas y la paginación de 50: no los hice porque son de Matías. Sigue Mateo (S23-M13) cuando todo esté en `main`.
+- Pendientes o BLOQUEOS: ninguno para Mateo. El 2026-11-19 se unieron a `main` S23-M5 a S23-M8 (Matías) y S23-M9 a S23-M12 (Ethan), avance directo y sin conflictos. Comprobado en `main`: `dotnet build SAGE.slnx` sin errores ni advertencias, `dotnet test` con 133 pruebas correctas, las 14 migraciones se aplican sobre una base vacía (sin cambios de modelo pendientes) y la aplicación arranca. Matías todavía debe marcar sus casillas S23-M5 a S23-M8 y escribir su entrada en la Bitácora. En `/eventos` (S23-M5) faltan los filtros por dispositivo, tipo y fechas y la paginación de 50: no los hice porque son de Matías. Sigue Mateo (S23-M13).
 - Último commit: 6c5ad44
 
 ---
