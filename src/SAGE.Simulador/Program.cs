@@ -93,6 +93,10 @@ try
 
         lock (sync)
         {
+            // Hasta tener el primer promedio de 1 s no hay nada que informar.
+            if (controlador.UltimasLecturas is null)
+                continue;
+
             conWifi = wifi;
 
             if (conWifi)

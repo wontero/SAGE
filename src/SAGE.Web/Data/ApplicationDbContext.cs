@@ -146,7 +146,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<Orden>(entity =>
         {
             // Estado y fechas tienen setter privado: EF los asigna igual.
-            entity.Property(o => o.Estado).HasMaxLength(20);
+            // Token de concurrencia: si la telemetría y el expirador cambian la
+            // misma orden a la vez, el segundo en guardar falla y reintenta
+            // (así una orden expirada nunca se entrega después, RNF08).
+            entity.Property(o => o.Estado)
+                .HasMaxLength(20)
+                .IsConcurrencyToken();
             entity.Property(o => o.Motivo).HasMaxLength(50);
 
             entity.HasIndex(o => new

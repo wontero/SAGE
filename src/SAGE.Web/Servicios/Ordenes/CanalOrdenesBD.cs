@@ -114,7 +114,16 @@ public sealed class CanalOrdenesBD : ICanalOrdenes
 
         db.Ordenes.Add(orden);
 
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // La orden anterior cambió de estado mientras tanto (se entregó o expiró).
+            throw new InvalidOperationException(
+                "La orden anterior cambió de estado. Intente de nuevo.");
+        }
 
         _enVivo.NotificarOrdenes(dispositivoId);
 

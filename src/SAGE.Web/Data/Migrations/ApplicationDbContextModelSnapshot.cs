@@ -691,6 +691,7 @@ namespace SAGE.Web.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Estado")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");

@@ -56,10 +56,13 @@ public sealed class FachadaSincronizacion
                     ct);
             }
             catch (DbUpdateException ex)
-                when (EsDuplicado(ex) && intento == 0)
+                when ((EsDuplicado(ex) || ex is DbUpdateConcurrencyException) &&
+                      intento == 0)
             {
+                // S23-M9: DbUpdateConcurrencyException = otra petición o el
+                // expirador cambió una orden a la vez; se reintenta con datos frescos.
                 _logger.LogInformation(
-                    "Registro duplicado detectado. " +
+                    "Registro duplicado o cambiado a la vez detectado. " +
                     "Reintentando sincronización.");
 
                 _db.ChangeTracker.Clear();
