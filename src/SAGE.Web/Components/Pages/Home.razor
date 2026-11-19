@@ -1,335 +1,840 @@
 ﻿@page "/"
 @attribute [Authorize]
-@using Microsoft.EntityFrameworkCore
-@using SAGE.Web.Data
-@using SAGE.Web.Servicios.Seguridad
 @implements IDisposable
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Seguridad
+
 @inject IUsuarioActual UsuarioActual
 @inject IServiceScopeFactory ScopeFactory
+@inject EstadoDispositivosEnVivo EnVivo
 
 <PageTitle>Inicio — SAGE</PageTitle>
 
-<div class="home">
-    <header class="home-intro">
+<div class="page">
+
+    <header class="page-head">
         <div class="page-head__text">
-            <p class="home-kicker">@_saludo</p>
-            <h1 class="home-title">@_nombre</h1>
-            <p class="home-meta">@_fraseRol@(_esOperador ? "" : $" · {_empresaNombre}")</p>
+            <p class="page-kicker">@SaludoLocal()</p>
+            <h1 class="page-title">@_nombre</h1>
+            <p class="page-meta">
+                @(_esOperador ? "Operador SAGE" : "Tablero energético")
+            </p>
         </div>
     </header>
 
-    <div class="home-body">
-        <div class="home-body__side">
-            @if (!_esOperador)
-            {
-                <section class="home-group" aria-labelledby="home-now-title">
-                    <h2 id="home-now-title" class="home-group__title">Ahora</h2>
-                    <div class="home-list">
-                        <div class="home-row home-row--hero">
-                            <div class="home-row__stack">
-                                <span class="home-row__label">Potencia</span>
-                                <span class="home-row__hint">
-                                    <span class="home-live-dot" aria-hidden="true"></span>
-                                    En vivo · cada 5 s
-                                </span>
-                            </div>
-                            <span class="home-row__hero">@Watts(_potenciaTotalMw) <small>W</small></span>
+    @if (_cargando)
+    {
+        <MudProgressCircular Indeterminate="true"
+                             Color="Color.Primary" />
+    }
+    else if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error">
+            @_error
+        </MudAlert>
+    }
+    else if (_esOperador)
+    {
+        <MudGrid Spacing="3">
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.subtitle2">
+                        Empresas activas
+                    </MudText>
+                    <MudText Typo="Typo.h4">
+                        @_empresasActivas
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.subtitle2">
+                        Empresas inactivas
+                    </MudText>
+                    <MudText Typo="Typo.h4">
+                        @_empresasInactivas
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.subtitle2">
+                        Administradores
+                    </MudText>
+                    <MudText Typo="Typo.h4">
+                        @_administradores
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.subtitle2">
+                        Usuarios en total
+                    </MudText>
+                    <MudText Typo="Typo.h4">
+                        @_usuarios
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+        </MudGrid>
+
+        <MudPaper Class="pa-4 mt-4">
+
+            <MudText Typo="Typo.h6">
+                Empresas y usuarios por rol
+            </MudText>
+
+            <MudTable T="FilaOperador"
+                      Items="@_filasOperador"
+                      Dense="true"
+                      Hover="true">
+
+                <HeaderContent>
+                    <MudTh>Empresa</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>Administradores</MudTh>
+                    <MudTh>Técnicos</MudTh>
+                    <MudTh>Consulta</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd>@context.Nombre</MudTd>
+                    <MudTd>
+                        @(context.Activa ? "Activa" : "Inactiva")
+                    </MudTd>
+                    <MudTd>@context.Administradores</MudTd>
+                    <MudTd>@context.Tecnicos</MudTd>
+                    <MudTd>@context.Consultas</MudTd>
+                </RowTemplate>
+
+            </MudTable>
+
+        </MudPaper>
+    }
+    else
+    {
+        <MudTabs @bind-ActivePanelIndex="_pestana"
+                 Rounded="true"
+                 ApplyEffectsToContainer="true">
+
+            <MudTabPanel Text="@_empresaNombre">
+
+                @if (_empresaActiva is not null)
+                {
+                    <MudGrid Spacing="3" Class="mt-2">
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-4">
+                                <MudText Typo="Typo.subtitle2">
+                                    Dispositivos en línea
+                                </MudText>
+                                <MudText Typo="Typo.h4">
+                                    @_empresaActiva.EnLinea /
+                                    @_empresaActiva.TotalDispositivos
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-4">
+                                <MudText Typo="Typo.subtitle2">
+                                    Potencia solar ahora
+                                </MudText>
+                                <MudText Typo="Typo.h5">
+                                    @Potencia(_empresaActiva.PSolarMw)
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-4">
+                                <MudText Typo="Typo.subtitle2">
+                                    Potencia de red ahora
+                                </MudText>
+                                <MudText Typo="Typo.h5">
+                                    @Potencia(_empresaActiva.PRedMw)
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-4">
+                                <MudText Typo="Typo.subtitle2">
+                                    Alertas abiertas
+                                </MudText>
+                                <MudText Typo="Typo.h4">
+                                    @_empresaActiva.AlertasAbiertas
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-4">
+                                <MudText Typo="Typo.subtitle2">
+                                    Consumo facturado, 12 meses
+                                </MudText>
+                                <MudText Typo="Typo.h5">
+                                    @Numero(_empresaActiva.ConsumoKwh) kWh
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-4">
+                                <MudText Typo="Typo.subtitle2">
+                                    Monto facturado, 12 meses
+                                </MudText>
+                                <MudText Typo="Typo.h5">
+                                    @Numero(_empresaActiva.MontoBs) Bs
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                    </MudGrid>
+
+                    @if (_empresaActiva.TieneEscala)
+                    {
+                        <div class="mt-3">
+                            <MudChip T="string"
+                                     Color="Color.Info"
+                                     Variant="Variant.Outlined">
+                                Potencia escalada para maqueta
+                            </MudChip>
                         </div>
-                        <div class="home-row">
-                            <span class="home-row__label">
-                                <span class="home-swatch home-swatch--solar" aria-hidden="true"></span>
-                                Solar
-                            </span>
-                            <span class="home-row__value">@Watts(_potenciaSolarMw) W</span>
-                        </div>
-                        <div class="home-row">
-                            <span class="home-row__label">
-                                <span class="home-swatch home-swatch--red" aria-hidden="true"></span>
-                                Red
-                            </span>
-                            <span class="home-row__value">@Watts(_potenciaRedMw) W</span>
-                        </div>
-                        @if (_potenciaTotalMw > 0)
+                    }
+
+                    <MudPaper Class="pa-4 mt-4">
+
+                        <MudText Typo="Typo.h6">
+                            Última medición
+                        </MudText>
+
+                        @if (_empresaActiva.Dispositivos.Count == 0)
                         {
-                            <div class="home-mix" aria-hidden="true">
-                                <span class="home-mix__solar" style="width: @Porcentaje(_potenciaSolarMw, _potenciaTotalMw)%"></span>
-                                <span class="home-mix__red" style="width: @Porcentaje(_potenciaRedMw, _potenciaTotalMw)%"></span>
-                            </div>
+                            <MudText Class="mt-3">
+                                No hay dispositivos activos.
+                            </MudText>
                         }
-                    </div>
-                </section>
+                        else
+                        {
+                            <MudTable T="TarjetaDispositivo"
+                                      Items="@_empresaActiva.Dispositivos"
+                                      Dense="true"
+                                      Hover="true">
+
+                                <HeaderContent>
+                                    <MudTh>Dispositivo</MudTh>
+                                    <MudTh>Tipo</MudTh>
+                                    <MudTh>Conexión</MudTh>
+                                    <MudTh>Fuente</MudTh>
+                                    <MudTh>Potencia</MudTh>
+                                    <MudTh>Última medición</MudTh>
+                                </HeaderContent>
+
+                                <RowTemplate>
+                                    <MudTd>@context.Nombre</MudTd>
+
+                                    <MudTd>
+                                        @(context.EsSimulado
+                                            ? "Simulado" : "Real")
+                                    </MudTd>
+
+                                    <MudTd>
+                                        <MudChip T="string"
+                                                 Size="Size.Small"
+                                                 Color="@(context.EnLinea
+                                                                                                 ? Color.Success
+                                                                                                 : Color.Error)">
+                                            @(context.EnLinea
+                                                ? "En línea"
+                                                : "Sin conexión")
+                                        </MudChip>
+                                    </MudTd>
+
+                                    <MudTd>
+                                        @Formato.Fuente(context.Fuente)
+                                    </MudTd>
+
+                                    <MudTd>
+                                        @Potencia(context.PotenciaSeleccionadaMw)
+                                    </MudTd>
+
+                                    <MudTd>
+                                        @Formato.Hace(context.UltimoContacto)
+                                    </MudTd>
+                                </RowTemplate>
+
+                            </MudTable>
+                        }
+
+                    </MudPaper>
+                }
+
+            </MudTabPanel>
+
+            @if (UsuarioActual.Empresas.Count >= 2)
+            {
+                <MudTabPanel Text="Todas mis empresas">
+
+                    <MudPaper Class="pa-4 mt-3">
+
+                        <MudText Typo="Typo.h6">
+                            Resumen de mis empresas
+                        </MudText>
+
+                        <MudTable T="ResumenEmpresa"
+                                  Items="@_resumenes"
+                                  Dense="true"
+                                  Hover="true"
+                                  Breakpoint="Breakpoint.Md">
+
+                            <HeaderContent>
+                                <MudTh>Empresa</MudTh>
+                                <MudTh>Dispositivos</MudTh>
+                                <MudTh>Solar</MudTh>
+                                <MudTh>Red</MudTh>
+                                <MudTh>Alertas</MudTh>
+                                <MudTh>Consumo 12 meses</MudTh>
+                                <MudTh>Monto 12 meses</MudTh>
+                                <MudTh>Acción</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Empresa">
+                                    @context.Nombre
+                                </MudTd>
+
+                                <MudTd DataLabel="Dispositivos">
+                                    @context.EnLinea /
+                                    @context.TotalDispositivos
+                                </MudTd>
+
+                                <MudTd DataLabel="Solar">
+                                    @Potencia(context.PSolarMw)
+                                </MudTd>
+
+                                <MudTd DataLabel="Red">
+                                    @Potencia(context.PRedMw)
+                                </MudTd>
+
+                                <MudTd DataLabel="Alertas">
+                                    @context.AlertasAbiertas
+                                </MudTd>
+
+                                <MudTd DataLabel="Consumo 12 meses">
+                                    @Numero(context.ConsumoKwh) kWh
+                                </MudTd>
+
+                                <MudTd DataLabel="Monto 12 meses">
+                                    @Numero(context.MontoBs) Bs
+                                </MudTd>
+
+                                <MudTd DataLabel="Acción">
+                                    <MudButton Size="Size.Small"
+                                               Variant="Variant.Text"
+                                               Color="Color.Primary"
+                                               OnClick="@(() => IrEmpresaAsync(context.EmpresaId))">
+                                        Seleccionar
+                                    </MudButton>
+                                </MudTd>
+                            </RowTemplate>
+
+                            @* M8: fila Total dentro de la tabla *@
+                            <FooterContent>
+                                <MudTh>
+                                    <strong>TOTAL</strong>
+                                </MudTh>
+
+                                <MudTh>
+                                    @_resumenes.Sum(r => r.EnLinea) /
+                                    @_resumenes.Sum(r => r.TotalDispositivos)
+                                </MudTh>
+
+                                <MudTh>
+                                    @Potencia(_resumenes.Sum(r => r.PSolarMw))
+                                </MudTh>
+
+                                <MudTh>
+                                    @Potencia(_resumenes.Sum(r => r.PRedMw))
+                                </MudTh>
+
+                                <MudTh>
+                                    @_resumenes.Sum(r => r.AlertasAbiertas)
+                                </MudTh>
+
+                                <MudTh>
+                                    @Numero(_resumenes.Sum(r => r.ConsumoKwh)) kWh
+                                </MudTh>
+
+                                <MudTh>
+                                    @Numero(_resumenes.Sum(r => r.MontoBs)) Bs
+                                </MudTh>
+
+                                <MudTh></MudTh>
+                            </FooterContent>
+
+                        </MudTable>
+
+                    </MudPaper>
+
+                    <MudPaper Class="pa-4 mt-4">
+
+                        <MudText Typo="Typo.h6">
+                            Potencia actual por empresa
+                        </MudText>
+
+                        @if (_resumenes.Count > 0)
+                        {
+                            <MudChart T="double"
+                                      ChartType="ChartType.Bar"
+                                      ChartSeries="@_series"
+                                      ChartLabels="@_etiquetas"
+                                      Width="100%"
+                                      Height="320px" />
+                        }
+
+                    </MudPaper>
+
+                </MudTabPanel>
             }
 
-            <section class="home-group" aria-labelledby="home-summary-title">
-                <h2 id="home-summary-title" class="home-group__title">Resumen</h2>
-                <div class="home-list">
-                    @foreach (var kpi in Kpis())
-                    {
-                        <div class="home-row">
-                            <span class="home-row__label">@kpi.Titulo</span>
-                            <span class="home-row__value">@kpi.Valor</span>
-                        </div>
-                    }
-                </div>
-            </section>
-        </div>
+        </MudTabs>
+    }
 
-        @if (!_esOperador)
-        {
-            <section class="home-group" aria-labelledby="home-devices-title">
-                <h2 id="home-devices-title" class="home-group__title">Última medición</h2>
-                <div class="home-list">
-                    @if (_dispositivos.Count == 0)
-                    {
-                        <div class="home-row home-row--muted">
-                            <span class="home-row__label">No hay dispositivos activos</span>
-                        </div>
-                    }
-                    else
-                    {
-                        @foreach (var d in _dispositivos)
-                        {
-                            var solar = d.Medicion?.EsSolar == true;
-                            <div class="home-row home-row--device">
-                                <div class="home-row__stack">
-                                    <span class="home-row__label">@d.Nombre</span>
-                                    <span class="home-row__hint">
-                                        @if (d.EsSimulado)
-                                        {
-                                            <text>Simulado</text>
-                                            @if (d.Medicion is not null)
-                                            {
-                                                <span aria-hidden="true"> · </span>
-                                            }
-                                        }
-                                        @if (d.Medicion is null)
-                                        {
-                                            <text>Sin mediciones</text>
-                                        }
-                                        else
-                                        {
-                                            <text>@(solar ? "Solar" : "Red") · @TiempoDesde(d.Medicion.TsServidor)</text>
-                                        }
-                                    </span>
-                                </div>
-                                @if (d.Medicion is not null)
-                                {
-                                    <span class="home-row__value home-row__value--emphasis">
-                                        @Watts(solar ? d.Medicion.PSolMw : d.Medicion.PRedMw) W
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="home-row__value">—</span>
-                                }
-                            </div>
-                        }
-                    }
-                    <a class="home-action" href="dispositivos">
-                        <span>Ver dispositivos</span>
-                        <span class="home-action__chev" aria-hidden="true">›</span>
-                    </a>
-                </div>
-            </section>
-        }
-    </div>
 </div>
 
 @code {
-    private readonly CancellationTokenSource _cts = new();
+
+    private readonly List<ResumenEmpresa> _resumenes = new();
+
+    private ResumenEmpresa? _empresaActiva;
+
+    private List<FilaOperador> _filasOperador = new();
+
+    private List<ChartSeries<double>> _series = new();
+
+    private string[] _etiquetas = [];
 
     private string _nombre = "usuario";
-    private string _saludo = "Hola";
-    private string _fraseRol = "";
-    private string _empresaNombre = "—";
+    private string _empresaNombre = "Mi empresa";
+
     private bool _esOperador;
-    private int? _empresaId;
+    private bool _cargando = true;
+    private bool _destruido;
+
+    private string? _error;
+
+    private int _pestana;
 
     private int _empresasActivas;
+    private int _empresasInactivas;
+    private int _administradores;
     private int _usuarios;
-    private int _dispositivosEnLinea;
-    private int _dispositivosTotal;
-    private int _facturas;
-    private decimal _potenciaSolarMw;
-    private decimal _potenciaRedMw;
-    private decimal _potenciaTotalMw;
-    private List<TarjetaDispositivo> _dispositivos = new();
 
     protected override async Task OnInitializedAsync()
     {
-        _saludo = SaludoLocal();
+        EnVivo.Cambio += AlCambiarEstado;
+        EnVivo.AlertasCambiaron += AlCambiarAlertas;
+        UsuarioActual.EmpresaCambiada += AlCambiarEmpresa;
 
         await UsuarioActual.CargarAsync();
-        _nombre = string.IsNullOrWhiteSpace(UsuarioActual.NombreCompleto) ? "usuario" : UsuarioActual.NombreCompleto;
+
+        _nombre = string.IsNullOrWhiteSpace(
+            UsuarioActual.NombreCompleto)
+            ? "usuario"
+            : UsuarioActual.NombreCompleto;
+
         _esOperador = UsuarioActual.EsOperador;
-        _empresaId = UsuarioActual.EmpresaActivaId;
-        _empresaNombre = UsuarioActual.EmpresaActiva?.Nombre ?? "—";
 
-        _fraseRol = _esOperador ? "Operador SAGE"
-            : UsuarioActual.EsAdministrador ? "Administrador"
-            : UsuarioActual.EsTecnico ? "Técnico"
-            : UsuarioActual.EsConsulta ? "Consulta"
-            : "Usuario";
-
-        await CargarResumenAsync();
+        await CargarAsync();
     }
 
-    protected override void OnAfterRender(bool firstRender)
+    private async Task CargarAsync()
     {
-        if (firstRender && !_esOperador)
+        _cargando = true;
+        _error = null;
+
+        try
         {
-            _ = RefrescarCadaCincoSegundosAsync();
+            if (_esOperador)
+            {
+                await CargarOperadorAsync();
+            }
+            else
+            {
+                await CargarEmpresasAsync();
+            }
+        }
+        catch
+        {
+            _error = "No se pudo cargar el tablero de Inicio.";
+        }
+        finally
+        {
+            _cargando = false;
         }
     }
 
-    private async Task CargarResumenAsync()
+    private async Task CargarOperadorAsync()
     {
         await using var scope = ScopeFactory.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        if (_esOperador)
-        {
-            // El Operador no ve ningún dato de energía.
-            _empresasActivas = await db.Empresas.CountAsync(e => e.Activa);
-            _usuarios = await db.Users.CountAsync();
-            return;
-        }
+        var db = scope.ServiceProvider
+            .GetRequiredService<ApplicationDbContext>();
 
-        if (_empresaId is not int empresaId)
-        {
-            return;
-        }
+        _empresasActivas =
+            await db.Empresas.CountAsync(e => e.Activa);
 
-        _facturas = await db.Facturas.CountAsync(f => f.EmpresaId == empresaId);
-        await CargarDispositivosAsync(db, empresaId);
-    }
+        _empresasInactivas =
+            await db.Empresas.CountAsync(e => !e.Activa);
 
-    private async Task CargarDispositivosAsync(ApplicationDbContext db, int empresaId)
-    {
-        var consulta = db.Dispositivos.AsNoTracking()
-            .Where(d => d.Activo && d.EmpresaId == empresaId);
+        _usuarios = await db.Users.CountAsync();
 
-        var limite = DateTime.UtcNow.AddSeconds(-30);
-        _dispositivosTotal = await consulta.CountAsync();
-        _dispositivosEnLinea = await consulta.CountAsync(d => d.UltimoContacto != null && d.UltimoContacto >= limite);
+        var administradores = await db.UserRoles
+            .Join(
+                db.Roles,
+                ur => ur.RoleId,
+                r => r.Id,
+                (ur, r) => new { ur.UserId, r.Name })
+            .Where(x => x.Name == "Administrador")
+            .Select(x => x.UserId)
+            .Distinct()
+            .CountAsync();
 
-        var lista = await consulta
-            .OrderBy(d => d.Nombre)
-            .Take(20)
-            .Select(d => new TarjetaDispositivo
+        _administradores = administradores;
+
+        var empresas = await db.Empresas
+            .AsNoTracking()
+            .OrderBy(e => e.Nombre)
+            .Select(e => new
             {
-                Id = d.Id,
-                Nombre = d.Nombre,
-                EsSimulado = d.EsSimulado
+                e.Id,
+                e.Nombre,
+                e.Activa
             })
             .ToListAsync();
 
-        foreach (var d in lista)
+        _filasOperador.Clear();
+
+        foreach (var empresa in empresas)
         {
-            d.Medicion = await db.Mediciones.AsNoTracking()
-                .Where(m => m.DispositivoId == d.Id)
-                .OrderByDescending(m => m.Id)
-                .Select(m => new UltimaMedicion
-                {
-                    PSolMw = m.PSolMw,
-                    PRedMw = m.PRedMw,
-                    EsSolar = m.FuenteSeleccionada == "SOLAR",
-                    TsServidor = m.TsServidor
-                })
-                .FirstOrDefaultAsync();
-        }
+            var usuariosEmpresa = db.UsuarioEmpresas
+                .Where(ue => ue.EmpresaId == empresa.Id);
 
-        _dispositivos = lista;
-        RecalcularPotencia();
-    }
+            var administradoresEmpresa = await usuariosEmpresa
+                .CountAsync(ue =>
+                    db.UserRoles.Any(ur =>
+                        ur.UserId == ue.UsuarioId &&
+                        db.Roles.Any(r =>
+                            r.Id == ur.RoleId &&
+                            r.Name == "Administrador")));
 
-    private void RecalcularPotencia()
-    {
-        _potenciaSolarMw = 0;
-        _potenciaRedMw = 0;
-        foreach (var d in _dispositivos)
-        {
-            if (d.Medicion is null) continue;
-            _potenciaSolarMw += d.Medicion.PSolMw;
-            _potenciaRedMw += d.Medicion.PRedMw;
-        }
+            var tecnicosEmpresa = await usuariosEmpresa
+                .CountAsync(ue =>
+                    db.UserRoles.Any(ur =>
+                        ur.UserId == ue.UsuarioId &&
+                        db.Roles.Any(r =>
+                            r.Id == ur.RoleId &&
+                            r.Name == "Tecnico")));
 
-        _potenciaTotalMw = _potenciaSolarMw + _potenciaRedMw;
-    }
+            var consultasEmpresa = await usuariosEmpresa
+                .CountAsync(ue =>
+                    db.UserRoles.Any(ur =>
+                        ur.UserId == ue.UsuarioId &&
+                        db.Roles.Any(r =>
+                            r.Id == ur.RoleId &&
+                            r.Name == "Consulta")));
 
-    private async Task RefrescarCadaCincoSegundosAsync()
-    {
-        using var temporizador = new PeriodicTimer(TimeSpan.FromSeconds(5));
-        try
-        {
-            while (await temporizador.WaitForNextTickAsync(_cts.Token))
+            _filasOperador.Add(new FilaOperador
             {
-                if (_empresaId is not int empresaId)
+                Nombre = empresa.Nombre,
+                Activa = empresa.Activa,
+                Administradores = administradoresEmpresa,
+                Tecnicos = tecnicosEmpresa,
+                Consultas = consultasEmpresa
+            });
+        }
+    }
+
+    private async Task CargarEmpresasAsync()
+    {
+        _resumenes.Clear();
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+
+        var db = scope.ServiceProvider
+            .GetRequiredService<ApplicationDbContext>();
+
+        var ahora = DateTime.UtcNow;
+
+        var mesActual = ahora.Year * 12 + ahora.Month;
+        var primerMes = mesActual - 11;
+
+        // Solo empresas asignadas al usuario.
+        foreach (var empresa in UsuarioActual.Empresas)
+        {
+            if (!UsuarioActual.PuedeVerEmpresa(empresa.Id))
+                continue;
+
+            var resumen = new ResumenEmpresa
+            {
+                EmpresaId = empresa.Id,
+                Nombre = empresa.Nombre
+            };
+
+            var dispositivos = await db.Dispositivos
+                .AsNoTracking()
+                .Where(d =>
+                    d.EmpresaId == empresa.Id &&
+                    d.Activo)
+                .OrderBy(d => d.Nombre)
+                .ToListAsync();
+
+            foreach (var dispositivo in dispositivos)
+            {
+                var tarjeta = new TarjetaDispositivo
                 {
-                    continue;
+                    Id = dispositivo.Id,
+                    Nombre = dispositivo.Nombre,
+                    EsSimulado = dispositivo.EsSimulado,
+                    FactorEscala = dispositivo.FactorEscala,
+                    UltimoContacto = dispositivo.UltimoContacto
+                };
+
+                resumen.Dispositivos.Add(tarjeta);
+
+                var ultima = await db.Mediciones
+                    .AsNoTracking()
+                    .Where(m =>
+                        m.DispositivoId == dispositivo.Id)
+                    .OrderByDescending(m => m.TsServidor)
+                    .FirstOrDefaultAsync();
+
+                if (ultima is not null)
+                {
+                    tarjeta.Actualizar(
+                        EstadoDispositivo.Desde(
+                            ultima,
+                            empresa.Id,
+                            dispositivo.FactorEscala));
                 }
 
-                await using var scope = ScopeFactory.CreateAsyncScope();
-                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                await CargarDispositivosAsync(db, empresaId);
-                await InvokeAsync(StateHasChanged);
+                tarjeta.EnLinea =
+                    dispositivo.UltimoContacto.HasValue &&
+                    ahora - dispositivo.UltimoContacto.Value
+                        <= TimeSpan.FromSeconds(30);
+
+                var vivo = EnVivo.Obtener(dispositivo.Id);
+
+                if (vivo is not null &&
+                    vivo.EmpresaId == empresa.Id)
+                {
+                    tarjeta.Actualizar(vivo);
+                }
             }
+
+            resumen.AlertasAbiertas = await db.Alertas
+                .AsNoTracking()
+                .CountAsync(a =>
+                    a.Dispositivo.EmpresaId == empresa.Id &&
+                    a.Activa &&
+                    a.Fin == null);
+
+            // Últimos doce meses, por empresa.
+            var facturas = await db.Facturas
+                .AsNoTracking()
+                .Where(f =>
+                    f.EmpresaId == empresa.Id &&
+                    f.Anio * 12 + f.Mes >= primerMes &&
+                    f.Anio * 12 + f.Mes <= mesActual)
+                .Select(f => new
+                {
+                    f.ConsumoKwh,
+                    f.MontoBs
+                })
+                .ToListAsync();
+
+            resumen.ConsumoKwh =
+                facturas.Sum(f => f.ConsumoKwh);
+
+            resumen.MontoBs =
+                facturas.Sum(f => f.MontoBs);
+
+            resumen.Recalcular();
+
+            _resumenes.Add(resumen);
         }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-        catch (Exception)
-        {
-        }
+
+        SincronizarEmpresaActiva();
+        ActualizarGrafico();
     }
 
-    public void Dispose()
+    private void SincronizarEmpresaActiva()
     {
-        _cts.Cancel();
-        _cts.Dispose();
+        var id = UsuarioActual.EmpresaActivaId;
+
+        _empresaActiva = _resumenes
+            .FirstOrDefault(r => r.EmpresaId == id);
+
+        _empresaNombre =
+            _empresaActiva?.Nombre ?? "Mi empresa";
     }
 
-    private IEnumerable<KpiItem> Kpis()
+    private void AlCambiarEstado(EstadoDispositivo estado)
     {
-        if (_esOperador)
+        if (_destruido || _esOperador)
+            return;
+
+        // En consolidado se aceptan las empresas del usuario.
+        if (!UsuarioActual.PuedeVerEmpresa(estado.EmpresaId))
+            return;
+
+        _ = InvokeAsync(() =>
         {
-            yield return new("Empresas activas", _empresasActivas.ToString());
-            yield return new("Usuarios", _usuarios.ToString());
-            yield break;
-        }
+            if (_destruido)
+                return;
 
-        yield return new("Dispositivos en línea", $"{_dispositivosEnLinea} / {_dispositivosTotal}");
-        yield return new("Facturas registradas", _facturas.ToString());
+            var resumen = _resumenes
+                .FirstOrDefault(r =>
+                    r.EmpresaId == estado.EmpresaId);
+
+            var dispositivo = resumen?.Dispositivos
+                .FirstOrDefault(d =>
+                    d.Id == estado.DispositivoId);
+
+            if (resumen is null || dispositivo is null)
+                return;
+
+            dispositivo.Actualizar(estado);
+
+            resumen.Recalcular();
+            ActualizarGrafico();
+
+            StateHasChanged();
+        });
     }
 
-    private static string Watts(decimal mw) => (mw / 1000m).ToString("N2", FacturaReglas.Cultura);
-
-    private static double Porcentaje(decimal parte, decimal total)
+    private void AlCambiarAlertas(int empresaId)
     {
-        if (total <= 0) return 0;
-        return Math.Round((double)(parte / total * 100m), 1);
+        if (_destruido || _esOperador ||
+            !UsuarioActual.PuedeVerEmpresa(empresaId))
+            return;
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_destruido)
+                return;
+
+            try
+            {
+                await using var scope =
+                    ScopeFactory.CreateAsyncScope();
+
+                var db = scope.ServiceProvider
+                    .GetRequiredService<ApplicationDbContext>();
+
+                var cantidad = await db.Alertas
+                    .AsNoTracking()
+                    .CountAsync(a =>
+                        a.Dispositivo.EmpresaId == empresaId &&
+                        a.Activa &&
+                        a.Fin == null);
+
+                var resumen = _resumenes
+                    .FirstOrDefault(r =>
+                        r.EmpresaId == empresaId);
+
+                if (resumen is not null)
+                {
+                    resumen.AlertasAbiertas = cantidad;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Un error de lectura no interrumpe la telemetría.
+            }
+        });
     }
 
-    private static string TiempoDesde(DateTime utc)
+    private void AlCambiarEmpresa()
     {
-        var segundos = Math.Max(0, (DateTime.UtcNow - utc).TotalSeconds);
+        if (_destruido)
+            return;
 
-        if (segundos < 60)
-            return $"hace {(int)segundos} s";
-        if (segundos < 3600)
-            return $"hace {(int)(segundos / 60)} min";
-        if (segundos < 86400)
-            return $"hace {(int)(segundos / 3600)} h";
-        return $"hace {(int)(segundos / 86400)} días";
+        _ = InvokeAsync(() =>
+        {
+            _pestana = 0;
+            SincronizarEmpresaActiva();
+            StateHasChanged();
+        });
+    }
+
+    private async Task IrEmpresaAsync(int empresaId)
+    {
+        if (!UsuarioActual.PuedeVerEmpresa(empresaId))
+            return;
+
+        await UsuarioActual.SeleccionarEmpresaAsync(empresaId);
+
+        _pestana = 0;
+        SincronizarEmpresaActiva();
+    }
+
+    private void ActualizarGrafico()
+    {
+        _etiquetas = _resumenes
+            .Select(r => r.Nombre)
+            .ToArray();
+
+        _series = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double>
+            {
+                Name = "Solar (W)",
+                Data = _resumenes
+                    .Select(r => (double)(r.PSolarMw / 1000m))
+                    .ToArray()
+            },
+            new ChartSeries<double>
+            {
+                Name = "Red (W)",
+                Data = _resumenes
+                    .Select(r => (double)(r.PRedMw / 1000m))
+                    .ToArray()
+            }
+        };
+    }
+
+    private static string Potencia(decimal mw)
+    {
+        return Formato.Potencia(mw);
+    }
+
+    private static string Numero(decimal valor)
+    {
+        return valor.ToString(
+            "N2",
+            System.Globalization.CultureInfo.GetCultureInfo("es-BO"));
     }
 
     private static string SaludoLocal()
     {
-        var tz = ResolveTz();
-        var hora = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Hour;
+        var hora = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.UtcNow,
+            ObtenerZonaBolivia()).Hour;
+
         return hora switch
         {
             >= 5 and < 12 => "Buenos días",
@@ -338,33 +843,110 @@
         };
     }
 
-    private static TimeZoneInfo ResolveTz()
+    private static TimeZoneInfo ObtenerZonaBolivia()
     {
-        foreach (var id in new[] { "America/La_Paz", "SA Western Standard Time" })
+        foreach (var id in new[]
         {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
-            catch (TimeZoneNotFoundException) { }
-            catch (InvalidTimeZoneException) { }
+            "America/La_Paz",
+            "SA Western Standard Time"
+        })
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(id);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+            }
+            catch (InvalidTimeZoneException)
+            {
+            }
         }
 
         return TimeZoneInfo.Local;
     }
 
-    private sealed record KpiItem(string Titulo, string Valor);
+    public void Dispose()
+    {
+        _destruido = true;
+
+        EnVivo.Cambio -= AlCambiarEstado;
+        EnVivo.AlertasCambiaron -= AlCambiarAlertas;
+        UsuarioActual.EmpresaCambiada -= AlCambiarEmpresa;
+    }
+
+    private sealed class FilaOperador
+    {
+        public string Nombre { get; set; } = "";
+        public bool Activa { get; set; }
+        public int Administradores { get; set; }
+        public int Tecnicos { get; set; }
+        public int Consultas { get; set; }
+    }
+
+    private sealed class ResumenEmpresa
+    {
+        public int EmpresaId { get; set; }
+        public string Nombre { get; set; } = "";
+
+        public int TotalDispositivos { get; set; }
+        public int EnLinea { get; set; }
+
+        public decimal PSolarMw { get; set; }
+        public decimal PRedMw { get; set; }
+
+        public int AlertasAbiertas { get; set; }
+        public decimal ConsumoKwh { get; set; }
+        public decimal MontoBs { get; set; }
+
+        public bool TieneEscala { get; set; }
+
+        public List<TarjetaDispositivo> Dispositivos { get; } = new();
+
+        public void Recalcular()
+        {
+            TotalDispositivos = Dispositivos.Count;
+            EnLinea = Dispositivos.Count(d => d.EnLinea);
+
+            PSolarMw = Dispositivos
+                .Where(d => d.EnLinea)
+                .Sum(d => d.PSolMw * d.FactorEscala);
+
+            PRedMw = Dispositivos
+                .Where(d => d.EnLinea)
+                .Sum(d => d.PRedMw * d.FactorEscala);
+
+            TieneEscala = Dispositivos
+                .Any(d => d.FactorEscala != 1m);
+        }
+    }
 
     private sealed class TarjetaDispositivo
     {
         public int Id { get; set; }
-        public string Nombre { get; set; } = string.Empty;
+        public string Nombre { get; set; } = "";
         public bool EsSimulado { get; set; }
-        public UltimaMedicion? Medicion { get; set; }
-    }
+        public decimal FactorEscala { get; set; } = 1m;
 
-    private sealed class UltimaMedicion
-    {
+        public bool EnLinea { get; set; }
+        public DateTime? UltimoContacto { get; set; }
+
+        public string Fuente { get; set; } = "";
+
         public decimal PSolMw { get; set; }
         public decimal PRedMw { get; set; }
-        public bool EsSolar { get; set; }
-        public DateTime TsServidor { get; set; }
+
+        public decimal PotenciaSeleccionadaMw =>
+            (Fuente == "SOLAR" ? PSolMw : PRedMw) *
+            FactorEscala;
+
+        public void Actualizar(EstadoDispositivo estado)
+        {
+            EnLinea = estado.EnLinea;
+            UltimoContacto = estado.TsServidor;
+            Fuente = estado.FuenteSeleccionada;
+            PSolMw = estado.PSolMw;
+            PRedMw = estado.PRedMw;
+        }
     }
 }

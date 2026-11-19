@@ -1,4 +1,3 @@
-
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -19,17 +18,27 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     // S23-M5: Registro de eventos de dispositivos
     public DbSet<Evento> Eventos => Set<Evento>();
 
+    // S23-M7: Alertas automáticas
+    public DbSet<Alerta> Alertas => Set<Alerta>();
+
     public DbSet<Factura> Facturas => Set<Factura>();
 
-    public DbSet<ParametrosEconomicos> ParametrosEconomicos => Set<ParametrosEconomicos>();
+    public DbSet<ParametrosEconomicos> ParametrosEconomicos
+        => Set<ParametrosEconomicos>();
 
-    public DbSet<TarifaEmpresa> TarifasEmpresa => Set<TarifaEmpresa>();
+    public DbSet<TarifaEmpresa> TarifasEmpresa
+        => Set<TarifaEmpresa>();
 
-    public DbSet<Simulacion> Simulaciones => Set<Simulacion>();
+    public DbSet<Simulacion> Simulaciones
+        => Set<Simulacion>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        // =====================================================
+        // EMPRESAS
+        // =====================================================
 
         builder.Entity<Empresa>(entity =>
         {
@@ -37,9 +46,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.Nit).IsUnique();
         });
 
+        // =====================================================
+        // USUARIOS Y EMPRESAS
+        // =====================================================
+
         builder.Entity<UsuarioEmpresa>(entity =>
         {
-            entity.HasKey(ue => new { ue.UsuarioId, ue.EmpresaId });
+            entity.HasKey(ue => new
+            {
+                ue.UsuarioId,
+                ue.EmpresaId
+            });
 
             entity.HasOne(ue => ue.Usuario)
                 .WithMany(u => u.Empresas)
@@ -52,6 +69,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // =====================================================
+        // DISPOSITIVOS
+        // =====================================================
+
         builder.Entity<Dispositivo>(entity =>
         {
             entity.HasIndex(d => d.TokenHash).IsUnique();
@@ -60,7 +81,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany()
                 .HasForeignKey(d => d.EmpresaId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // S23-M6: Factor de escala de la maqueta.
+            // Solo multiplica potencia y energía en pantalla.
+            entity.Property(d => d.FactorEscala)
+                .HasPrecision(10, 2)
+                .HasDefaultValue(1m);
         });
+
+        // =====================================================
+        // MEDICIONES
+        // =====================================================
 
         builder.Entity<Medicion>(entity =>
         {
@@ -77,7 +108,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // S23-M5: Configuración de la entidad Evento
+        // =====================================================
+        // S23-M5: EVENTOS DE DISPOSITIVOS
+        // =====================================================
+
         builder.Entity<Evento>(entity =>
         {
             entity.HasIndex(e => new
@@ -92,6 +126,61 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasForeignKey(e => e.DispositivoId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+
+        // =====================================================
+        // S23-M7: ALERTAS AUTOMÁTICAS
+        // =====================================================
+
+        builder.Entity<Alerta>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+
+            entity.Property(a => a.Tipo)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            // Campos nuevos de la guía oficial.
+            entity.Property(a => a.Inicio)
+                .HasColumnType("datetime2");
+
+            entity.Property(a => a.Fin)
+                .HasColumnType("datetime2");
+
+            // Relación opcional con el evento
+            // que originó la alerta.
+            entity.HasOne(a => a.Evento)
+                .WithMany()
+                .HasForeignKey(a => a.EventoId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Compatibilidad temporal con la
+            // implementación anterior.
+            entity.Property(a => a.Mensaje)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(a => a.FechaCreacion)
+                .IsRequired();
+
+            // Una sola alerta activa por tipo
+            // para cada dispositivo.
+            entity.HasIndex(a => new
+            {
+                a.DispositivoId,
+                a.Tipo
+            })
+            .IsUnique()
+            .HasFilter("[Activa] = 1");
+
+            entity.HasOne(a => a.Dispositivo)
+                .WithMany()
+                .HasForeignKey(a => a.DispositivoId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // =====================================================
+        // FACTURAS
+        // =====================================================
 
         builder.Entity<Factura>(entity =>
         {
@@ -117,6 +206,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // =====================================================
+        // PARÁMETROS ECONÓMICOS
+        // =====================================================
+
         builder.Entity<ParametrosEconomicos>(entity =>
         {
             entity.HasIndex(p => p.Version).IsUnique();
@@ -139,6 +232,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // =====================================================
+        // TARIFAS POR EMPRESA
+        // =====================================================
+
         builder.Entity<TarifaEmpresa>(entity =>
         {
             entity.Property(t => t.TarifaBsKwh)
@@ -155,6 +252,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // =====================================================
+        // SIMULACIONES
+        // =====================================================
+
         builder.Entity<Simulacion>(entity =>
         {
             entity.Property(s => s.TarifaUsadaBsKwh)
@@ -170,6 +271,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasPrecision(18, 4);
 
             entity.Property(s => s.InversionSolarBs)
+                .HasPrecision(18, 4);
+
+            entity.Property(s => s.KwpMixto)
                 .HasPrecision(18, 4);
 
             entity.Property(s => s.InversionMixtoBs)

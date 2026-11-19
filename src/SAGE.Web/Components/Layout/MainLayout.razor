@@ -1,7 +1,11 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
+
+@using SAGE.Web.Components.Shared
+@using SAGE.Web.Servicios.Seguridad
+
 @inject NavigationManager NavigationManager
-@inject SAGE.Web.Servicios.Seguridad.IUsuarioActual UsuarioActual
+@inject IUsuarioActual UsuarioActual
 
 <MudThemeProvider Theme="_temaSage" />
 <MudPopoverProvider />
@@ -9,22 +13,46 @@
 <MudSnackbarProvider />
 
 <MudLayout Class="sage-shell">
-    <MudAppBar Elevation="0" Dense="true" Class="sage-toolbar" Color="Color.Transparent">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" aria-label="Menú" />
-        <a class="sage-toolbar__brand" href="/" aria-label="SAGE inicio">
-            <SageMark Size="34" Class="sage-toolbar__mark" />
-            <span class="sage-toolbar__word">SAGE</span>
+
+    <MudAppBar Elevation="0"
+               Dense="true"
+               Class="sage-toolbar"
+               Color="Color.Transparent">
+
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="ToggleDrawer"
+                       aria-label="Menú" />
+
+        <a class="sage-toolbar__brand"
+           href="/"
+           aria-label="SAGE inicio">
+
+            <SageMark Size="34"
+                      Class="sage-toolbar__mark" />
+
+            <span class="sage-toolbar__word">
+                SAGE
+            </span>
         </a>
+
         <MudSpacer />
+
         <AuthorizeView>
-            <Authorized>
+            <Authorized Context="usuarioContext">
+
                 @if (UsuarioActual.EsOperador)
                 {
-                    <span class="sage-toolbar__chip">Operador SAGE</span>
+                    <span class="sage-toolbar__chip">
+                        Operador SAGE
+                    </span>
                 }
                 else if (UsuarioActual.Empresas.Count == 1)
                 {
-                    <span class="sage-toolbar__chip">@UsuarioActual.Empresas[0].Nombre</span>
+                    <span class="sage-toolbar__chip">
+                        @UsuarioActual.Empresas[0].Nombre
+                    </span>
                 }
                 else if (UsuarioActual.Empresas.Count > 1)
                 {
@@ -38,40 +66,93 @@
                                AnchorOrigin="Origin.BottomCenter"
                                TransformOrigin="Origin.TopCenter"
                                aria-label="Empresa activa">
-                        @foreach (var e in UsuarioActual.Empresas)
+
+                        @foreach (var empresa in UsuarioActual.Empresas)
                         {
-                            <MudSelectItem T="int" Value="@e.Id">@e.Nombre</MudSelectItem>
+                            <MudSelectItem T="int"
+                                           Value="@empresa.Id">
+                                @empresa.Nombre
+                            </MudSelectItem>
                         }
+
                     </MudSelect>
                 }
-                <span class="sage-toolbar__user">@context.User.Identity?.Name</span>
-                <form action="Account/Logout" method="post" class="sage-toolbar__logout">
+
+                @* =========================================
+                   S23-M7: INDICADOR DE ALERTAS EN VIVO
+                   ========================================= *@
+
+                <AuthorizeView Roles="Administrador,Tecnico,Consulta">
+                    <Authorized Context="alertasContext">
+                        <IndicadorAlertas />
+                    </Authorized>
+                </AuthorizeView>
+
+                <span class="sage-toolbar__user">
+                    @usuarioContext.User.Identity?.Name
+                </span>
+
+                <form action="Account/Logout"
+                      method="post"
+                      class="sage-toolbar__logout">
+
                     <AntiforgeryToken />
-                    <input type="hidden" name="ReturnUrl" value="@_currentUrl" />
-                    <button type="submit" class="sage-toolbar__btn">Cerrar sesión</button>
+
+                    <input type="hidden"
+                           name="ReturnUrl"
+                           value="@_currentUrl" />
+
+                    <button type="submit"
+                            class="sage-toolbar__btn">
+                        Cerrar sesión
+                    </button>
                 </form>
+
             </Authorized>
         </AuthorizeView>
+
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Class="sage-sidebar" Variant="DrawerVariant.Persistent">
+    <MudDrawer @bind-Open="_drawerOpen"
+               ClipMode="DrawerClipMode.Always"
+               Elevation="0"
+               Class="sage-sidebar"
+               Variant="DrawerVariant.Persistent">
+
         <div class="sage-sidebar__head">
-            <a class="sage-sidebar__brand" href="/" aria-label="SAGE">
+
+            <a class="sage-sidebar__brand"
+               href="/"
+               aria-label="SAGE">
+
                 <SageMark Size="40" />
+
                 <span>
-                    <span class="sage-sidebar__word">SAGE</span>
-                    <span class="sage-sidebar__caption">Menú</span>
+                    <span class="sage-sidebar__word">
+                        SAGE
+                    </span>
+
+                    <span class="sage-sidebar__caption">
+                        Menú
+                    </span>
                 </span>
+
             </a>
+
         </div>
+
         <NavMenu />
+
     </MudDrawer>
 
     <MudMainContent Class="sage-main">
+
         <div @key="UsuarioActual.EmpresaActivaId">
             @Body
         </div>
+
     </MudMainContent>
+
 </MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
@@ -82,7 +163,12 @@
 
 @code {
     private bool _drawerOpen = true;
+
     private string? _currentUrl;
+
+    // =====================================================
+    // TEMA VISUAL SAGE
+    // =====================================================
 
     private readonly MudTheme _temaSage = new()
     {
@@ -98,47 +184,95 @@
             TextPrimary = "#1C2430",
             TextSecondary = "#5B6775"
         },
+
         Typography = new Typography
         {
             Default = new DefaultTypography
             {
-                FontFamily = ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI", "system-ui", "sans-serif"]
+                FontFamily =
+                [
+                    "-apple-system",
+                    "BlinkMacSystemFont",
+                    "SF Pro Text",
+                    "Segoe UI",
+                    "system-ui",
+                    "sans-serif"
+                ]
             }
         }
     };
 
+    // =====================================================
+    // INICIALIZACIÓN
+    // =====================================================
+
     protected override async Task OnInitializedAsync()
     {
-        _currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        _currentUrl = NavigationManager.ToBaseRelativePath(
+            NavigationManager.Uri);
+
         NavigationManager.LocationChanged += OnLocationChanged;
+
         UsuarioActual.EmpresaCambiada += OnEmpresaCambiada;
 
         await UsuarioActual.CargarAsync();
 
         if (UsuarioActual.DebeCambiarContrasena)
         {
-            NavigationManager.NavigateTo("/Account/CambiarContrasenaInicial", forceLoad: true);
+            NavigationManager.NavigateTo(
+                "/Account/CambiarContrasenaInicial",
+                forceLoad: true);
+
+            return;
         }
     }
 
+    // =====================================================
+    // CAMBIAR EMPRESA
+    // =====================================================
+
     private async Task CambiarEmpresa(int empresaId)
     {
-        await UsuarioActual.SeleccionarEmpresaAsync(empresaId);
+        await UsuarioActual.SeleccionarEmpresaAsync(
+            empresaId);
     }
 
-    private void OnEmpresaCambiada() => InvokeAsync(StateHasChanged);
-
-    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
-
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    private void OnEmpresaCambiada()
     {
-        _currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
-        StateHasChanged();
+        _ = InvokeAsync(StateHasChanged);
     }
+
+    // =====================================================
+    // MENÚ LATERAL
+    // =====================================================
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    // =====================================================
+    // CAMBIO DE RUTA
+    // =====================================================
+
+    private void OnLocationChanged(
+        object? sender,
+        LocationChangedEventArgs e)
+    {
+        _currentUrl = NavigationManager.ToBaseRelativePath(
+            e.Location);
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    // =====================================================
+    // LIBERAR SUSCRIPCIONES
+    // =====================================================
 
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+
         UsuarioActual.EmpresaCambiada -= OnEmpresaCambiada;
     }
 }

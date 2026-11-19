@@ -1,52 +1,64 @@
 ﻿@page "/mediciones"
 @attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@implements IDisposable
 
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.EnVivo
 @using SAGE.Web.Servicios.Seguridad
 
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
+@inject EstadoDispositivosEnVivo EnVivo
 
 <PageTitle>Mediciones — SAGE</PageTitle>
 
 <div class="page">
     <header class="page-head">
         <div class="page-head__text">
-            <p class="page-kicker">Telemetría</p>
+            <p class="page-kicker">Telemetría en tiempo real</p>
             <h1 class="page-title">Mediciones</h1>
-            <p class="page-meta">Últimas 50 mediciones registradas</p>
+            <p class="page-meta">
+                Últimas 200 mediciones de la empresa activa.
+                Actualización automática.
+            </p>
         </div>
     </header>
 
     @if (cargando)
     {
         <div class="page-panel">
-            <div class="home-row home-row--muted">
-                <span class="home-row__label">Cargando mediciones…</span>
-            </div>
+            <MudProgressCircular Indeterminate="true"
+                                 Color="Color.Primary" />
         </div>
     }
-    else if (error != null)
+    else if (error is not null)
     {
-        <MudAlert Severity="Severity.Error">@error</MudAlert>
+        <MudAlert Severity="Severity.Error">
+            @error
+        </MudAlert>
     }
     else if (mediciones.Count == 0)
     {
-        <div class="home-list">
-            <div class="home-row home-row--muted">
-                <span class="home-row__label">No hay mediciones registradas</span>
-            </div>
-        </div>
+        <MudAlert Severity="Severity.Info">
+            No hay mediciones registradas.
+        </MudAlert>
     }
     else
     {
         <div class="page-panel">
-            <MudTable Items="mediciones" Dense="true" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0">
+            <MudTable T="Medicion"
+                      Items="@mediciones"
+                      Dense="true"
+                      Hover="true"
+                      Breakpoint="Breakpoint.Md"
+                      Elevation="0">
+
                 <HeaderContent>
                     <MudTh>Dispositivo</MudTh>
-                    <MudTh>Servidor (UTC)</MudTh>
+                    <MudTh>Servidor (Bolivia)</MudTh>
                     <MudTh>Boot</MudTh>
                     <MudTh>Seq</MudTh>
                     <MudTh>V solar</MudTh>
@@ -56,18 +68,53 @@
                     <MudTh>Estado</MudTh>
                     <MudTh>Fuente</MudTh>
                 </HeaderContent>
+
                 <RowTemplate>
-                    <MudTd DataLabel="Dispositivo">@context.DispositivoId</MudTd>
-                    <MudTd DataLabel="Servidor (UTC)">@context.TsServidor.ToString("dd/MM/yyyy HH:mm:ss")</MudTd>
-                    <MudTd DataLabel="Boot">@context.BootId</MudTd>
-                    <MudTd DataLabel="Seq">@context.Seq</MudTd>
-                    <MudTd DataLabel="V solar">@context.VSol V</MudTd>
-                    <MudTd DataLabel="I solar">@context.ISolMa mA</MudTd>
-                    <MudTd DataLabel="P solar">@context.PSolMw mW</MudTd>
-                    <MudTd DataLabel="Modo">@context.Modo</MudTd>
-                    <MudTd DataLabel="Estado">@context.Estado</MudTd>
-                    <MudTd DataLabel="Fuente">@context.FuenteSeleccionada</MudTd>
+                    <MudTd DataLabel="Dispositivo">
+                        @context.DispositivoId
+                    </MudTd>
+
+                    <MudTd DataLabel="Servidor (Bolivia)">
+                        @Formato.HoraLocal(context.TsServidor)
+                    </MudTd>
+
+                    <MudTd DataLabel="Boot">
+                        @context.BootId
+                    </MudTd>
+
+                    <MudTd DataLabel="Seq">
+                        @context.Seq
+                    </MudTd>
+
+                    <MudTd DataLabel="V solar">
+                        @Formato.Tension(context.VSol)
+                    </MudTd>
+
+                    <MudTd DataLabel="I solar">
+                        @Formato.Corriente(context.ISolMa)
+                    </MudTd>
+
+                    <MudTd DataLabel="P solar">
+                        @Formato.Potencia(context.PSolMw)
+                    </MudTd>
+
+                    <MudTd DataLabel="Modo">
+                        @context.Modo
+                    </MudTd>
+
+                    <MudTd DataLabel="Estado">
+                        @context.Estado
+                    </MudTd>
+
+                    <MudTd DataLabel="Fuente">
+                        @Formato.Fuente(context.FuenteSeleccionada)
+                    </MudTd>
                 </RowTemplate>
+
+                <PagerContent>
+                    <MudTablePager RowsPerPageString="Filas por página" />
+                </PagerContent>
+
             </MudTable>
         </div>
     }
@@ -75,8 +122,19 @@
 
 @code {
     private List<Medicion> mediciones = new();
+
     private bool cargando = true;
+    private bool destruido;
     private string? error;
+    private int? empresaId;
+
+    private readonly SemaphoreSlim bloqueo = new(1, 1);
+
+    protected override void OnInitialized()
+    {
+        // Patrón Observer: observar nuevas mediciones.
+        EnVivo.Cambio += AlCambiarEstado;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -84,23 +142,29 @@
         {
             await UsuarioActual.CargarAsync();
 
-            if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            empresaId = UsuarioActual.EmpresaActivaId;
+
+            if (empresaId is not int empresa)
             {
                 error = "No tenés una empresa activa.";
                 return;
             }
 
-            await using var scope = ScopeFactory.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await using var scope =
+                ScopeFactory.CreateAsyncScope();
 
-            // El filtro por empresa activa se aplica siempre en la consulta (RNF01).
-            mediciones = await db.Mediciones.AsNoTracking()
-                .Where(m => m.Dispositivo.EmpresaId == empresaId)
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            mediciones = await db.Mediciones
+                .AsNoTracking()
+                .Where(m => m.Dispositivo.EmpresaId == empresa)
                 .OrderByDescending(m => m.TsServidor)
-                .Take(50)
+                .ThenByDescending(m => m.Id)
+                .Take(200)
                 .ToListAsync();
         }
-        catch (Exception)
+        catch
         {
             error = "No se pudieron cargar las mediciones.";
         }
@@ -108,5 +172,97 @@
         {
             cargando = false;
         }
+    }
+
+    private void AlCambiarEstado(EstadoDispositivo estado)
+    {
+        if (destruido ||
+            empresaId is not int empresa ||
+            estado.EmpresaId != empresa ||
+            UsuarioActual.EmpresaActivaId != empresa ||
+            !estado.EnLinea)
+        {
+            return;
+        }
+
+        // La notificación llega después de guardar en SQL.
+        // Consultamos únicamente cuando llega una medición.
+        // No existe polling periódico.
+        _ = InvokeAsync(async () =>
+        {
+            if (destruido)
+                return;
+
+            await CargarNuevaMedicionAsync(estado);
+        });
+    }
+
+    private async Task CargarNuevaMedicionAsync(
+        EstadoDispositivo estado)
+    {
+        await bloqueo.WaitAsync();
+
+        try
+        {
+            if (destruido ||
+                empresaId != estado.EmpresaId ||
+                UsuarioActual.EmpresaActivaId != empresaId)
+            {
+                return;
+            }
+
+            await using var scope =
+                ScopeFactory.CreateAsyncScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var nuevas = await db.Mediciones
+                .AsNoTracking()
+                .Where(m =>
+                    m.DispositivoId == estado.DispositivoId &&
+                    m.Dispositivo.EmpresaId == estado.EmpresaId &&
+                    m.TsServidor >= estado.TsServidor)
+                .OrderByDescending(m => m.TsServidor)
+                .ThenByDescending(m => m.Id)
+                .Take(200)
+                .ToListAsync();
+
+            if (destruido)
+                return;
+
+            foreach (var nueva in nuevas)
+            {
+                if (mediciones.Any(m => m.Id == nueva.Id))
+                    continue;
+
+                mediciones.Add(nueva);
+            }
+
+            mediciones = mediciones
+                .OrderByDescending(m => m.TsServidor)
+                .ThenByDescending(m => m.Id)
+                .Take(200)
+                .ToList();
+
+            StateHasChanged();
+        }
+        catch
+        {
+            // Un error de actualización visual no debe
+            // interrumpir la recepción de telemetría.
+        }
+        finally
+        {
+            bloqueo.Release();
+        }
+    }
+
+    public void Dispose()
+    {
+        destruido = true;
+
+        // Evitar suscripciones colgadas.
+        EnVivo.Cambio -= AlCambiarEstado;
     }
 }

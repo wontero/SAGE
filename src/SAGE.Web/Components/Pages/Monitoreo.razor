@@ -1,0 +1,290 @@
+﻿@page "/monitoreo"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@implements IDisposable
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Seguridad
+
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject EstadoDispositivosEnVivo EnVivo
+
+<PageTitle>Monitoreo — SAGE</PageTitle>
+
+<div class="page">
+
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Tiempo real</p>
+            <h1 class="page-title">Monitoreo de dispositivos</h1>
+            <p class="page-meta">
+                Estado y alimentación de los dispositivos
+                de la empresa activa
+            </p>
+        </div>
+    </header>
+
+    @if (cargando)
+    {
+        <MudProgressCircular Indeterminate="true"
+                             Color="Color.Primary" />
+    }
+    else if (error is not null)
+    {
+        <MudAlert Severity="Severity.Error">
+            @error
+        </MudAlert>
+    }
+    else if (dispositivos.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">
+            No hay dispositivos registrados en esta empresa.
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+
+            @foreach (var dispositivo in dispositivos)
+            {
+                estados.TryGetValue(
+                    dispositivo.Id,
+                    out var estado);
+
+                var enLinea = estado?.EnLinea
+                    ?? (dispositivo.UltimoContacto.HasValue
+                        && DateTime.UtcNow -
+                           dispositivo.UltimoContacto.Value
+                           <= TimeSpan.FromSeconds(30));
+
+                <MudItem xs="12" sm="6" lg="4">
+
+                    <MudPaper Class="pa-4" Elevation="1">
+
+                        <MudStack Spacing="2">
+
+                            <MudText Typo="Typo.h6">
+                                @dispositivo.Nombre
+                            </MudText>
+
+                            <MudStack Row="true" Spacing="1">
+
+                                <MudChip T="string"
+                                         Size="Size.Small"
+                                         Color="@(dispositivo.EsSimulado
+                                                                                 ? Color.Info
+                                                                                 : Color.Default)">
+                                    @(dispositivo.EsSimulado
+                                        ? "SIMULADO"
+                                        : "REAL")
+                                </MudChip>
+
+                                <MudChip T="string"
+                                         Size="Size.Small"
+                                         Color="@(enLinea
+                                                                                 ? Color.Success
+                                                                                 : Color.Error)">
+                                    @(enLinea
+                                        ? "● En línea"
+                                        : "● Sin conexión")
+                                </MudChip>
+
+                            </MudStack>
+
+                            <MudText Typo="Typo.body2">
+                                Última conexión:
+                                @Formato.Hace(
+                                    estado?.TsServidor
+                                    ?? dispositivo.UltimoContacto)
+                            </MudText>
+
+                            <MudDivider />
+
+                            <MudText Typo="Typo.body2">
+                                <b>Modo:</b>
+                                @Formato.Modo(
+                                    estado?.Modo
+                                        ?? dispositivo.ModoActual
+                                        ?? "",
+                                    estado?.FuenteSeleccionada
+                                        ?? dispositivo.FuenteSeleccionada
+                                        ?? "")
+                            </MudText>
+
+                            <MudText Typo="Typo.body2">
+                                <b>Fuente seleccionada:</b>
+                                @Formato.Fuente(
+                                    estado?.FuenteSeleccionada
+                                        ?? dispositivo.FuenteSeleccionada
+                                        ?? "")
+                            </MudText>
+
+                            <MudDivider />
+
+                            <MudText Typo="Typo.subtitle2">
+                                Potencia solar
+                            </MudText>
+
+                            <MudText Typo="Typo.h5"
+                                     Color="Color.Success">
+                                @(estado is null
+                                    ? "Sin datos"
+                                    : Formato.Potencia(
+                                        estado.PSolMw,
+                                        dispositivo.FactorEscala))
+                            </MudText>
+
+                            <MudText Typo="Typo.subtitle2">
+                                Potencia de red
+                            </MudText>
+
+                            <MudText Typo="Typo.h5"
+                                     Color="Color.Primary">
+                                @(estado is null
+                                    ? "Sin datos"
+                                    : Formato.Potencia(
+                                        estado.PRedMw,
+                                        dispositivo.FactorEscala))
+                            </MudText>
+
+                            <ChipEscala Factor="@dispositivo.FactorEscala" />
+
+                            <MudDivider />
+
+                            <MudButton Href="@($"/monitoreo/{dispositivo.Id}")"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       FullWidth="true">
+                                Ver monitoreo
+                            </MudButton>
+
+                        </MudStack>
+
+                    </MudPaper>
+
+                </MudItem>
+            }
+
+        </MudGrid>
+    }
+
+</div>
+
+@code {
+
+    private List<Dispositivo> dispositivos = new();
+
+    private readonly Dictionary<int, EstadoDispositivo> estados = new();
+
+    private int? empresaId;
+
+    private bool cargando = true;
+
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        EnVivo.Cambio += AlCambiarEstado;
+
+        try
+        {
+            await UsuarioActual.CargarAsync();
+
+            empresaId = UsuarioActual.EmpresaActivaId;
+
+            if (empresaId is null)
+            {
+                error = "No tenés una empresa activa.";
+                return;
+            }
+
+            await using var scope =
+                ScopeFactory.CreateAsyncScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            dispositivos = await db.Dispositivos
+                .AsNoTracking()
+                .Where(d =>
+                    d.EmpresaId == empresaId.Value &&
+                    d.Activo)
+                .OrderBy(d => d.Nombre)
+                .ToListAsync();
+
+            foreach (var dispositivo in dispositivos)
+            {
+                var estadoActual =
+                    EnVivo.Obtener(dispositivo.Id);
+
+                if (estadoActual is not null &&
+                    estadoActual.EmpresaId == empresaId.Value)
+                {
+                    estados[dispositivo.Id] = estadoActual;
+                    continue;
+                }
+
+                var ultimaMedicion = await db.Mediciones
+                    .AsNoTracking()
+                    .Where(m =>
+                        m.DispositivoId == dispositivo.Id)
+                    .OrderByDescending(m => m.TsServidor)
+                    .FirstOrDefaultAsync();
+
+                if (ultimaMedicion is not null)
+                {
+                    var estadoInicial = EstadoDispositivo.Desde(
+                        ultimaMedicion,
+                        empresaId.Value,
+                        dispositivo.FactorEscala);
+
+                    estados[dispositivo.Id] = estadoInicial with
+                    {
+                        EnLinea =
+                            dispositivo.UltimoContacto.HasValue &&
+                            DateTime.UtcNow -
+                            dispositivo.UltimoContacto.Value
+                            <= TimeSpan.FromSeconds(30)
+                    };
+                }
+            }
+        }
+        catch (Exception)
+        {
+            error = "No se pudo cargar el monitoreo.";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void AlCambiarEstado(EstadoDispositivo estado)
+    {
+        if (empresaId is null)
+            return;
+
+        // Ignorar dispositivos de otras empresas.
+        if (estado.EmpresaId != empresaId.Value)
+            return;
+
+        if (!dispositivos.Any(d => d.Id == estado.DispositivoId))
+            return;
+
+        _ = InvokeAsync(() =>
+        {
+            estados[estado.DispositivoId] = estado;
+
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        EnVivo.Cambio -= AlCambiarEstado;
+    }
+}

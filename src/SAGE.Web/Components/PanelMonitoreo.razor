@@ -1,0 +1,619 @@
+﻿@page "/monitoreo/{Id:int}"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@implements IDisposable
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Components.Shared
+
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject EstadoDispositivosEnVivo EnVivo
+
+<PageTitle>Monitoreo de dispositivo - SAGE</PageTitle>
+
+<div class="page">
+
+    @if (cargando)
+    {
+        <MudProgressCircular Indeterminate="true"
+                             Color="Color.Primary" />
+    }
+    else if (dispositivo is null)
+    {
+        <MudAlert Severity="Severity.Warning">
+            No encontrado.
+        </MudAlert>
+    }
+    else
+    {
+        <MudStack Spacing="3">
+
+            <MudButton Href="/monitoreo"
+                       Variant="Variant.Text"
+                       Color="Color.Primary">
+                Volver al monitoreo
+            </MudButton>
+
+            <MudPaper Class="pa-4" Elevation="1">
+
+                <MudText Typo="Typo.h5">
+                    @dispositivo.Nombre
+                </MudText>
+
+                <MudStack Row="true"
+                          Spacing="2"
+                          Class="mt-2">
+
+                    <MudChip T="string"
+                             Color="@(EnLinea ? Color.Success : Color.Error)">
+                        @(EnLinea ? "● En línea" : "● Sin conexión")
+                    </MudChip>
+
+                    <MudChip T="string"
+                             Color="Color.Info">
+                        @(dispositivo.EsSimulado ? "SIMULADO" : "REAL")
+                    </MudChip>
+
+                    <ChipEscala Factor="@dispositivo.FactorEscala" />
+
+                </MudStack>
+
+                <MudText Class="mt-3">
+                    Última conexión:
+                    @Formato.Hace(
+                        estado?.TsServidor ?? dispositivo.UltimoContacto)
+                </MudText>
+
+                <MudText>
+                    Modo:
+                    @Formato.Modo(
+                        estado?.Modo ?? dispositivo.ModoActual ?? "",
+                        estado?.FuenteSeleccionada
+                            ?? dispositivo.FuenteSeleccionada ?? "")
+                </MudText>
+
+            </MudPaper>
+
+            <MudPaper Class="pa-4" Elevation="1">
+
+                <MudText Typo="Typo.h6">
+                    Estado de alimentación
+                </MudText>
+
+                <MudStack Row="true"
+                          Spacing="2"
+                          Class="mt-3"
+                          Style="flex-wrap:wrap">
+
+                    <MudChip T="string"
+                             Color="Color.Info">
+                        Solicitada: @ModoSolicitado
+                    </MudChip>
+
+                    <MudChip T="string"
+                             Color="Color.Primary">
+                        Seleccionada:
+                        @Formato.Fuente(
+                            estado?.FuenteSeleccionada
+                            ?? dispositivo.FuenteSeleccionada ?? "")
+                    </MudChip>
+
+                    <MudChip T="string"
+                             Color="@(Comprobada ? Color.Success : Color.Warning)">
+                        Comprobada: @TextoComprobacion
+                    </MudChip>
+
+                </MudStack>
+
+            </MudPaper>
+
+            <MudGrid Spacing="3">
+
+                <MudItem xs="12" md="6">
+
+                    <MudPaper Class="pa-4" Elevation="1">
+
+                        <MudText Typo="Typo.h6"
+                                 Color="Color.Success">
+                            Energía solar
+                        </MudText>
+
+                        <MudDivider Class="my-3" />
+
+                        <MudText>
+                            Tensión:
+                            @Formato.Tension(estado?.VSol ?? 0m)
+                        </MudText>
+
+                        <MudText>
+                            Corriente:
+                            @Formato.Corriente(estado?.ISolMa ?? 0m)
+                        </MudText>
+
+                        <MudText>
+                            Potencia:
+                            @Formato.Potencia(
+                                estado?.PSolMw ?? 0m,
+                                dispositivo.FactorEscala)
+                        </MudText>
+
+                        <MudText>
+                            Energía acumulada:
+                            @Formato.Energia(
+                                estado?.WhSolAcum ?? 0m,
+                                dispositivo.FactorEscala)
+                        </MudText>
+
+                        <ChipEscala Factor="@dispositivo.FactorEscala" />
+
+                    </MudPaper>
+
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+
+                    <MudPaper Class="pa-4" Elevation="1">
+
+                        <MudText Typo="Typo.h6"
+                                 Color="Color.Primary">
+                            Energía de red
+                        </MudText>
+
+                        <MudDivider Class="my-3" />
+
+                        <MudText>
+                            Tensión:
+                            @Formato.Tension(estado?.VRed ?? 0m)
+                        </MudText>
+
+                        <MudText>
+                            Corriente:
+                            @Formato.Corriente(estado?.IRedMa ?? 0m)
+                        </MudText>
+
+                        <MudText>
+                            Potencia:
+                            @Formato.Potencia(
+                                estado?.PRedMw ?? 0m,
+                                dispositivo.FactorEscala)
+                        </MudText>
+
+                        <MudText>
+                            Energía acumulada:
+                            @Formato.Energia(
+                                estado?.WhRedAcum ?? 0m,
+                                dispositivo.FactorEscala)
+                        </MudText>
+
+                        <ChipEscala Factor="@dispositivo.FactorEscala" />
+
+                    </MudPaper>
+
+                </MudItem>
+
+            </MudGrid>
+
+            <MudPaper Class="pa-4" Elevation="1">
+
+                <MudText Typo="Typo.h6">
+                    Potencia en tiempo real
+                </MudText>
+
+                <MudText Typo="Typo.caption">
+                    Solar y red, últimos 5 minutos.
+                    Máximo 300 mediciones.
+                </MudText>
+
+                @if (puntos.Count == 0)
+                {
+                    <MudText Class="mt-3">
+                        Todavía no hay mediciones para el gráfico.
+                    </MudText>
+                }
+                else
+                {
+                    <MudChart T="double"
+                              ChartType="ChartType.Line"
+                              ChartSeries="@series"
+                              ChartLabels="@etiquetas"
+                              Width="100%"
+                              Height="300px" />
+                }
+
+            </MudPaper>
+
+            <MudPaper Class="pa-4" Elevation="1">
+
+                <MudText Typo="Typo.h6">
+                    Últimos 10 eventos
+                </MudText>
+
+                @if (eventos.Count == 0)
+                {
+                    <MudText Class="mt-3">
+                        No hay eventos registrados.
+                    </MudText>
+                }
+                else
+                {
+                    <MudTable T="Evento"
+                              Items="@eventos"
+                              Dense="true"
+                              Hover="true">
+
+                        <HeaderContent>
+                            <MudTh>Hora</MudTh>
+                            <MudTh>Tipo</MudTh>
+                            <MudTh>Estado</MudTh>
+                            <MudTh>Motivo</MudTh>
+                            <MudTh>Origen</MudTh>
+                        </HeaderContent>
+
+                        <RowTemplate>
+                            <MudTd DataLabel="Hora">
+                                @Formato.HoraLocal(context.TsServidor)
+                            </MudTd>
+
+                            <MudTd DataLabel="Tipo">
+                                @context.Tipo
+                            </MudTd>
+
+                            <MudTd DataLabel="Estado">
+                                @context.Estado
+                            </MudTd>
+
+                            <MudTd DataLabel="Motivo">
+                                @context.Motivo
+                            </MudTd>
+
+                            <MudTd DataLabel="Origen">
+                                @context.Origen
+                            </MudTd>
+                        </RowTemplate>
+
+                    </MudTable>
+                }
+
+            </MudPaper>
+
+        </MudStack>
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private Dispositivo? dispositivo;
+
+    private EstadoDispositivo? estado;
+
+    private List<Evento> eventos = new();
+
+    private readonly List<PuntoPotencia> puntos = new();
+
+    private List<ChartSeries<double>> series = new();
+
+    private string[] etiquetas = Array.Empty<string>();
+
+    private bool cargando = true;
+
+    private bool destruido;
+
+    private readonly CancellationTokenSource cancelacion = new();
+
+    private int empresaId;
+
+    private sealed record PuntoPotencia(
+        DateTime Fecha,
+        decimal SolarMw,
+        decimal RedMw);
+
+    private bool EnLinea =>
+        estado?.EnLinea ??
+        (dispositivo?.UltimoContacto is DateTime ultima &&
+         DateTime.UtcNow - ultima <= TimeSpan.FromSeconds(30));
+
+    private string ModoSolicitado =>
+        (estado?.Modo ?? dispositivo?.ModoActual ?? "")
+            .ToUpperInvariant() switch
+        {
+            "AUTO" => "Automático",
+            "SOLAR" => "Solar",
+            "CARGADOR" => "Red",
+            _ => "Desconocido"
+        };
+
+    private bool Comprobada =>
+        estado?.AlimentacionComprobada
+        ?? dispositivo?.AlimentacionComprobada
+        ?? false;
+
+    private string TextoComprobacion
+    {
+        get
+        {
+            if (!Comprobada)
+                return "No";
+
+            if (estado is null)
+                return "Sí";
+
+            var corriente =
+                estado.FuenteSeleccionada == "SOLAR"
+                    ? estado.ISolMa
+                    : estado.IRedMa;
+
+            return corriente < 20m
+                ? "Sin consumo"
+                : "Sí";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        EnVivo.Cambio += AlCambiarEstado;
+
+        EnVivo.EventosRegistrados += AlRegistrarEventos;
+
+        _ = ActualizarTiempoAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        cargando = true;
+
+        dispositivo = null;
+
+        estado = null;
+
+        eventos.Clear();
+
+        puntos.Clear();
+
+        try
+        {
+            await UsuarioActual.CargarAsync();
+
+            if (UsuarioActual.EmpresaActivaId is not int empresa)
+                return;
+
+            empresaId = empresa;
+
+            await using var scope =
+                ScopeFactory.CreateAsyncScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            dispositivo = await db.Dispositivos
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d =>
+                    d.Id == Id &&
+                    d.EmpresaId == empresaId &&
+                    d.Activo);
+
+            if (dispositivo is null)
+                return;
+
+            var ultima = await db.Mediciones
+                .AsNoTracking()
+                .Where(m => m.DispositivoId == Id)
+                .OrderByDescending(m => m.TsServidor)
+                .FirstOrDefaultAsync();
+
+            if (ultima is not null)
+            {
+                estado = EstadoDispositivo.Desde(
+                    ultima,
+                    empresaId,
+                    dispositivo.FactorEscala);
+
+                estado = estado with
+                {
+                    EnLinea =
+                        dispositivo.UltimoContacto.HasValue &&
+                        DateTime.UtcNow -
+                        dispositivo.UltimoContacto.Value
+                        <= TimeSpan.FromSeconds(30)
+                };
+            }
+
+            var estadoVivo = EnVivo.Obtener(Id);
+
+            if (estadoVivo is not null &&
+                estadoVivo.EmpresaId == empresaId)
+            {
+                estado = estadoVivo;
+            }
+
+            var desde = DateTime.UtcNow.AddMinutes(-5);
+
+            var mediciones = await db.Mediciones
+                .AsNoTracking()
+                .Where(m =>
+                    m.DispositivoId == Id &&
+                    m.TsServidor >= desde)
+                .OrderByDescending(m => m.TsServidor)
+                .Take(300)
+                .ToListAsync();
+
+            foreach (var m in mediciones.OrderBy(m => m.TsServidor))
+            {
+                puntos.Add(new PuntoPotencia(
+                    m.TsServidor,
+                    m.PSolMw,
+                    m.PRedMw));
+            }
+
+            ActualizarGrafico();
+
+            await CargarEventosAsync();
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void AlCambiarEstado(EstadoDispositivo nuevo)
+    {
+        if (destruido ||
+            dispositivo is null ||
+            nuevo.DispositivoId != Id ||
+            nuevo.EmpresaId != empresaId)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(() =>
+        {
+            if (destruido)
+                return;
+
+            estado = nuevo;
+
+            if (puntos.Count == 0 ||
+                nuevo.TsServidor > puntos[^1].Fecha)
+            {
+                puntos.Add(new PuntoPotencia(
+                    nuevo.TsServidor,
+                    nuevo.PSolMw,
+                    nuevo.PRedMw));
+
+                ActualizarGrafico();
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private void AlRegistrarEventos(int dispositivoId)
+    {
+        if (destruido ||
+            dispositivo is null ||
+            dispositivoId != Id)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            if (destruido)
+                return;
+
+            await CargarEventosAsync();
+
+            StateHasChanged();
+        });
+    }
+
+    private async Task CargarEventosAsync()
+    {
+        if (dispositivo is null)
+            return;
+
+        await using var scope =
+            ScopeFactory.CreateAsyncScope();
+
+        var db = scope.ServiceProvider
+            .GetRequiredService<ApplicationDbContext>();
+
+        eventos = await db.Eventos
+            .AsNoTracking()
+            .Where(e =>
+                e.DispositivoId == Id &&
+                e.Dispositivo.EmpresaId == empresaId)
+            .OrderByDescending(e => e.TsServidor)
+            .Take(10)
+            .ToListAsync();
+    }
+
+    private void ActualizarGrafico()
+    {
+        if (dispositivo is null)
+            return;
+
+        var desde = DateTime.UtcNow.AddMinutes(-5);
+
+        puntos.RemoveAll(p => p.Fecha < desde);
+
+        if (puntos.Count > 300)
+        {
+            puntos.RemoveRange(0, puntos.Count - 300);
+        }
+
+        var factor = dispositivo.FactorEscala;
+
+        series = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double>
+            {
+                Name = "Solar (W)",
+                Data = puntos
+                    .Select(p =>
+                        (double)(p.SolarMw * factor / 1000m))
+                    .ToArray()
+            },
+
+            new ChartSeries<double>
+            {
+                Name = "Red (W)",
+                Data = puntos
+                    .Select(p =>
+                        (double)(p.RedMw * factor / 1000m))
+                    .ToArray()
+            }
+        };
+
+        etiquetas = puntos
+            .Select(p =>
+                Formato.HoraLocal(p.Fecha).Substring(11))
+            .ToArray();
+    }
+
+    private async Task ActualizarTiempoAsync()
+    {
+        using var temporizador =
+            new PeriodicTimer(TimeSpan.FromSeconds(1));
+
+        try
+        {
+            while (await temporizador.WaitForNextTickAsync(
+                       cancelacion.Token))
+            {
+                await InvokeAsync(() =>
+                {
+                    if (!destruido)
+                        StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // El componente se cerró.
+        }
+    }
+
+    public void Dispose()
+    {
+        destruido = true;
+
+        EnVivo.Cambio -= AlCambiarEstado;
+
+        EnVivo.EventosRegistrados -= AlRegistrarEventos;
+
+        cancelacion.Cancel();
+
+        cancelacion.Dispose();
+    }
+}

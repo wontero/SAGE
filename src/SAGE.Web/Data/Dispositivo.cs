@@ -41,4 +41,9 @@ public class Dispositivo
     public string? FuenteSeleccionada { get; set; }
 
     public bool? AlimentacionComprobada { get; set; }
+
+    // M6: Multiplica potencia y energía solo en pantalla.
+    // No modifica los valores reales guardados.
+    [Range(1, 10000, ErrorMessage = "El factor debe estar entre 1 y 10000.")]
+    public decimal FactorEscala { get; set; } = 1m;
 }

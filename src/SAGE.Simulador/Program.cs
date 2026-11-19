@@ -1,4 +1,3 @@
-
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -8,7 +7,7 @@ using System.Text.Json.Serialization;
 // Uso:
 // dotnet run --project src/SAGE.Simulador --
 // --url https://localhost:7001 --token <TOKEN>
-// [--intervalo 2] [--hora 12]
+// [--intervalo 1] [--hora 12]
 
 var opciones = Opciones.Leer(args);
 
@@ -130,7 +129,8 @@ internal sealed record Opciones(
         string? url = null;
         string? token = null;
 
-        var intervalo = 2;
+        // M6: intervalo predeterminado de 1 segundo.
+        var intervalo = 1;
         double? hora = null;
 
         for (var i = 0; i < args.Length; i++)

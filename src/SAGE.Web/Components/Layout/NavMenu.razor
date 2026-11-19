@@ -1,5 +1,4 @@
-﻿
-<MudNavMenu Class="sage-nav"
+﻿<MudNavMenu Class="sage-nav"
             Color="Color.Default"
             Bordered="false">
 
@@ -8,6 +7,17 @@
                 Icon="@Icons.Material.Outlined.Home">
         Inicio
     </MudNavLink>
+
+    @* S23-M6: Monitoreo en tiempo real *@
+    <AuthorizeView Roles="Administrador,Tecnico,Consulta">
+        <Authorized>
+            <MudNavLink Href="/monitoreo"
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Outlined.MonitorHeart">
+                Monitoreo
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
 
     <AuthorizeView Roles="Operador">
         <Authorized>
@@ -39,6 +49,7 @@
 
     <AuthorizeView Roles="Administrador,Tecnico,Consulta">
         <Authorized>
+
             <MudNavLink Href="/dispositivos"
                         Icon="@Icons.Material.Outlined.Devices">
                 Dispositivos
@@ -55,6 +66,12 @@
                 Eventos
             </MudNavLink>
 
+            @* S23-M7: Pantalla de alertas automáticas *@
+            <MudNavLink Href="/alertas"
+                        Icon="@Icons.Material.Outlined.NotificationsActive">
+                Alertas
+            </MudNavLink>
+
             <MudNavLink Href="/facturas"
                         Icon="@Icons.Material.Outlined.Receipt">
                 Facturas
@@ -64,6 +81,7 @@
                         Icon="@Icons.Material.Outlined.Calculate">
                 Simulación
             </MudNavLink>
+
         </Authorized>
     </AuthorizeView>
 

@@ -3,30 +3,42 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SAGE.Web.Api;
 using SAGE.Web.Data;
+using SAGE.Web.Servicios.Alertas;
+using SAGE.Web.Servicios.EnVivo;
+using Dispositivo = SAGE.Web.Data.Dispositivo;
 
 namespace SAGE.Web.Servicios.Telemetria;
 
-// Respuesta de la sincronización.
 public sealed record RespuestaSincronizacion(
     DateTime HoraServidor,
     object? Orden);
 
-// Patrón de diseño: Facade
+// Patrón: Facade — rol: fachada
 public sealed class FachadaSincronizacion
 {
     private readonly ApplicationDbContext _db;
     private readonly IAdaptadorTelemetria _adaptador;
+    private readonly ServicioAlertas _servicioAlertas;
+    private readonly EstadoDispositivosEnVivo _enVivo;
     private readonly ILogger<FachadaSincronizacion> _logger;
 
     public FachadaSincronizacion(
         ApplicationDbContext db,
         IAdaptadorTelemetria adaptador,
+        ServicioAlertas servicioAlertas,
+        EstadoDispositivosEnVivo enVivo,
         ILogger<FachadaSincronizacion> logger)
     {
         _db = db;
         _adaptador = adaptador;
+        _servicioAlertas = servicioAlertas;
+        _enVivo = enVivo;
         _logger = logger;
     }
+
+    // =====================================================
+    // SINCRONIZACIÓN PRINCIPAL
+    // =====================================================
 
     public async Task<RespuestaSincronizacion?> SincronizarAsync(
         string token,
@@ -38,13 +50,16 @@ public sealed class FachadaSincronizacion
             try
             {
                 return await SincronizarInternoAsync(
-                    token, paquete, ct);
+                    token,
+                    paquete,
+                    ct);
             }
             catch (DbUpdateException ex)
                 when (EsDuplicado(ex) && intento == 0)
             {
                 _logger.LogInformation(
-                    "Se detectó un envío simultáneo duplicado.");
+                    "Registro duplicado detectado. " +
+                    "Reintentando sincronización.");
 
                 _db.ChangeTracker.Clear();
             }
@@ -60,47 +75,98 @@ public sealed class FachadaSincronizacion
             TelemetriaRequest paquete,
             CancellationToken ct)
     {
-        // 1. Autenticar el dispositivo.
-        var dispositivo = await AutenticarAsync(token, ct);
+        // 1. Autenticar dispositivo y empresa.
+        var dispositivo = await AutenticarAsync(
+            token,
+            ct);
 
         if (dispositivo is null)
             return null;
 
         var horaServidor = DateTime.UtcNow;
 
-        // 2. Registrar medición.
+        // 2. Convertir el paquete a Medicion.
+        var medicion = _adaptador.AMedicion(
+            paquete,
+            dispositivo.Id,
+            horaServidor);
+
+        // 3. Evitar mediciones duplicadas.
         var medicionNueva = await RegistrarMedicionAsync(
             dispositivo,
             paquete,
-            horaServidor,
+            medicion,
             ct);
 
-        // 3. Actualizar contacto.
+        // 4. Actualizar el último contacto.
         RegistrarContacto(
             dispositivo,
             paquete,
             horaServidor,
             medicionNueva);
 
-        // 4. Registrar eventos.
-        await RegistrarEventosAsync(
+        // 5. Registrar únicamente eventos nuevos.
+        var eventosNuevos = await RegistrarEventosAsync(
             dispositivo,
             paquete,
             horaServidor,
             ct);
 
-        // 5. Resultados de órdenes.
-        await ActualizarResultadosOrdenesAsync(paquete, ct);
+        // 6. Resultados de órdenes (M9).
+        await ActualizarResultadosOrdenesAsync(
+            paquete,
+            ct);
 
-        // 6. Alertas.
-        await EvaluarAlertasAsync(dispositivo, paquete, ct);
+        // 7. Evaluar las alertas (M7).
+        var alertasCambiaron =
+            await _servicioAlertas.EvaluarAsync(
+                dispositivo,
+                medicionNueva ? medicion : null,
+                eventosNuevos,
+                ct);
 
-        // 7. Órdenes pendientes.
+        // 8. Órdenes pendientes (M9).
         var orden = await EntregarOrdenPendienteAsync(
-            dispositivo, ct);
+            dispositivo,
+            ct);
 
-        // 8. Guardar cambios.
+        // 9. Guardar los cambios en SQL Server.
         await _db.SaveChangesAsync(ct);
+
+        // =====================================================
+        // S23-M6: NOTIFICACIONES EN TIEMPO REAL
+        // =====================================================
+        // Notificar únicamente DESPUÉS de guardar.
+        // Si falla SaveChangesAsync, no se emiten avisos.
+
+        if (medicionNueva)
+        {
+            // Factor provisional 1 hasta implementar
+            // FactorEscala en Dispositivo (S23-M6).
+            var estado = EstadoDispositivo.Desde(
+                medicion,
+                dispositivo.EmpresaId,
+                1m);
+
+            _enVivo.Actualizar(estado);
+        }
+
+        if (eventosNuevos.Count > 0)
+        {
+            _enVivo.NotificarEventos(dispositivo.Id);
+        }
+
+        if (alertasCambiaron)
+        {
+            _enVivo.NotificarAlertas(
+                dispositivo.EmpresaId);
+
+            _logger.LogInformation(
+                "Alertas actualizadas. " +
+                "Dispositivo {Id}, empresa {EmpresaId}.",
+                dispositivo.Id,
+                dispositivo.EmpresaId);
+        }
 
         return new RespuestaSincronizacion(
             horaServidor,
@@ -108,7 +174,7 @@ public sealed class FachadaSincronizacion
     }
 
     // =====================================================
-    // AUTENTICACIÓN Y DIAGNÓSTICO DE HTTP 401
+    // AUTENTICACIÓN
     // =====================================================
 
     private async Task<Dispositivo?> AutenticarAsync(
@@ -125,10 +191,10 @@ public sealed class FachadaSincronizacion
             return null;
         }
 
-        // Nunca registrar el token ni su hash.
-        var tokenHash = TokenDispositivo.CalcularHash(token);
+        // Nunca registrar token ni hash.
+        var tokenHash =
+            TokenDispositivo.CalcularHash(token);
 
-        // Diagnóstico: buscar coincidencia del hash.
         var dispositivo = await _db.Dispositivos
             .SingleOrDefaultAsync(
                 d => d.TokenHash == tokenHash,
@@ -137,8 +203,8 @@ public sealed class FachadaSincronizacion
         if (dispositivo is null)
         {
             _logger.LogWarning(
-                "Autenticación rechazada: ningún dispositivo " +
-                "coincide con el token recibido.");
+                "Autenticación rechazada: token " +
+                "sin dispositivo asociado.");
 
             return null;
         }
@@ -146,7 +212,7 @@ public sealed class FachadaSincronizacion
         if (!dispositivo.Activo)
         {
             _logger.LogWarning(
-                "Autenticación rechazada: dispositivo {Id} inactivo.",
+                "Dispositivo {Id} inactivo.",
                 dispositivo.Id);
 
             return null;
@@ -154,22 +220,18 @@ public sealed class FachadaSincronizacion
 
         var empresaActiva = await _db.Empresas
             .AnyAsync(
-                e => e.Id == dispositivo.EmpresaId && e.Activa,
+                e => e.Id == dispositivo.EmpresaId &&
+                     e.Activa,
                 ct);
 
         if (!empresaActiva)
         {
             _logger.LogWarning(
-                "Autenticación rechazada: empresa del " +
-                "dispositivo {Id} no activa.",
+                "Empresa inactiva del dispositivo {Id}.",
                 dispositivo.Id);
 
             return null;
         }
-
-        _logger.LogInformation(
-            "Dispositivo {Id} autenticado correctamente.",
-            dispositivo.Id);
 
         return dispositivo;
     }
@@ -181,14 +243,9 @@ public sealed class FachadaSincronizacion
     private async Task<bool> RegistrarMedicionAsync(
         Dispositivo dispositivo,
         TelemetriaRequest paquete,
-        DateTime horaServidor,
+        Medicion medicion,
         CancellationToken ct)
     {
-        var medicion = _adaptador.AMedicion(
-            paquete,
-            dispositivo.Id,
-            horaServidor);
-
         var existe = await _db.Mediciones.AnyAsync(
             m => m.DispositivoId == dispositivo.Id &&
                  m.BootId == paquete.BootId &&
@@ -203,6 +260,10 @@ public sealed class FachadaSincronizacion
         return true;
     }
 
+    // =====================================================
+    // ACTUALIZAR ÚLTIMO CONTACTO
+    // =====================================================
+
     private static void RegistrarContacto(
         Dispositivo dispositivo,
         TelemetriaRequest paquete,
@@ -216,6 +277,7 @@ public sealed class FachadaSincronizacion
 
         dispositivo.ModoActual = paquete.Modo;
         dispositivo.EstadoActual = paquete.Estado;
+
         dispositivo.FuenteSeleccionada =
             paquete.FuenteSeleccionada;
 
@@ -224,17 +286,19 @@ public sealed class FachadaSincronizacion
     }
 
     // =====================================================
-    // REGISTRO DE EVENTOS
+    // S23-M5: REGISTRO DE EVENTOS
     // =====================================================
 
-    private async Task RegistrarEventosAsync(
+    private async Task<List<Evento>> RegistrarEventosAsync(
         Dispositivo dispositivo,
         TelemetriaRequest paquete,
         DateTime horaServidor,
         CancellationToken ct)
     {
+        var eventosNuevos = new List<Evento>();
+
         if (paquete.Eventos is null)
-            return;
+            return eventosNuevos;
 
         var secuencias = new HashSet<long>();
 
@@ -276,39 +340,43 @@ public sealed class FachadaSincronizacion
                      e.Seq == recibido.Seq,
                 ct);
 
-            if (!existe)
-                _db.Eventos.Add(evento);
+            if (existe)
+                continue;
+
+            _db.Eventos.Add(evento);
+            eventosNuevos.Add(evento);
         }
+
+        return eventosNuevos;
     }
 
     // =====================================================
-    // FUNCIONALIDADES DE PRÓXIMOS SPRINTS
+    // S23-M9: RESULTADOS DE ÓRDENES
     // =====================================================
 
     private static Task ActualizarResultadosOrdenesAsync(
         TelemetriaRequest paquete,
         CancellationToken ct)
     {
-        // Pendiente: S23-M9.
+        // Pendiente: Ethan implementará M9.
         return Task.CompletedTask;
     }
 
-    private static Task EvaluarAlertasAsync(
-        Dispositivo dispositivo,
-        TelemetriaRequest paquete,
-        CancellationToken ct)
-    {
-        // Pendiente: S23-M7.
-        return Task.CompletedTask;
-    }
+    // =====================================================
+    // S23-M9: ENTREGAR ÓRDENES
+    // =====================================================
 
     private static Task<object?> EntregarOrdenPendienteAsync(
         Dispositivo dispositivo,
         CancellationToken ct)
     {
-        // Pendiente: S23-M9.
+        // Pendiente: Ethan implementará M9.
         return Task.FromResult<object?>(null);
     }
+
+    // =====================================================
+    // DETECCIÓN DE DUPLICADOS
+    // =====================================================
 
     private static bool EsDuplicado(DbUpdateException ex)
     {

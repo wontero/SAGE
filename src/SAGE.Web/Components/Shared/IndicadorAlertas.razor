@@ -1,0 +1,168 @@
+﻿@implements IDisposable
+
+@using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Seguridad
+
+@inject IUsuarioActual UsuarioActual
+@inject EstadoDispositivosEnVivo EnVivo
+@inject IServiceScopeFactory ScopeFactory
+@inject NavigationManager NavigationManager
+
+@* Patrón: Observer — rol: observador concreto *@
+
+<MudBadge Content="@_alertasActivas"
+          Visible="@(_alertasActivas > 0)"
+          Color="Color.Error"
+          Overlap="true"
+          Class="mx-3">
+
+    <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
+                   Color="Color.Inherit"
+                   Size="Size.Medium"
+                   OnClick="IrAAlertas"
+                   aria-label="Ver alertas" />
+
+</MudBadge>
+
+@code {
+    private int _alertasActivas;
+    private bool _disposed;
+    private long _versionConsulta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UsuarioActual.CargarAsync();
+
+        EnVivo.AlertasCambiaron += OnAlertasCambiaron;
+        UsuarioActual.EmpresaCambiada += OnEmpresaCambiada;
+
+        await CargarContadorAsync();
+    }
+
+    // =====================================================
+    // CONTAR ALERTAS DE LA EMPRESA ACTIVA
+    // =====================================================
+
+    private async Task CargarContadorAsync()
+    {
+        var version = Interlocked.Increment(
+            ref _versionConsulta);
+
+        var empresaId = UsuarioActual.EmpresaActivaId;
+
+        if (empresaId is null)
+        {
+            _alertasActivas = 0;
+            return;
+        }
+
+        try
+        {
+            await using var scope =
+                ScopeFactory.CreateAsyncScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var cantidad = await db.Alertas
+                .AsNoTracking()
+                .CountAsync(a =>
+                    a.Dispositivo.EmpresaId == empresaId.Value &&
+                    a.Activa &&
+                    a.Fin == null);
+
+            // Evitar que una consulta antigua sobrescriba
+            // el contador de otra empresa o consulta nueva.
+            if (!_disposed &&
+                version == Interlocked.Read(ref _versionConsulta) &&
+                UsuarioActual.EmpresaActivaId == empresaId)
+            {
+                _alertasActivas = cantidad;
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // El componente ya fue destruido.
+        }
+        catch (Exception)
+        {
+            // No bloquear el diseño principal por
+            // un problema al leer el contador.
+        }
+    }
+
+    // =====================================================
+    // OBSERVER: ALERTAS MODIFICADAS
+    // =====================================================
+
+    private void OnAlertasCambiaron(int empresaId)
+    {
+        if (_disposed ||
+            UsuarioActual.EmpresaActivaId != empresaId)
+        {
+            return;
+        }
+
+        _ = ActualizarEnInterfazAsync();
+    }
+
+    private async Task ActualizarEnInterfazAsync()
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_disposed)
+                    return;
+
+                await CargarContadorAsync();
+
+                if (!_disposed)
+                    StateHasChanged();
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            // El circuito Blazor se cerró.
+        }
+        catch (InvalidOperationException)
+        {
+            // El componente ya no está disponible.
+        }
+    }
+
+    // =====================================================
+    // CAMBIO DE EMPRESA ACTIVA
+    // =====================================================
+
+    private void OnEmpresaCambiada()
+    {
+        if (_disposed)
+            return;
+
+        _ = ActualizarEnInterfazAsync();
+    }
+
+    // =====================================================
+    // NAVEGACIÓN
+    // =====================================================
+
+    private void IrAAlertas()
+    {
+        NavigationManager.NavigateTo("/alertas");
+    }
+
+    // =====================================================
+    // LIBERACIÓN DE SUSCRIPCIONES
+    // =====================================================
+
+    public void Dispose()
+    {
+        _disposed = true;
+
+        EnVivo.AlertasCambiaron -= OnAlertasCambiaron;
+        UsuarioActual.EmpresaCambiada -= OnEmpresaCambiada;
+    }
+}

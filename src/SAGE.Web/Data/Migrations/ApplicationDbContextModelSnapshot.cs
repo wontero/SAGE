@@ -176,6 +176,56 @@ namespace SAGE.Web.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("SAGE.Web.Data.Alerta", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("DispositivoId")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("EventoId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaResolucion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("Fin")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("Inicio")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Mensaje")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventoId");
+
+                    b.HasIndex("DispositivoId", "Tipo")
+                        .IsUnique()
+                        .HasFilter("[Activa] = 1");
+
+                    b.ToTable("Alertas");
+                });
+
             modelBuilder.Entity("SAGE.Web.Data.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -283,6 +333,12 @@ namespace SAGE.Web.Data.Migrations
                     b.Property<string>("EstadoActual")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("FactorEscala")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)")
+                        .HasDefaultValue(1m);
 
                     b.Property<DateTime>("FechaRegistro")
                         .HasColumnType("datetime2");
@@ -848,6 +904,24 @@ namespace SAGE.Web.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SAGE.Web.Data.Alerta", b =>
+                {
+                    b.HasOne("SAGE.Web.Data.Dispositivo", "Dispositivo")
+                        .WithMany()
+                        .HasForeignKey("DispositivoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SAGE.Web.Data.Evento", "Evento")
+                        .WithMany()
+                        .HasForeignKey("EventoId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Dispositivo");
+
+                    b.Navigation("Evento");
                 });
 
             modelBuilder.Entity("SAGE.Web.Data.Dispositivo", b =>

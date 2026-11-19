@@ -1,26 +1,42 @@
 ﻿@page "/dispositivos"
 @attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@implements IDisposable
+
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.DependencyInjection
 @using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Servicios.EnVivo
+
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject EstadoDispositivosEnVivo EnVivo
 
 <PageTitle>Dispositivos — SAGE</PageTitle>
 
 <div class="page">
+
     <header class="page-head">
+
         <div class="page-head__text">
+
             <p class="page-kicker">Monitoreo</p>
+
             <h1 class="page-title">Dispositivos</h1>
+
             @if (UsuarioActual.EmpresaActiva is not null)
             {
-                <p class="page-meta">@UsuarioActual.EmpresaActiva.Nombre</p>
+                <p class="page-meta">
+                    @UsuarioActual.EmpresaActiva.Nombre
+                </p>
             }
+
         </div>
+
         <div class="page-actions">
+
             @if (_esAdministrador)
             {
                 <MudButton Color="Color.Primary"
@@ -31,108 +47,175 @@
                     Nuevo dispositivo
                 </MudButton>
             }
+
             <MudButton Variant="Variant.Outlined"
                        StartIcon="@Icons.Material.Filled.Refresh"
                        OnClick="CargarDispositivos"
                        Disabled="@(_cargando || _ocupado)">
                 Actualizar
             </MudButton>
+
         </div>
+
     </header>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mb-3">
+            @_error
+        </MudAlert>
     }
 
     <div class="page-panel">
+
         <MudTable T="DispositivoFila"
                   Items="_dispositivos"
                   Loading="_cargando"
                   Hover="true"
                   Breakpoint="Breakpoint.Sm"
                   Elevation="0">
+
             <HeaderContent>
+
                 <MudTh>Nombre</MudTh>
                 <MudTh>Tipo</MudTh>
                 <MudTh>Estado</MudTh>
                 <MudTh>Última conexión</MudTh>
+
                 @if (_esAdministrador)
                 {
                     <MudTh>Acciones</MudTh>
                 }
+
             </HeaderContent>
 
             <RowTemplate>
-                <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+
+                <MudTd DataLabel="Nombre">
+                    @context.Nombre
+                </MudTd>
+
                 <MudTd DataLabel="Tipo">
-                    <MudChip T="string" Size="Size.Small" Color="@(context.EsSimulado ? Color.Warning : Color.Info)">
+
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(context.EsSimulado ? Color.Warning : Color.Info)">
                         @(context.EsSimulado ? "Simulado" : "Real")
                     </MudChip>
+
                 </MudTd>
+
                 <MudTd DataLabel="Estado">
-                    <MudChip T="string" Size="Size.Small" Color="@(context.Activo ? Color.Success : Color.Default)">
+
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(context.Activo ? Color.Success : Color.Default)">
                         @(context.Activo ? "Activo" : "Inactivo")
                     </MudChip>
+
                 </MudTd>
+
                 <MudTd DataLabel="Última conexión">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+
+                    <MudStack Row="true"
+                              AlignItems="AlignItems.Center"
+                              Spacing="1">
+
                         <MudIcon Icon="@Icons.Material.Filled.Circle"
                                  Size="Size.Small"
-                                 Color="@(EstaEnLinea(context.UltimoContacto) ? Color.Success : Color.Error)" />
-                        <MudText Typo="Typo.body2">@TiempoDesde(context.UltimoContacto)</MudText>
+                                 Color="@(EstaEnLinea(context) ? Color.Success : Color.Error)" />
+
+                        <MudText Typo="Typo.body2">
+                            @TiempoDesde(context.UltimoContacto)
+                        </MudText>
+
                     </MudStack>
+
                 </MudTd>
+
                 @if (_esAdministrador)
                 {
                     <MudTd DataLabel="Acciones">
-                        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+
+                        <MudStack Row="true"
+                                  Spacing="1"
+                                  Wrap="Wrap.Wrap">
+
                             <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                            Color="Color.Primary"
                                            Size="Size.Small"
                                            aria-label="Editar"
                                            OnClick="@(() => EditarDispositivo(context))"
                                            Disabled="@(_cargando || _ocupado)" />
+
                             <MudIconButton Icon="@(context.Activo ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
                                            Color="@(context.Activo ? Color.Warning : Color.Success)"
                                            Size="Size.Small"
                                            aria-label="@(context.Activo ? "Desactivar" : "Activar")"
                                            OnClick="@(() => CambiarEstado(context))"
                                            Disabled="@(_cargando || _ocupado)" />
+
                             <MudIconButton Icon="@Icons.Material.Filled.VpnKey"
                                            Color="Color.Secondary"
                                            Size="Size.Small"
                                            aria-label="Regenerar token"
                                            OnClick="@(() => RegenerarToken(context))"
                                            Disabled="@(_cargando || _ocupado)" />
+
                         </MudStack>
+
                     </MudTd>
                 }
+
             </RowTemplate>
 
             <NoRecordsContent>
-                <MudText>No hay dispositivos para mostrar.</MudText>
+
+                <MudText>
+                    No hay dispositivos para mostrar.
+                </MudText>
+
             </NoRecordsContent>
 
             <PagerContent>
+
                 <MudTablePager RowsPerPageString="Filas por página"
                                InfoFormat="{first_item}-{last_item} de {all_items}" />
+
             </PagerContent>
+
         </MudTable>
+
     </div>
+
 </div>
 
 @code {
+
     private List<DispositivoFila> _dispositivos = new();
+
     private bool _esAdministrador;
     private bool _cargando = true;
     private bool _ocupado;
+    private bool _destruido;
+
     private string? _error;
+
+    private int? _empresaId;
+
+    protected override void OnInitialized()
+    {
+        // M6: Observer.
+        // Escuchar nuevas mediciones y desconexiones.
+        EnVivo.Cambio += AlCambiarEstado;
+    }
 
     protected override async Task OnInitializedAsync()
     {
         await UsuarioActual.CargarAsync();
+
         _esAdministrador = UsuarioActual.EsAdministrador;
+
         await CargarDispositivos();
     }
 
@@ -144,17 +227,24 @@
 
         try
         {
-            if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            await UsuarioActual.CargarAsync();
+
+            _empresaId = UsuarioActual.EmpresaActivaId;
+
+            if (_empresaId is not int empresaId)
             {
                 _error = "No tenés una empresa activa.";
                 return;
             }
 
             using var scope = ScopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            // El filtro por empresa activa se aplica en SQL (RNF01).
-            _dispositivos = await db.Dispositivos.AsNoTracking()
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            // RNF01: dispositivos solamente de la empresa activa.
+            _dispositivos = await db.Dispositivos
+                .AsNoTracking()
                 .Where(d => d.EmpresaId == empresaId)
                 .OrderBy(d => d.Nombre)
                 .Select(d => new DispositivoFila
@@ -168,6 +258,22 @@
                     UltimoContacto = d.UltimoContacto
                 })
                 .ToListAsync();
+
+            // Recuperar el estado actual del Singleton.
+            foreach (var fila in _dispositivos)
+            {
+                var estado = EnVivo.Obtener(fila.Id);
+
+                if (estado is null)
+                    continue;
+
+                // No mostrar datos de otras empresas.
+                if (estado.EmpresaId != empresaId)
+                    continue;
+
+                fila.UltimoContacto = estado.TsServidor;
+                fila.EnLineaVivo = estado.EnLinea;
+            }
         }
         catch
         {
@@ -179,7 +285,91 @@
         }
     }
 
-    private Task NuevoDispositivo() => AbrirFormulario(new DispositivoFormModel(), "Nuevo dispositivo");
+    // M6: actualizar la fila sin consultar SQL.
+    private void AlCambiarEstado(EstadoDispositivo estado)
+    {
+        if (_destruido)
+            return;
+
+        if (_empresaId is not int empresaId)
+            return;
+
+        // Nunca aceptar notificaciones de otras empresas.
+        if (estado.EmpresaId != empresaId)
+            return;
+
+        if (UsuarioActual.EmpresaActivaId != empresaId)
+            return;
+
+        _ = InvokeAsync(() =>
+        {
+            if (_destruido)
+                return;
+
+            var fila = _dispositivos.FirstOrDefault(
+                d => d.Id == estado.DispositivoId &&
+                     d.EmpresaId == empresaId);
+
+            if (fila is null)
+                return;
+
+            // La última medición queda disponible
+            // sin volver a consultar la base.
+            fila.UltimoContacto = estado.TsServidor;
+
+            // El vigilante puede marcarlo sin conexión.
+            fila.EnLineaVivo = estado.EnLinea;
+
+            StateHasChanged();
+        });
+    }
+
+    private static bool EstaEnLinea(DispositivoFila fila)
+    {
+        if (!fila.Activo)
+            return false;
+
+        if (fila.EnLineaVivo.HasValue)
+            return fila.EnLineaVivo.Value;
+
+        if (!fila.UltimoContacto.HasValue)
+            return false;
+
+        var segundos =
+            (DateTime.UtcNow - fila.UltimoContacto.Value)
+            .TotalSeconds;
+
+        return segundos >= 0 && segundos < 30;
+    }
+
+    private static string TiempoDesde(DateTime? ultimoContacto)
+    {
+        if (!ultimoContacto.HasValue)
+            return "Nunca";
+
+        var segundos = Math.Max(
+            0,
+            (DateTime.UtcNow - ultimoContacto.Value)
+            .TotalSeconds);
+
+        if (segundos < 60)
+            return $"hace {(int)segundos} s";
+
+        if (segundos < 3600)
+            return $"hace {(int)(segundos / 60)} min";
+
+        if (segundos < 86400)
+            return $"hace {(int)(segundos / 3600)} h";
+
+        return $"hace {(int)(segundos / 86400)} días";
+    }
+
+    private Task NuevoDispositivo()
+    {
+        return AbrirFormulario(
+            new DispositivoFormModel(),
+            "Nuevo dispositivo");
+    }
 
     private Task EditarDispositivo(DispositivoFila dispositivo)
     {
@@ -195,26 +385,42 @@
         return AbrirFormulario(modelo, "Editar dispositivo");
     }
 
-    private async Task AbrirFormulario(DispositivoFormModel modelo, string titulo)
+    private async Task AbrirFormulario(
+        DispositivoFormModel modelo,
+        string titulo)
     {
         if (_ocupado)
             return;
 
         _ocupado = true;
+
         try
         {
             var parametros = new DialogParameters
             {
                 [nameof(DispositivoDialog.Modelo)] = modelo
             };
-            var opciones = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
-            var dialogo = await DialogService.ShowAsync<DispositivoDialog>(titulo, parametros, opciones);
+
+            var opciones = new DialogOptions
+            {
+                FullWidth = true,
+                MaxWidth = MaxWidth.Small,
+                CloseButton = true
+            };
+
+            var dialogo =
+                await DialogService.ShowAsync<DispositivoDialog>(
+                    titulo,
+                    parametros,
+                    opciones);
+
             var resultado = await dialogo.Result;
 
             if (resultado is null || resultado.Canceled)
                 return;
 
-            if (resultado.Data is string token && !string.IsNullOrWhiteSpace(token))
+            if (resultado.Data is string token &&
+                !string.IsNullOrWhiteSpace(token))
             {
                 await MostrarToken(token);
             }
@@ -229,19 +435,44 @@
 
     private async Task MostrarToken(string token)
     {
-        var parametros = new DialogParameters { [nameof(TokenDialog.Token)] = token };
-        var opciones = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false };
-        var dialogo = await DialogService.ShowAsync<TokenDialog>("Token del dispositivo", parametros, opciones);
+        var parametros = new DialogParameters
+        {
+            [nameof(TokenDialog.Token)] = token
+        };
+
+        var opciones = new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small,
+            CloseButton = false
+        };
+
+        var dialogo =
+            await DialogService.ShowAsync<TokenDialog>(
+                "Token del dispositivo",
+                parametros,
+                opciones);
+
         await dialogo.Result;
     }
 
     private async Task<bool> Confirmar(string mensaje)
     {
-        var parametros = new DialogParameters { ["Contenido"] = mensaje };
+        var parametros = new DialogParameters
+        {
+            ["Contenido"] = mensaje
+        };
+
         var dialogo = await DialogService.ShowAsync<
-            SAGE.Web.Components.Pages.Empresas.ConfirmDialog>("Confirmar", parametros);
+            SAGE.Web.Components.Pages.Empresas.ConfirmDialog>(
+                "Confirmar",
+                parametros);
+
         var resultado = await dialogo.Result;
-        return resultado is not null && !resultado.Canceled && resultado.Data is true;
+
+        return resultado is not null &&
+               !resultado.Canceled &&
+               resultado.Data is true;
     }
 
     private async Task CambiarEstado(DispositivoFila fila)
@@ -250,39 +481,66 @@
             return;
 
         _ocupado = true;
+
         try
         {
             var nuevoEstado = !fila.Activo;
-            var accion = nuevoEstado ? "activar" : "desactivar";
 
-            if (!await Confirmar($"¿Querés {accion} el dispositivo {fila.Nombre}?"))
-                return;
+            var accion = nuevoEstado
+                ? "activar"
+                : "desactivar";
 
-            if (!UsuarioActual.EsAdministrador || !UsuarioActual.PuedeVerEmpresa(fila.EmpresaId))
+            if (!await Confirmar(
+                $"¿Querés {accion} el dispositivo {fila.Nombre}?"))
             {
-                Snackbar.Add("No tenés permiso para modificar este dispositivo.", Severity.Error);
+                return;
+            }
+
+            if (!UsuarioActual.EsAdministrador ||
+                !UsuarioActual.PuedeVerEmpresa(fila.EmpresaId))
+            {
+                Snackbar.Add(
+                    "No tenés permiso para modificar este dispositivo.",
+                    Severity.Error);
+
                 return;
             }
 
             using var scope = ScopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            var dispositivo = await db.Dispositivos.FindAsync(fila.Id);
-            if (dispositivo is null || dispositivo.EmpresaId != fila.EmpresaId)
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            var dispositivo =
+                await db.Dispositivos.FindAsync(fila.Id);
+
+            if (dispositivo is null ||
+                dispositivo.EmpresaId != fila.EmpresaId)
             {
-                Snackbar.Add("El dispositivo ya no existe.", Severity.Error);
+                Snackbar.Add(
+                    "El dispositivo ya no existe.",
+                    Severity.Error);
+
                 return;
             }
 
             dispositivo.Activo = nuevoEstado;
+
             await db.SaveChangesAsync();
 
-            Snackbar.Add(nuevoEstado ? "Dispositivo activado." : "Dispositivo desactivado.", Severity.Success);
+            Snackbar.Add(
+                nuevoEstado
+                    ? "Dispositivo activado."
+                    : "Dispositivo desactivado.",
+                Severity.Success);
+
             await CargarDispositivos();
         }
         catch
         {
-            Snackbar.Add("No se pudo cambiar el estado del dispositivo.", Severity.Error);
+            Snackbar.Add(
+                "No se pudo cambiar el estado del dispositivo.",
+                Severity.Error);
         }
         finally
         {
@@ -296,40 +554,65 @@
             return;
 
         _ocupado = true;
+
         try
         {
             if (!await Confirmar(
-                $"¿Querés regenerar el token de {fila.Nombre}? El token anterior dejará de funcionar."))
-                return;
-
-            if (!UsuarioActual.EsAdministrador || !UsuarioActual.PuedeVerEmpresa(fila.EmpresaId))
+                $"¿Querés regenerar el token de {fila.Nombre}? " +
+                "El token anterior dejará de funcionar."))
             {
-                Snackbar.Add("No tenés permiso para regenerar tokens.", Severity.Error);
+                return;
+            }
+
+            if (!UsuarioActual.EsAdministrador ||
+                !UsuarioActual.PuedeVerEmpresa(fila.EmpresaId))
+            {
+                Snackbar.Add(
+                    "No tenés permiso para regenerar tokens.",
+                    Severity.Error);
+
                 return;
             }
 
             string token;
+
             using (var scope = ScopeFactory.CreateScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                var dispositivo = await db.Dispositivos.FindAsync(fila.Id);
-                if (dispositivo is null || dispositivo.EmpresaId != fila.EmpresaId)
+                var db = scope.ServiceProvider
+                    .GetRequiredService<ApplicationDbContext>();
+
+                var dispositivo =
+                    await db.Dispositivos.FindAsync(fila.Id);
+
+                if (dispositivo is null ||
+                    dispositivo.EmpresaId != fila.EmpresaId)
                 {
-                    Snackbar.Add("El dispositivo ya no existe.", Severity.Error);
+                    Snackbar.Add(
+                        "El dispositivo ya no existe.",
+                        Severity.Error);
+
                     return;
                 }
 
                 token = TokenDispositivo.Generar();
-                dispositivo.TokenHash = TokenDispositivo.CalcularHash(token);
+
+                dispositivo.TokenHash =
+                    TokenDispositivo.CalcularHash(token);
+
                 await db.SaveChangesAsync();
             }
 
-            Snackbar.Add("Token regenerado correctamente.", Severity.Success);
+            Snackbar.Add(
+                "Token regenerado correctamente.",
+                Severity.Success);
+
             await MostrarToken(token);
         }
         catch
         {
-            Snackbar.Add("No se pudo completar la regeneración del token.", Severity.Error);
+            Snackbar.Add(
+                "No se pudo completar la regeneración del token.",
+                Severity.Error);
         }
         finally
         {
@@ -337,39 +620,31 @@
         }
     }
 
-    private static bool EstaEnLinea(DateTime? ultimoContacto)
+    // M6: desuscribir al salir de la página.
+    public void Dispose()
     {
-        if (!ultimoContacto.HasValue)
-            return false;
+        _destruido = true;
 
-        var segundos = (DateTime.UtcNow - ultimoContacto.Value).TotalSeconds;
-        return segundos >= 0 && segundos < 30;
-    }
-
-    private static string TiempoDesde(DateTime? ultimoContacto)
-    {
-        if (!ultimoContacto.HasValue)
-            return "Nunca";
-
-        var segundos = Math.Max(0, (DateTime.UtcNow - ultimoContacto.Value).TotalSeconds);
-
-        if (segundos < 60)
-            return $"hace {(int)segundos} s";
-        if (segundos < 3600)
-            return $"hace {(int)(segundos / 60)} min";
-        if (segundos < 86400)
-            return $"hace {(int)(segundos / 3600)} h";
-        return $"hace {(int)(segundos / 86400)} días";
+        EnVivo.Cambio -= AlCambiarEstado;
     }
 
     private sealed class DispositivoFila
     {
         public int Id { get; set; }
+
         public int EmpresaId { get; set; }
+
         public string Nombre { get; set; } = string.Empty;
+
         public string? Descripcion { get; set; }
+
         public bool EsSimulado { get; set; }
+
         public bool Activo { get; set; }
+
         public DateTime? UltimoContacto { get; set; }
+
+        // Estado recibido del Observer.
+        public bool? EnLineaVivo { get; set; }
     }
 }

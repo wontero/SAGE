@@ -1,0 +1,522 @@
+﻿@page "/alertas"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+@implements IDisposable
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Seguridad
+
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject EstadoDispositivosEnVivo EnVivo
+
+<PageTitle>Alertas - SAGE</PageTitle>
+
+<div class="page">
+
+    <header class="page-head">
+        <div class="page-head__text">
+            <p class="page-kicker">Monitoreo</p>
+
+            <h1 class="page-title">Alertas</h1>
+
+            <p class="page-meta">
+                Estado e historial de las alertas de los dispositivos
+            </p>
+        </div>
+    </header>
+
+    @if (cargando)
+    {
+        <MudProgressLinear Indeterminate="true"
+                           Color="Color.Primary" />
+        <MudText Class="mt-3">
+            Cargando alertas...
+        </MudText>
+    }
+    else if (error is not null)
+    {
+        <MudAlert Severity="Severity.Error">
+            @error
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid Class="mb-4">
+
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="0">
+                    <MudText Typo="Typo.subtitle2">
+                        Total de alertas
+                    </MudText>
+                    <MudText Typo="Typo.h4">
+                        @totalAlertas
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="0">
+                    <MudText Typo="Typo.subtitle2">
+                        Alertas abiertas
+                    </MudText>
+                    <MudText Typo="Typo.h4"
+                             Color="Color.Error">
+                        @alertasAbiertas
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="0">
+                    <MudText Typo="Typo.subtitle2">
+                        Alertas resueltas
+                    </MudText>
+                    <MudText Typo="Typo.h4"
+                             Color="Color.Success">
+                        @alertasResueltas
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+        </MudGrid>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="CargarAlertasAsync"
+                   Class="mb-4">
+            Actualizar alertas
+        </MudButton>
+
+        <MudPaper Class="pa-4" Elevation="0">
+
+            <MudTabs Rounded="true"
+                     Color="Color.Primary"
+                     ApplyEffectsToContainer="true">
+
+                <MudTabPanel Text="@($"Abiertas ({alertasAbiertas})")">
+
+                    @if (abiertas.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Success"
+                                  Class="mt-4">
+                            No hay alertas abiertas para esta empresa.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudTable Items="@abiertas"
+                                  Dense="true"
+                                  Hover="true"
+                                  Breakpoint="Breakpoint.Md"
+                                  Elevation="0"
+                                  RowsPerPage="10">
+
+                            <HeaderContent>
+                                <MudTh>Dispositivo</MudTh>
+                                <MudTh>Tipo</MudTh>
+                                <MudTh>Inicio (Bolivia)</MudTh>
+                                <MudTh>Duración</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Dispositivo">
+                                    @context.Dispositivo.Nombre
+                                </MudTd>
+
+                                <MudTd DataLabel="Tipo">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Color="Color.Error">
+                                        @NombreTipo(context.Tipo)
+                                    </MudChip>
+                                </MudTd>
+
+                                <MudTd DataLabel="Inicio (Bolivia)">
+                                    @HoraBolivia(
+                                        context.Inicio
+                                            ?? context.FechaCreacion)
+                                </MudTd>
+
+                                <MudTd DataLabel="Duración">
+                                    @Duracion(
+                                        context.Inicio
+                                            ?? context.FechaCreacion,
+                                        null)
+                                </MudTd>
+                            </RowTemplate>
+
+                            <PagerContent>
+                                <MudTablePager />
+                            </PagerContent>
+
+                        </MudTable>
+                    }
+
+                </MudTabPanel>
+
+                <MudTabPanel Text="@($"Historial ({alertasResueltas})")">
+
+                    @if (historial.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Info"
+                                  Class="mt-4">
+                            No hay alertas resueltas.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudTable Items="@historial"
+                                  Dense="true"
+                                  Hover="true"
+                                  Breakpoint="Breakpoint.Md"
+                                  Elevation="0"
+                                  RowsPerPage="10">
+
+                            <HeaderContent>
+                                <MudTh>Dispositivo</MudTh>
+                                <MudTh>Tipo</MudTh>
+                                <MudTh>Inicio (Bolivia)</MudTh>
+                                <MudTh>Fin (Bolivia)</MudTh>
+                                <MudTh>Duración</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Dispositivo">
+                                    @context.Dispositivo.Nombre
+                                </MudTd>
+
+                                <MudTd DataLabel="Tipo">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Color="Color.Success">
+                                        @NombreTipo(context.Tipo)
+                                    </MudChip>
+                                </MudTd>
+
+                                <MudTd DataLabel="Inicio (Bolivia)">
+                                    @HoraBolivia(
+                                        context.Inicio
+                                            ?? context.FechaCreacion)
+                                </MudTd>
+
+                                <MudTd DataLabel="Fin (Bolivia)">
+                                    @HoraBoliviaNullable(
+                                        context.Fin
+                                            ?? context.FechaResolucion)
+                                </MudTd>
+
+                                <MudTd DataLabel="Duración">
+                                    @Duracion(
+                                        context.Inicio
+                                            ?? context.FechaCreacion,
+                                        context.Fin
+                                            ?? context.FechaResolucion)
+                                </MudTd>
+                            </RowTemplate>
+
+                            <PagerContent>
+                                <MudTablePager />
+                            </PagerContent>
+
+                        </MudTable>
+                    }
+
+                </MudTabPanel>
+
+            </MudTabs>
+
+        </MudPaper>
+    }
+
+</div>
+
+@code {
+    private List<Alerta> abiertas = new();
+    private List<Alerta> historial = new();
+
+    private bool cargando = true;
+    private bool _disposed;
+
+    private string? error;
+
+    private int totalAlertas;
+    private int alertasAbiertas;
+    private int alertasResueltas;
+
+    private long _versionConsulta;
+
+    // =====================================================
+    // INICIALIZACIÓN Y OBSERVER
+    // =====================================================
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UsuarioActual.CargarAsync();
+
+        EnVivo.AlertasCambiaron += OnAlertasCambiaron;
+        UsuarioActual.EmpresaCambiada += OnEmpresaCambiada;
+
+        await CargarAlertasAsync();
+    }
+
+    // =====================================================
+    // CONSULTA POR EMPRESA ACTIVA
+    // =====================================================
+
+    private async Task CargarAlertasAsync()
+    {
+        var version = Interlocked.Increment(
+            ref _versionConsulta);
+
+        var empresaId = UsuarioActual.EmpresaActivaId;
+
+        cargando = true;
+        error = null;
+
+        try
+        {
+            if (empresaId is null)
+            {
+                abiertas.Clear();
+                historial.Clear();
+
+                totalAlertas = 0;
+                alertasAbiertas = 0;
+                alertasResueltas = 0;
+
+                error = "No tenés una empresa activa.";
+                return;
+            }
+
+            await using var scope =
+                ScopeFactory.CreateAsyncScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<ApplicationDbContext>();
+
+            // La empresa se filtra directamente en SQL.
+            var consulta = db.Alertas
+                .AsNoTracking()
+                .Where(a =>
+                    a.Dispositivo.EmpresaId == empresaId.Value);
+
+            // Compatibilidad temporal con la columna Activa.
+            var cantidadAbiertas = await consulta
+                .CountAsync(a => a.Activa);
+
+            var cantidadResueltas = await consulta
+                .CountAsync(a => !a.Activa);
+
+            // Mostrar hasta 200 alertas abiertas.
+            var nuevasAbiertas = await consulta
+                .Where(a => a.Activa)
+                .Include(a => a.Dispositivo)
+                .OrderByDescending(a => a.Inicio
+                    ?? a.FechaCreacion)
+                .ThenByDescending(a => a.Id)
+                .Take(200)
+                .ToListAsync();
+
+            // Mostrar las 200 resoluciones más recientes.
+            var nuevoHistorial = await consulta
+                .Where(a => !a.Activa)
+                .Include(a => a.Dispositivo)
+                .OrderByDescending(a => a.Fin
+                    ?? a.FechaResolucion)
+                .ThenByDescending(a => a.Id)
+                .Take(200)
+                .ToListAsync();
+
+            // Evitar datos de una empresa anterior si
+            // el usuario cambió de empresa durante la consulta.
+            if (_disposed ||
+                version != Interlocked.Read(ref _versionConsulta) ||
+                UsuarioActual.EmpresaActivaId != empresaId)
+            {
+                return;
+            }
+
+            abiertas = nuevasAbiertas;
+            historial = nuevoHistorial;
+
+            alertasAbiertas = cantidadAbiertas;
+            alertasResueltas = cantidadResueltas;
+            totalAlertas = cantidadAbiertas + cantidadResueltas;
+        }
+        catch (Exception)
+        {
+            if (!_disposed &&
+                version == Interlocked.Read(ref _versionConsulta))
+            {
+                error = "No se pudieron cargar las alertas.";
+            }
+        }
+        finally
+        {
+            if (!_disposed &&
+                version == Interlocked.Read(ref _versionConsulta))
+            {
+                cargando = false;
+            }
+        }
+    }
+
+    // =====================================================
+    // OBSERVER: CAMBIOS DE ALERTAS
+    // =====================================================
+
+    private void OnAlertasCambiaron(int empresaId)
+    {
+        if (_disposed ||
+            UsuarioActual.EmpresaActivaId != empresaId)
+        {
+            return;
+        }
+
+        _ = ActualizarInterfazAsync();
+    }
+
+    private void OnEmpresaCambiada()
+    {
+        if (_disposed)
+            return;
+
+        _ = ActualizarInterfazAsync();
+    }
+
+    private async Task ActualizarInterfazAsync()
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_disposed)
+                    return;
+
+                await CargarAlertasAsync();
+
+                if (!_disposed)
+                    StateHasChanged();
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            // El componente fue destruido.
+        }
+        catch (InvalidOperationException)
+        {
+            // El circuito ya no está disponible.
+        }
+    }
+
+    // =====================================================
+    // TIPOS DE ALERTAS EN ESPAÑOL
+    // =====================================================
+
+    private static string NombreTipo(string tipo)
+    {
+        return tipo.ToLowerInvariant() switch
+        {
+            "solar_insuficiente" =>
+                "Solar insuficiente",
+
+            "sin_fuente_valida" or
+            "ninguna_fuente_valida" =>
+                "Ninguna fuente válida",
+
+            "cargador_sin_tension" or
+            "red_sin_tension" =>
+                "Red sin tensión",
+
+            "sin_conexion" =>
+                "Sin conexión",
+
+            _ => tipo
+        };
+    }
+
+    // =====================================================
+    // FECHAS EN HORARIO DE BOLIVIA
+    // =====================================================
+
+    private static string HoraBolivia(DateTime fechaUtc)
+    {
+        TimeZoneInfo zona;
+
+        try
+        {
+            zona = TimeZoneInfo.FindSystemTimeZoneById(
+                "America/La_Paz");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            zona = TimeZoneInfo.FindSystemTimeZoneById(
+                "SA Western Standard Time");
+        }
+
+        var fecha = DateTime.SpecifyKind(
+            fechaUtc,
+            DateTimeKind.Utc);
+
+        var local = TimeZoneInfo.ConvertTimeFromUtc(
+            fecha,
+            zona);
+
+        return local.ToString("dd/MM/yyyy HH:mm:ss");
+    }
+
+    private static string HoraBoliviaNullable(
+        DateTime? fechaUtc)
+    {
+        return fechaUtc.HasValue
+            ? HoraBolivia(fechaUtc.Value)
+            : "-";
+    }
+
+    // =====================================================
+    // DURACIÓN DE UNA ALERTA
+    // =====================================================
+
+    private static string Duracion(
+        DateTime inicio,
+        DateTime? fin)
+    {
+        var hasta = fin ?? DateTime.UtcNow;
+
+        var diferencia = hasta - inicio;
+
+        if (diferencia < TimeSpan.Zero)
+            diferencia = TimeSpan.Zero;
+
+        if (diferencia.TotalDays >= 1)
+            return $"{(int)diferencia.TotalDays} d " +
+                   $"{diferencia.Hours} h";
+
+        if (diferencia.TotalHours >= 1)
+            return $"{(int)diferencia.TotalHours} h " +
+                   $"{diferencia.Minutes} min";
+
+        if (diferencia.TotalMinutes >= 1)
+            return $"{(int)diferencia.TotalMinutes} min " +
+                   $"{diferencia.Seconds} s";
+
+        return $"{(int)diferencia.TotalSeconds} s";
+    }
+
+    // =====================================================
+    // LIBERAR SUSCRIPCIONES
+    // =====================================================
+
+    public void Dispose()
+    {
+        _disposed = true;
+
+        EnVivo.AlertasCambiaron -= OnAlertasCambiaron;
+        UsuarioActual.EmpresaCambiada -= OnEmpresaCambiada;
+    }
+}
