@@ -56,17 +56,23 @@ public sealed class CanalOrdenesBD : ICanalOrdenes
 
     public async Task<IReadOnlyList<Orden>> UltimasAsync(int dispositivoId, int cantidad)
     {
+        await _usuario.CargarAsync();
+        var empresaId = ObtenerEmpresaActiva();
         await using var scope = _scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        return await db.Ordenes
+        var ordenes = await db.Ordenes
             .AsNoTracking()
             .Include(o => o.Usuario)
-            .Where(o => o.DispositivoId == dispositivoId)
+            .Where(o => o.DispositivoId == dispositivoId && o.Dispositivo.EmpresaId == empresaId)
             .OrderByDescending(o => o.Creada)
             .ThenByDescending(o => o.Id)
             .Take(Math.Clamp(cantidad, 1, 200))
             .ToListAsync();
+
+        if (_usuario.EmpresaActivaId != empresaId)
+            throw new UnauthorizedAccessException("El dispositivo no pertenece a su empresa activa.");
+        return ordenes;
     }
 
     private async Task<Orden> CrearAsync(int dispositivoId, string tipo, string valorJson)
@@ -75,22 +81,26 @@ public sealed class CanalOrdenesBD : ICanalOrdenes
 
         var usuarioId = _usuario.UsuarioId
             ?? throw new UnauthorizedAccessException("No hay un usuario autenticado.");
+        var empresaId = ObtenerEmpresaActiva();
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        var existe = await db.Dispositivos.AnyAsync(d => d.Id == dispositivoId);
+        var existe = await db.Dispositivos.AnyAsync(d => d.Id == dispositivoId && d.EmpresaId == empresaId);
 
         if (!existe)
-            throw new InvalidOperationException("El dispositivo no existe.");
+            throw new UnauthorizedAccessException("El dispositivo no pertenece a su empresa activa.");
 
         var ahora = DateTime.UtcNow;
 
         var abiertas = await db.Ordenes
             .Where(o =>
-                o.DispositivoId == dispositivoId &&
+                o.DispositivoId == dispositivoId && o.Dispositivo.EmpresaId == empresaId &&
                 (o.Estado == Orden.EstadoPendiente || o.Estado == Orden.EstadoEntregada))
             .ToListAsync();
+
+        if (_usuario.EmpresaActivaId != empresaId)
+            throw new UnauthorizedAccessException("El dispositivo no pertenece a su empresa activa.");
 
         // Primero se vencen las que ya pasaron su plazo.
         foreach (var vencida in abiertas.Where(o => o.Vencida(ahora)))
@@ -129,4 +139,8 @@ public sealed class CanalOrdenesBD : ICanalOrdenes
 
         return orden;
     }
+
+    private int ObtenerEmpresaActiva() =>
+        _usuario.EmpresaActivaId is int id && _usuario.PuedeVerEmpresa(id) && !_usuario.DebeCambiarContrasena
+            ? id : throw new UnauthorizedAccessException("El dispositivo no pertenece a su empresa activa.");
 }

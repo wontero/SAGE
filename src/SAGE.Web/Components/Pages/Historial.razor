@@ -318,7 +318,7 @@
 
             using var archivo = new MemoryStream();
             HistorialExcel.Escribir(archivo, dispositivo.Nombre, resultado.Desde, resultado.Hasta,
-                dispositivo.FactorEscala, resultado.Energia, lecturas, resultado.Eventos);
+                dispositivo.FactorEscala, resultado.Energia, lecturas, resultado.Eventos, Simulado);
 
             if (dispositivo.EmpresaId != UsuarioActual.EmpresaActivaId)
                 return;

@@ -241,13 +241,15 @@
                     return;
                 }
 
+                var empresasVisibles = UsuarioActual.Empresas.Select(e => e.Id).ToArray();
                 var operadorIds = await db.UserRoles
                     .Where(ur => ur.RoleId == operadorRoleId)
                     .Select(ur => ur.UserId).ToListAsync();
 
                 var usuarios = await db.Users.AsNoTracking()
                     .Where(u => u.Empresas.Any(ue => ue.EmpresaId == empresaActiva) && !operadorIds.Contains(u.Id))
-                    .Include(u => u.Empresas).ThenInclude(ue => ue.Empresa)
+                    .Include(u => u.Empresas.Where(ue => empresasVisibles.Contains(ue.EmpresaId)))
+                    .ThenInclude(ue => ue.Empresa)
                     .OrderBy(u => u.NombreCompleto)
                     .ToListAsync();
 
@@ -410,21 +412,13 @@
                 return;
             }
 
-            if (usuario.Id == UsuarioActual.UsuarioId)
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var roles = await userManager.GetRolesAsync(usuario);
+            if (await ReglasUsuarios.ErrorDeGestionAsync(db, UsuarioActual, usuario.Id, roles,
+                    AccionUsuario.CambiarEstado) is { } error)
             {
-                Snackbar.Add("No podés desactivar tu propia cuenta.", Severity.Warning);
+                Snackbar.Add(error, Severity.Error);
                 return;
-            }
-
-            // El Administrador no puede tocar a otro Administrador u Operador.
-            if (!UsuarioActual.EsOperador)
-            {
-                var roles = await userManager.GetRolesAsync(usuario);
-                if (roles.Contains("Administrador") || roles.Contains("Operador"))
-                {
-                    Snackbar.Add("Este usuario lo gestiona SAGE.", Severity.Error);
-                    return;
-                }
             }
 
             usuario.Activo = nuevoEstado;

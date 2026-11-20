@@ -8,8 +8,10 @@ namespace SAGE.Tests;
 
 public class HistorialExcelTests
 {
-    [Fact]
-    public void ResumenYMedicionesConservanValoresRealesYEscalados()
+    [Theory]
+    [InlineData(false, "Medido")]
+    [InlineData(true, "SIMULADO")]
+    public void ResumenYMedicionesConservanValoresRealesYEscalados(bool simulado, string origen)
     {
         var inicio = new DateTime(2026, 11, 20, 12, 0, 0, DateTimeKind.Utc);
         var anterior = new Medicion { Ts = inicio.AddSeconds(-1), BootId = 1, WhSolAcum = 10m, WhRedAcum = 3m };
@@ -21,13 +23,14 @@ public class HistorialExcelTests
         var energia = CalculadoraEnergia.CalcularMuestras(mediciones, [anterior], eventos.Length);
 
         using var archivo = new MemoryStream();
-        HistorialExcel.Escribir(archivo, "Maqueta", inicio, ultima.Ts, 2000m, energia, mediciones, eventos);
+        HistorialExcel.Escribir(archivo, "Maqueta", inicio, ultima.Ts, 2000m, energia, mediciones, eventos, simulado);
         archivo.Position = 0;
         using var libro = new XLWorkbook(archivo);
         var resumen = libro.Worksheet("Resumen");
         var hoja = libro.Worksheet("Mediciones");
 
         Assert.Equal(3, libro.Worksheets.Count);
+        Assert.Equal(origen, resumen.Cell("B5").GetString());
         Assert.Equal(3m, resumen.Cell("B7").GetValue<decimal>());
         Assert.Equal(Formato.Energia(energia.WhSolar, 2000m), Formato.Energia(resumen.Cell("C7").GetValue<decimal>()));
         Assert.Equal(1m, resumen.Cell("B8").GetValue<decimal>());

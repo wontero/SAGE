@@ -4,7 +4,7 @@ using SAGE.Web.Data;
 
 namespace SAGE.Web.Servicios.Telemetria;
 
-// Patrón: Adapter - rol: adaptador
+// Patrón: Adapter — rol: adaptador
 public sealed class AdaptadorTelemetriaEsp32
     : IAdaptadorTelemetria
 {

@@ -16,6 +16,7 @@
 @inject EstadoDispositivosEnVivo EnVivo
 @inject IFabricaDispositivo Fabrica
 
+@* // Patrón: Observer — rol: observador *@
 <PageTitle>Mediciones — SAGE</PageTitle>
 
 <div class="page">
@@ -141,7 +142,6 @@
 
     protected override void OnInitialized()
     {
-        // Patrón Observer: observar nuevas mediciones.
         EnVivo.Cambio += AlCambiarEstado;
     }
 

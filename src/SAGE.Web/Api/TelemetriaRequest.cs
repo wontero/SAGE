@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace SAGE.Web.Api;
 
+// Patrón: Adapter — rol: adaptado
 public sealed class TelemetriaRequest
 {
     [JsonRequired]

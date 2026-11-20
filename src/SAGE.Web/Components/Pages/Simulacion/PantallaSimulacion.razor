@@ -96,10 +96,7 @@
         {
             <div class="page-panel sage-panel-pad">
                 <div class="sage-sim-head">
-                    <span class="sage-sim-badge">
-                        <MudIcon Icon="@Icons.Material.Filled.Science" Size="Size.Small" />
-                        SIMULACIÓN
-                    </span>
+                    <MudChip T="string" Color="Color.Info" Size="Size.Small">SIMULACIÓN</MudChip>
                     <span class="sage-person__mail">Horizonte @_resultado.HorizonteAnios años · params v@_resultado.ParametrosVersion</span>
                 </div>
 
@@ -279,7 +276,10 @@
         }
 
         <section class="home-group" aria-label="Simulaciones guardadas">
-            <h2 class="home-group__title">Simulaciones guardadas</h2>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <h2 class="home-group__title">Simulaciones guardadas</h2>
+                <MudChip T="string" Color="Color.Info" Size="Size.Small">SIMULACIÓN</MudChip>
+            </MudStack>
             <div class="page-panel">
                 <MudTable Items="_guardadas" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
                     <HeaderContent>
@@ -315,7 +315,8 @@
     private bool _simulando;
     private bool _guardando;
     private bool _guardandoTarifa;
-    private bool _puedeSimular;
+    private bool _puedeSimular => !UsuarioActual.EsOperador && !UsuarioActual.DebeCambiarContrasena &&
+        (UsuarioActual.EsAdministrador || UsuarioActual.EsTecnico);
     private bool _puedeFijarTarifa;
     private string? _error;
 
@@ -338,7 +339,6 @@
     protected override async Task OnInitializedAsync()
     {
         await UsuarioActual.CargarAsync();
-        _puedeSimular = UsuarioActual.EsAdministrador || UsuarioActual.EsTecnico;
         _puedeFijarTarifa = UsuarioActual.EsAdministrador;
         await CargarAsync();
     }
@@ -382,7 +382,7 @@
 
     private async Task Simular()
     {
-        if (_simulando)
+        if (_simulando || !_puedeSimular)
             return;
 
         _error = null;
@@ -398,7 +398,7 @@
             using var scope = ScopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            var empresa = await db.Empresas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == empresaId);
+            var empresa = await db.Empresas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == empresaId && e.Activa);
             var parametros = await db.ParametrosEconomicos.AsNoTracking()
                 .OrderByDescending(p => p.Version)
                 .FirstOrDefaultAsync();
@@ -418,7 +418,9 @@
 
             var tarifa = _tarifaPropia ?? parametros.TarifaBsKwh;
 
-            // Patrón: Builder — rol: director (la pantalla orquesta al constructor)
+            if (UsuarioActual.EmpresaActivaId != empresaId)
+                return;
+
             var simulacion = new SimulacionBuilder()
                 .ParaEmpresa(empresa)
                 .ConParametros(parametros)
@@ -637,12 +639,18 @@
 
     private async Task Guardar()
     {
-        if (_guardando || _resultado is null)
+        if (_guardando || !_puedeSimular || _resultado is not { } resultado)
             return;
 
         _guardando = true;
         try
         {
+            if (UsuarioActual.EmpresaActivaId != resultado.EmpresaId || !UsuarioActual.PuedeVerEmpresa(resultado.EmpresaId))
+            {
+                Snackbar.Add("El resultado no pertenece a su empresa activa.", Severity.Error);
+                return;
+            }
+
             if (UsuarioActual.UsuarioId is not string usuarioId)
             {
                 Snackbar.Add("No se pudo identificar al usuario.", Severity.Error);
@@ -654,27 +662,27 @@
 
             var copia = new Data.Simulacion
             {
-                EmpresaId = _resultado.EmpresaId,
+                EmpresaId = resultado.EmpresaId,
                 UsuarioId = usuarioId,
                 Fecha = DateTime.UtcNow,
-                ParametrosVersion = _resultado.ParametrosVersion,
-                TarifaUsadaBsKwh = _resultado.TarifaUsadaBsKwh,
-                ConsumoMensualKwh = _resultado.ConsumoMensualKwh,
-                MesesBase = _resultado.MesesBase,
-                KwpSolar = _resultado.KwpSolar,
-                KwpMixto = _resultado.KwpMixto,
-                HorizonteAnios = _resultado.HorizonteAnios,
-                InversionSolarBs = _resultado.InversionSolarBs,
-                InversionMixtoBs = _resultado.InversionMixtoBs,
-                CostoAnualRedBs = _resultado.CostoAnualRedBs,
-                CostoAnualSolarBs = _resultado.CostoAnualSolarBs,
-                CostoAnualMixtoBs = _resultado.CostoAnualMixtoBs,
-                CostoAcumRedBs = _resultado.CostoAcumRedBs,
-                CostoAcumSolarBs = _resultado.CostoAcumSolarBs,
-                CostoAcumMixtoBs = _resultado.CostoAcumMixtoBs,
-                RecuperacionSolarAnios = _resultado.RecuperacionSolarAnios,
-                RecuperacionMixtoAnios = _resultado.RecuperacionMixtoAnios,
-                Advertencias = _resultado.Advertencias.ToList()
+                ParametrosVersion = resultado.ParametrosVersion,
+                TarifaUsadaBsKwh = resultado.TarifaUsadaBsKwh,
+                ConsumoMensualKwh = resultado.ConsumoMensualKwh,
+                MesesBase = resultado.MesesBase,
+                KwpSolar = resultado.KwpSolar,
+                KwpMixto = resultado.KwpMixto,
+                HorizonteAnios = resultado.HorizonteAnios,
+                InversionSolarBs = resultado.InversionSolarBs,
+                InversionMixtoBs = resultado.InversionMixtoBs,
+                CostoAnualRedBs = resultado.CostoAnualRedBs,
+                CostoAnualSolarBs = resultado.CostoAnualSolarBs,
+                CostoAnualMixtoBs = resultado.CostoAnualMixtoBs,
+                CostoAcumRedBs = resultado.CostoAcumRedBs,
+                CostoAcumSolarBs = resultado.CostoAcumSolarBs,
+                CostoAcumMixtoBs = resultado.CostoAcumMixtoBs,
+                RecuperacionSolarAnios = resultado.RecuperacionSolarAnios,
+                RecuperacionMixtoAnios = resultado.RecuperacionMixtoAnios,
+                Advertencias = resultado.Advertencias.ToList()
             };
 
             db.Simulaciones.Add(copia);

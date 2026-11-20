@@ -2,8 +2,10 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.Extensions.DependencyInjection
+@using SAGE.Web.Servicios.Seguridad
 @inject IServiceScopeFactory ScopeFactory
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IUsuarioActual UsuarioActual
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -127,9 +129,18 @@
                 return;
             }
 
+            await UsuarioActual.CargarAsync();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var roles = await userManager.GetRolesAsync(usuario);
+            _error = await ReglasUsuarios.ErrorDeGestionAsync(db, UsuarioActual, usuario.Id, roles,
+                AccionUsuario.RestablecerContrasena);
+            if (_error is not null)
+                return;
+
             var token = await userManager
                 .GeneratePasswordResetTokenAsync(usuario);
 
+            usuario.DebeCambiarContrasena = true;
             var resultado = await userManager.ResetPasswordAsync(
                 usuario,
                 token,
@@ -143,10 +154,6 @@
 
                 return;
             }
-
-            // Contraseña temporal: debe cambiarla en el próximo inicio de sesión.
-            usuario.DebeCambiarContrasena = true;
-            await userManager.UpdateAsync(usuario);
 
             _modelo.NuevaContrasena = string.Empty;
             _modelo.Confirmacion = string.Empty;

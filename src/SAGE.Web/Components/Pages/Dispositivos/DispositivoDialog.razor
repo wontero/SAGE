@@ -145,6 +145,12 @@
 
         try
         {
+            if (UsuarioActual.EmpresaActivaId is not int empresaId || !UsuarioActual.PuedeVerEmpresa(empresaId))
+            {
+                _error = "El dispositivo ya no existe.";
+                return;
+            }
+
             await using var scope =
                 ScopeFactory.CreateAsyncScope();
 
@@ -153,22 +159,17 @@
 
             var datos = await db.Dispositivos
                 .AsNoTracking()
-                .Where(d => d.Id == dispositivoId)
-                .Select(d => new
-                {
-                    d.EmpresaId,
-                    d.FactorEscala
-                })
+                .Where(d => d.Id == dispositivoId && d.EmpresaId == empresaId)
+                .Select(d => (decimal?)d.FactorEscala)
                 .FirstOrDefaultAsync();
 
-            if (datos is null ||
-                !UsuarioActual.PuedeVerEmpresa(datos.EmpresaId))
+            if (datos is null || UsuarioActual.EmpresaActivaId != empresaId)
             {
                 _error = "El dispositivo ya no existe.";
                 return;
             }
 
-            _factorEscala = datos.FactorEscala;
+            _factorEscala = datos.Value;
         }
         catch
         {
@@ -285,12 +286,9 @@
             else
             {
                 var dispositivo = await db.Dispositivos
-                    .FindAsync(_modelo.Id.Value);
+                    .FirstOrDefaultAsync(d => d.Id == _modelo.Id.Value && d.EmpresaId == empresaId);
 
-                if (dispositivo is null ||
-                    dispositivo.EmpresaId != empresaId ||
-                    !UsuarioActual.PuedeVerEmpresa(
-                        dispositivo.EmpresaId))
+                if (dispositivo is null || UsuarioActual.EmpresaActivaId != empresaId)
                 {
                     _error = "El dispositivo ya no existe.";
                     return;

@@ -20,6 +20,7 @@
 @inject IFabricaDispositivo Fabrica
 @inject ILogger<Home> Logger
 
+@* // Patrón: Observer — rol: observador *@
 <PageTitle>Inicio — SAGE</PageTitle>
 
 <div class="page">
@@ -160,6 +161,10 @@
                                 <MudText Typo="Typo.h5">
                                     @Potencia(_empresaActiva.PSolarMw)
                                 </MudText>
+                                @foreach (var factor in _empresaActiva.FactoresPotencia)
+                                {
+                                    <ChipEscala Factor="@factor" />
+                                }
                             </MudPaper>
                         </MudItem>
 
@@ -171,6 +176,10 @@
                                 <MudText Typo="Typo.h5">
                                     @Potencia(_empresaActiva.PRedMw)
                                 </MudText>
+                                @foreach (var factor in _empresaActiva.FactoresPotencia)
+                                {
+                                    <ChipEscala Factor="@factor" />
+                                }
                             </MudPaper>
                         </MudItem>
 
@@ -208,17 +217,6 @@
                         </MudItem>
 
                     </MudGrid>
-
-                    @if (_empresaActiva.TieneEscala)
-                    {
-                        <div class="mt-3">
-                            <MudChip T="string"
-                                     Color="Color.Info"
-                                     Variant="Variant.Outlined">
-                                Potencia escalada para maqueta
-                            </MudChip>
-                        </div>
-                    }
 
                     <MudPaper Class="pa-4 mt-4">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
@@ -290,6 +288,7 @@
 
                                     <MudTd>
                                         @Potencia(context.PotenciaSeleccionadaMw)
+                                        <ChipEscala Factor="@context.FactorEscala" />
                                     </MudTd>
 
                                     <MudTd>
@@ -345,10 +344,18 @@
 
                                 <MudTd DataLabel="Solar">
                                     @Potencia(context.PSolarMw)
+                                    @foreach (var factor in context.FactoresPotencia)
+                                    {
+                                        <ChipEscala Factor="@factor" />
+                                    }
                                 </MudTd>
 
                                 <MudTd DataLabel="Red">
                                     @Potencia(context.PRedMw)
+                                    @foreach (var factor in context.FactoresPotencia)
+                                    {
+                                        <ChipEscala Factor="@factor" />
+                                    }
                                 </MudTd>
 
                                 <MudTd DataLabel="Energía hoy">
@@ -399,10 +406,18 @@
 
                                 <MudTh>
                                     @Potencia(_resumenes.Sum(r => r.PSolarMw))
+                                    @foreach (var factor in FactoresPotenciaTotal)
+                                    {
+                                        <ChipEscala Factor="@factor" />
+                                    }
                                 </MudTh>
 
                                 <MudTh>
                                     @Potencia(_resumenes.Sum(r => r.PRedMw))
+                                    @foreach (var factor in FactoresPotenciaTotal)
+                                    {
+                                        <ChipEscala Factor="@factor" />
+                                    }
                                 </MudTh>
 
                                 <MudTh>
@@ -445,6 +460,10 @@
 
                         @if (_resumenes.Count > 0)
                         {
+                            @foreach (var factor in FactoresPotenciaTotal)
+                            {
+                                <ChipEscala Factor="@factor" />
+                            }
                             <MudChart T="double"
                                       ChartType="ChartType.Bar"
                                       ChartSeries="@_series"
@@ -484,6 +503,7 @@
     private bool _actualizandoEnergia;
     private DateTime _proximaEnergiaUtc;
     private bool EnergiaSimulada => Fabrica is FabricaDispositivoSimulado;
+    private IEnumerable<decimal> FactoresPotenciaTotal => _resumenes.SelectMany(r => r.FactoresPotencia).Distinct();
 
     private string? _error;
 
@@ -659,7 +679,7 @@
                 {
                     Id = dispositivo.Id,
                     Nombre = dispositivo.Nombre,
-                    EsSimulado = dispositivo.EsSimulado,
+                    EsSimulado = EnergiaSimulada || dispositivo.EsSimulado,
                     FactorEscala = dispositivo.FactorEscala,
                     UltimoContacto = dispositivo.UltimoContacto
                 };
@@ -993,12 +1013,11 @@
         public decimal WhSolarHoy { get; set; }
         public decimal WhRedHoy { get; set; }
         public IEnumerable<decimal> Factores => Dispositivos.Select(d => d.FactorEscala).Distinct();
+        public IEnumerable<decimal> FactoresPotencia => Dispositivos.Where(d => d.EnLinea).Select(d => d.FactorEscala).Distinct();
 
         public int AlertasAbiertas { get; set; }
         public decimal ConsumoKwh { get; set; }
         public decimal MontoBs { get; set; }
-
-        public bool TieneEscala { get; set; }
 
         public List<TarjetaDispositivo> Dispositivos { get; } = new();
 
@@ -1015,8 +1034,6 @@
                 .Where(d => d.EnLinea)
                 .Sum(d => d.PRedMw * d.FactorEscala);
 
-            TieneEscala = Dispositivos
-                .Any(d => d.FactorEscala != 1m);
         }
     }
 

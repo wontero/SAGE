@@ -21,6 +21,7 @@
 @inject IFabricaDispositivo Fabrica
 @inject ISnackbar Snackbar
 
+@* // Patrón: Observer — rol: observador *@
 <PageTitle>Monitoreo de dispositivo - SAGE</PageTitle>
 
 <div class="page">
@@ -324,6 +325,7 @@
                 <MudText Typo="Typo.h6">
                     Potencia en tiempo real
                 </MudText>
+                <ChipEscala Factor="@dispositivo.FactorEscala" />
 
                 <MudText Typo="Typo.caption">
                     Solar y red, últimos 5 minutos.

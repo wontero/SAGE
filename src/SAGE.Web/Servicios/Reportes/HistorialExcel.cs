@@ -12,12 +12,13 @@ namespace SAGE.Web.Servicios.Reportes;
 internal static class HistorialExcel
 {
     internal static void Escribir(Stream destino, string dispositivo, DateTime desdeUtc, DateTime hastaUtc,
-        decimal factor, EnergiaPorFuente energia, IReadOnlyList<Medicion> mediciones, IReadOnlyList<Evento> eventos)
+        decimal factor, EnergiaPorFuente energia, IReadOnlyList<Medicion> mediciones, IReadOnlyList<Evento> eventos,
+        bool simulado)
     {
         var detalles = new List<Detalle>();
         using (var libro = new XLWorkbook())
         {
-            EscribirResumen(libro, dispositivo, desdeUtc, hastaUtc, factor, energia);
+            EscribirResumen(libro, dispositivo, desdeUtc, hastaUtc, factor, energia, simulado);
             PrepararHojas(libro, detalles, "Mediciones",
                 ["Hora (Bolivia)", "Solar (V)", "Solar (mA)", "Solar real (W)", "Solar escalada (W)",
                  "Solar real acum. (Wh)", "Solar escalada acum. (Wh)", "Red (V)", "Red (mA)", "Red real (W)",
@@ -60,7 +61,7 @@ internal static class HistorialExcel
     }
 
     private static void EscribirResumen(XLWorkbook libro, string dispositivo, DateTime desdeUtc, DateTime hastaUtc,
-        decimal factor, EnergiaPorFuente energia)
+        decimal factor, EnergiaPorFuente energia, bool simulado)
     {
         var resumen = libro.Worksheets.Add("Resumen");
         resumen.Cell("A1").Value = "Dispositivo";
@@ -71,6 +72,8 @@ internal static class HistorialExcel
         resumen.Cell("B3").Value = Formato.HoraLocal(hastaUtc);
         resumen.Cell("A4").Value = "Factor de escala";
         resumen.Cell("B4").Value = factor;
+        resumen.Cell("A5").Value = "Origen de datos";
+        resumen.Cell("B5").Value = simulado ? "SIMULADO" : "Medido";
         resumen.Cell("A6").InsertData(new[] { new[] { "Indicador", "Real (Wh)", "Escalada (Wh)" } });
         resumen.Range("A6:C6").Style.Font.Bold = true;
         resumen.Cell("A7").Value = "Energía solar";

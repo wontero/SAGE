@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SAGE.Web.Data;
 
+// Patrón: Builder — rol: producto
 public class Simulacion
 {
     public int Id { get; set; }

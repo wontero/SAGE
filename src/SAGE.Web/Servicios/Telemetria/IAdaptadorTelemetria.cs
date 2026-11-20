@@ -4,7 +4,7 @@ using SAGE.Web.Data;
 
 namespace SAGE.Web.Servicios.Telemetria;
 
-// Patrón: Adapter - rol: objetivo
+// Patrón: Adapter — rol: objetivo
 public interface IAdaptadorTelemetria
 {
     Medicion AMedicion(

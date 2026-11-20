@@ -6,12 +6,14 @@
 @using Microsoft.EntityFrameworkCore
 @using SAGE.Web.Data
 @using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Dispositivo
 @using SAGE.Web.Servicios.EnVivo
 @using SAGE.Web.Servicios.Seguridad
 
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
 @inject EstadoDispositivosEnVivo EnVivo
+@inject IFabricaDispositivo Fabrica
 
 <PageTitle>Monitoreo — SAGE</PageTitle>
 
@@ -51,6 +53,7 @@
 
             @foreach (var dispositivo in dispositivos)
             {
+                var simulado = Fabrica is FabricaDispositivoSimulado || dispositivo.EsSimulado;
                 estados.TryGetValue(
                     dispositivo.Id,
                     out var estado);
@@ -75,10 +78,10 @@
 
                                 <MudChip T="string"
                                          Size="Size.Small"
-                                         Color="@(dispositivo.EsSimulado
+                                         Color="@(simulado
                                                                                  ? Color.Info
                                                                                  : Color.Default)">
-                                    @(dispositivo.EsSimulado
+                                    @(simulado
                                         ? "SIMULADO"
                                         : "REAL")
                                 </MudChip>

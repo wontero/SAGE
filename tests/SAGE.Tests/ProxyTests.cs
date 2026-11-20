@@ -46,6 +46,57 @@ public class ProxyTests
     }
 
     [Fact]
+    public async Task CanalBdSoloConsultaYCreaOrdenesDeLaEmpresaActiva()
+    {
+        await using var servicios = await CrearServiciosAsync();
+        var scopes = servicios.GetRequiredService<IServiceScopeFactory>();
+        var enVivo = new EstadoDispositivosEnVivo(NullLogger<EstadoDispositivosEnVivo>.Instance);
+        var andina = new CanalOrdenesBD(scopes, new Usuario(DatosIniciales.RolAdministrador, 1), enVivo);
+        var palmas = new CanalOrdenesBD(scopes, new Usuario(DatosIniciales.RolAdministrador, 2), enVivo);
+
+        var orden = await andina.EnviarModoAsync(1, "AUTO");
+        Assert.Equal(orden.Id, Assert.Single(await andina.UltimasAsync(1, 10)).Id);
+        Assert.Empty(await palmas.UltimasAsync(1, 10));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => palmas.EnviarModoAsync(1, "CARGADOR"));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => palmas.EnviarParametrosAsync(1, ParametrosFuente.Predeterminados));
+        Assert.Equal(Orden.EstadoPendiente, Assert.Single(await andina.UltimasAsync(1, 10)).Estado);
+    }
+
+    [Theory]
+    [InlineData(AccionUsuario.RestablecerContrasena)]
+    [InlineData(AccionUsuario.Editar)]
+    [InlineData(AccionUsuario.CambiarEstado)]
+    public async Task GestionRequiereVinculoDelUsuarioConLaEmpresaActiva(AccionUsuario accion)
+    {
+        await using var servicios = await CrearServiciosAsync();
+        using var scope = servicios.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UsuarioEmpresas.Add(new UsuarioEmpresa { UsuarioId = "empleado", EmpresaId = 1 });
+        await db.SaveChangesAsync();
+
+        string[] roles = [DatosIniciales.RolTecnico];
+        var andina = new Usuario(DatosIniciales.RolAdministrador, 1);
+        var palmas = new Usuario(DatosIniciales.RolAdministrador, 2);
+        Assert.Null(await ReglasUsuarios.ErrorDeGestionAsync(db, andina, "empleado", roles, accion));
+        Assert.Equal("El usuario no pertenece a su empresa activa.",
+            await ReglasUsuarios.ErrorDeGestionAsync(db, palmas, "empleado", roles, accion));
+    }
+
+    [Theory]
+    [InlineData(AccionUsuario.RestablecerContrasena)]
+    [InlineData(AccionUsuario.CambiarEstado)]
+    public async Task OperadorSoloGestionaCuentasDeAdministradores(AccionUsuario accion)
+    {
+        await using var servicios = await CrearServiciosAsync();
+        using var scope = servicios.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var operador = new Usuario(DatosIniciales.RolOperador, 1);
+
+        Assert.Null(await ReglasUsuarios.ErrorDeGestionAsync(db, operador, "admin", [DatosIniciales.RolAdministrador], accion));
+        Assert.NotNull(await ReglasUsuarios.ErrorDeGestionAsync(db, operador, "tecnico", [DatosIniciales.RolTecnico], accion));
+    }
+
+    [Fact]
     public async Task FabricaSimuladaUsaLecturasSinteticasYResuelveLaOrdenSinGuardarlaEnSql()
     {
         await using var servicios = await CrearServiciosAsync();
@@ -96,6 +147,7 @@ public class ProxyTests
             .BuildServiceProvider();
         using var scope = servicios.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Users.Add(new ApplicationUser { Id = "prueba", UserName = "prueba" });
         db.Dispositivos.Add(new Dispositivo { Id = 1, EmpresaId = 1, Nombre = "Maqueta", TokenHash = "prueba" });
         await db.SaveChangesAsync();
         return servicios;

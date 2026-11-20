@@ -191,7 +191,7 @@
             }
             else
             {
-                await EditarAsync(usuarios);
+                await EditarAsync(db, usuarios);
             }
         }
         catch
@@ -266,7 +266,7 @@
         MudDialog.Close(DialogResult.Ok(true));
     }
 
-    private async Task EditarAsync(UserManager<ApplicationUser> usuarios)
+    private async Task EditarAsync(ApplicationDbContext db, UserManager<ApplicationUser> usuarios)
     {
         var usuario = await usuarios.FindByIdAsync(_modelo.Id!);
         if (usuario is null)
@@ -275,20 +275,11 @@
             return;
         }
 
-        if (usuario.Id == UsuarioActual.UsuarioId)
-        {
-            _error = "No podés editar tu propia cuenta desde aquí.";
-            return;
-        }
-
         var rolesActuales = await usuarios.GetRolesAsync(usuario);
-
-        // El Administrador solo edita Técnico y Consulta.
-        if (rolesActuales.Contains("Administrador") || rolesActuales.Contains("Operador"))
-        {
-            _error = "Este usuario lo gestiona SAGE.";
+        _error = await ReglasUsuarios.ErrorDeGestionAsync(db, UsuarioActual, usuario.Id, rolesActuales,
+            AccionUsuario.Editar);
+        if (_error is not null)
             return;
-        }
 
         if (_modelo.Rol != "Tecnico" && _modelo.Rol != "Consulta")
         {

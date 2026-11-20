@@ -876,16 +876,16 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 Con la plataforma y el simulador corriendo (dispositivo de Energía Andina con `FactorEscala = 2000`):
 
 - [ ] 1. `operador@sage.test`: crea la empresa "Panadería Sol" y su administrador. Muestra que no ve ningún dato de energía.
-- [ ] 2. El nuevo administrador entra → obligado a cambiar la contraseña → ve solo Panadería Sol.
+- [x] 2. El nuevo administrador entra → obligado a cambiar la contraseña → ve solo Panadería Sol.
 - [ ] 3. `admin@sage.test`: cambia entre sus 2 empresas con el selector; Inicio → "Todas mis empresas" con una fila por empresa en vivo.
 - [ ] 4. `/monitoreo/{id}`: modo Automático con sol → Solar · comprobada, potencia "×2000" cambiando cada segundo.
-- [ ] 5. Simulador `S` (sombra) → en ≤ 2 s pasa a Red, evento "Solar insuficiente" y alerta.
-- [ ] 6. Simulador `S` (sin sombra) → tras ~30 s, prueba y regreso a solar ("Solar comprobada").
-- [ ] 7. Con sombra, orden **Solar** → "Rechazada: Solar no disponible".
-- [ ] 8. Orden **Red** y luego **Automático** → ambas "Ejecutada".
-- [ ] 9. Simulador `W` (sin Wi-Fi) + `S` → conmuta igual; `W` → los eventos aparecen una sola vez; mientras, la alerta "Sin conexión" se abrió y se cerró.
+- [x] 5. Simulador `S` (sombra) → en ≤ 2 s pasa a Red, evento "Solar insuficiente" y alerta.
+- [x] 6. Simulador `S` (sin sombra) → tras ~30 s, prueba y regreso a solar ("Solar comprobada").
+- [x] 7. Con sombra, orden **Solar** → "Rechazada: Solar no disponible".
+- [x] 8. Orden **Red** y luego **Automático** → ambas "Ejecutada".
+- [x] 9. Simulador `W` (sin Wi-Fi) + `S` → conmuta igual; `W` → los eventos aparecen una sola vez; mientras, la alerta "Sin conexión" se abrió y se cerró.
 - [ ] 10. Pestaña Reglas: cambiar T_estable a 15 s → "Aplicada".
-- [ ] 11. Ensayo de 5 minutos con una sombra en medio → comparación MEDIDA por fuente.
+- [x] 11. Ensayo de 5 minutos con una sombra en medio → comparación MEDIDA por fuente.
 - [ ] 12. Historial del día → exportar a Excel.
 - [ ] 13. Simulación económica de Hotel Las Palmas → 3 escenarios rotulados SIMULACIÓN, separados de lo medido.
 - [ ] 14. `consulta@sage.test`: ve todo de Energía Andina, sin botones de control.
