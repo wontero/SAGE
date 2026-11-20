@@ -42,14 +42,10 @@ public sealed class CalculadoraEnergia(
 
         // LEAD usa el orden cronológico, incluso cuando cambia el BootId o el reloj se repite.
         var resultados = await db.Database.SqlQuery<Totales>($"""
-            WITH Dispositivo AS (
-                SELECT Id FROM Dispositivos WHERE Id = {dispositivoId} AND EmpresaId = {empresaId}
-            ), Intervalo AS (
-                SELECT m.Id, m.Ts, m.BootId, m.FuenteSeleccionada, m.WhSolAcum, m.WhRedAcum
-                FROM Mediciones m INNER JOIN Dispositivo d ON d.Id = m.DispositivoId
-                WHERE m.Ts >= {desdeUtc} AND m.Ts <= {hastaUtc}
-            ), Pares AS (
-                SELECT FuenteSeleccionada, Ts, LEAD(Ts) OVER (ORDER BY Ts, Id) AS Siguiente FROM Intervalo
+            WITH Pares AS (
+                SELECT m.FuenteSeleccionada, m.Ts, LEAD(m.Ts) OVER (ORDER BY m.Ts, m.Id) AS Siguiente
+                FROM Mediciones m
+                WHERE m.DispositivoId = {dispositivoId} AND m.Ts >= {desdeUtc} AND m.Ts <= {hastaUtc}
             ), Duraciones AS (
                 SELECT FuenteSeleccionada,
                     CASE WHEN Siguiente IS NULL THEN 0
@@ -58,30 +54,38 @@ public sealed class CalculadoraEnergia(
                          ELSE DATEDIFF_BIG(nanosecond, Ts, Siguiente) / 100
                     END AS Ticks
                 FROM Pares
-            ), Ultimas AS (
-                SELECT BootId, WhSolAcum, WhRedAcum,
-                    ROW_NUMBER() OVER (PARTITION BY BootId ORDER BY Ts DESC, Id DESC) AS Posicion
-                FROM Intervalo
+            ), Arranques AS (
+                -- Acota la lectura al intervalo, aunque el dispositivo tenga un historial mucho mayor.
+                SELECT DISTINCT m.BootId
+                FROM Mediciones m WITH (FORCESEEK (IX_Mediciones_DispositivoId_Ts (DispositivoId, Ts)))
+                WHERE m.DispositivoId = {dispositivoId} AND m.Ts >= {desdeUtc} AND m.Ts <= {hastaUtc}
             ), Energias AS (
                 SELECT SUM(u.WhSolAcum - COALESCE(r.WhSolAcum, 0)) AS WhSolar,
                     SUM(u.WhRedAcum - COALESCE(r.WhRedAcum, 0)) AS WhRed
-                FROM Ultimas u
+                FROM Arranques a
+                CROSS APPLY (
+                    SELECT TOP (1) m.WhSolAcum, m.WhRedAcum
+                    FROM Mediciones m
+                    WHERE m.DispositivoId = {dispositivoId} AND m.BootId = a.BootId
+                        AND m.Ts >= {desdeUtc} AND m.Ts <= {hastaUtc}
+                    ORDER BY m.Ts DESC, m.Id DESC
+                ) u
                 OUTER APPLY (
                     SELECT TOP (1) m.WhSolAcum, m.WhRedAcum
-                    FROM Mediciones m INNER JOIN Dispositivo d ON d.Id = m.DispositivoId
-                    WHERE m.BootId = u.BootId AND m.Ts < {desdeUtc}
+                    FROM Mediciones m
+                    WHERE m.DispositivoId = {dispositivoId} AND m.BootId = a.BootId AND m.Ts < {desdeUtc}
                     ORDER BY m.Ts DESC, m.Id DESC
                 ) r
-                WHERE u.Posicion = 1
             )
             SELECT e.WhSolar, e.WhRed, t.TicksSolar, t.TicksRed,
-                (SELECT COUNT(*) FROM Eventos ev INNER JOIN Dispositivo d ON d.Id = ev.DispositivoId
-                 WHERE ev.Tipo = N'conmutacion' AND ev.Ts >= {desdeUtc} AND ev.Ts <= {hastaUtc}) AS Conmutaciones
-            FROM Dispositivo CROSS JOIN Energias e CROSS JOIN (
+                (SELECT COUNT(*) FROM Eventos ev WHERE ev.DispositivoId = {dispositivoId}
+                    AND ev.Tipo = N'conmutacion' AND ev.Ts >= {desdeUtc} AND ev.Ts <= {hastaUtc}) AS Conmutaciones
+            FROM Energias e CROSS JOIN (
                 SELECT SUM(CASE WHEN FuenteSeleccionada = N'SOLAR' THEN Ticks ELSE 0 END) AS TicksSolar,
                        SUM(CASE WHEN FuenteSeleccionada = N'CARGADOR' THEN Ticks ELSE 0 END) AS TicksRed
                 FROM Duraciones
             ) t
+            WHERE EXISTS (SELECT 1 FROM Dispositivos WHERE Id = {dispositivoId} AND EmpresaId = {empresaId})
             """).ToListAsync();
 
         var total = resultados.SingleOrDefault() ??
