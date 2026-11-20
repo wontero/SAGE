@@ -756,7 +756,7 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 - [x] Con `Dispositivo:Modo = Real` todo funciona como antes.
 - [x] Llamar a `EnviarModoAsync` como Consulta (desde una prueba) lanza la excepción y no crea filas en `Ordenes`.
 
-### - [ ] S23-M14 · RF14 Energía por fuente, RF04 historial y RF08 exportación
+### - [x] S23-M14 · RF14 Energía por fuente, RF04 historial y RF08 exportación
 **Qué hacer**
 1. `Servicios/Energia/CalculadoraEnergia.cs`: `Task<EnergiaPorFuente> CalcularAsync(int dispositivoId, DateTime desdeUtc, DateTime hastaUtc)` → `record EnergiaPorFuente(decimal WhSolar, decimal WhRed, TimeSpan TiempoSolar, TimeSpan TiempoRed, int Conmutaciones)`. Regla exacta:
    - Por cada `BootId` con mediciones en el intervalo: `energía = último WhAcum en el intervalo − referencia`, donde `referencia` = último `WhAcum` de ese mismo `BootId` **antes** del intervalo, o 0 si no hay (el arranque fue dentro del intervalo). Se suman todos los `BootId`. Se hace por separado para solar y red.
@@ -774,8 +774,8 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 **Criterios de aceptación**
 - [x] 30 min de simulador en solar: la energía solar del historial coincide con `P promedio × 0,5 h` dentro de ±5 % (RF14, con los valores reales).
 - [x] Un reinicio del simulador en medio del periodo no resta ni duplica energía.
-- [ ] El Excel exportado tiene las mismas cifras que las tarjetas de la pantalla (RF08).
-- [ ] El gráfico de 7 días con datos generados carga en ≤ 3 s (medido con el reloj del navegador; anota el valor).
+- [x] El Excel exportado tiene las mismas cifras que las tarjetas de la pantalla (RF08).
+- [x] El gráfico de 7 días con datos generados carga en ≤ 3 s (medido con el reloj del navegador; anota el valor).
 
 ### - [x] S23-M15 · RF18 Comparación medida (ensayos y periodo)
 **Qué hacer**
@@ -869,6 +869,14 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 - Pendientes o BLOQUEOS: ninguno para Mateo. El 2026-11-19 se unieron a `main` S23-M5 a S23-M8 (Matías) y S23-M9 a S23-M12 (Ethan), avance directo y sin conflictos. Comprobado en `main`: `dotnet build SAGE.slnx` sin errores ni advertencias, `dotnet test` con 133 pruebas correctas, las 14 migraciones se aplican sobre una base vacía (sin cambios de modelo pendientes) y la aplicación arranca. Matías todavía debe marcar sus casillas S23-M5 a S23-M8 y escribir su entrada en la Bitácora. En `/eventos` (S23-M5) faltan los filtros por dispositivo, tipo y fechas y la paginación de 50: no los hice porque son de Matías. Sigue Mateo (S23-M13).
 - Último commit: 6c5ad44
 
+### 2026-11-20 09:17 (UTC-4) — Mateo — S23-M13 a S23-M17
+- Hecho: S23-M13, Proxy de protección y Abstract Factory para telemetría y órdenes en modos Real y Simulado. S23-M14, energía por fuente, historial agrupado en SQL, energía de hoy en Inicio y exportación a Excel. En Chromium el gráfico de siete días cargó en 1,88–1,96 s con unas 602.650 lecturas según SQL. El Excel de hoy coincide con las seis tarjetas y con las 423 mediciones y 15 eventos de SQL. S23-M15, comparación MEDIDA por fuente en Historial y Ensayos, separada de la simulación económica. S23-M17, auditoría RNF01, chips RNF12, patrones y README de la demo. Claude comprobó aislamiento de Las Palmas, denegación de pantallas de energía al Operador y monitoreo de Energía Andina sin controles para Consulta. Verifiqué HTTP 200 en `/facturas` para Administrador, Técnico y Consulta, y Acceso denegado para Operador. Chromium con Playwright midió `document.documentElement.scrollWidth = 375` en las 14 rutas solicitadas. Build con 0 errores y 0 advertencias, 151 pruebas correctas y arranque verificado.
+- Correcciones a trabajo anterior: auditoría A1–A8 sobre empresa activa en dispositivos y órdenes, empresas visibles en Usuarios, permisos de edición, cambio de estado y restablecimiento con contraseña temporal, y alcance del cálculo y guardado de simulaciones. Chips B1–B11 de origen y escala revisados en Inicio, Monitoreo, Mediciones, Historial, Ensayos, Simulación y Excel. Patrones P1–P7 anotados y documentados. Se movieron `IAdaptadorTelemetria`, `AdaptadorTelemetriaEsp32` y `FachadaSincronizacion` a `Servicios/Telemetria` y se retiró el vigilante de desconexiones anterior. Se corrigió el HTTP 500 de `/facturas` con un contexto propio por operación, también en Empresas y en los diálogos de ambos módulos. Las consultas de energía usan los índices por intervalo y arranque para evitar ordenamientos grandes. El índice `IndiceMedicionesRecepcion` evitó un timeout adicional en `/mediciones`. En celular el menú abre como panel temporal, el correo se oculta y el cierre de sesión tiene ícono accesible. Las pestañas caben en Inicio, las tablas contienen su desplazamiento y se ajustaron los chips de Monitoreo y el formulario de tarifa. El SVG de Simulación usa coordenadas invariantes y permite fijar un año con un toque o con Enter.
+- Desvíos de la guía y motivo: S23-M16 pasa al Sprint 3 por falta de hardware. En el Product Backlog v1.1, RF12 pasó al Sprint 3 y se añadió T07 “Maqueta y firmware del ESP32”. En el Sprint 2 la conmutación automática se demuestra con el simulador (T06). La verificación de Mateo usó la base aislada `SAGE_M17_Demo` y puertos alternativos. El Excel genera el Resumen con ClosedXML y escribe las filas de Mediciones y Eventos en streaming con Open XML para limitar el uso de memoria. El generador de historial inserta por lotes diarios en SQL. La lista en vivo ordena por hora de recepción y el historial por hora de la medición.
+- Criterios no comprobados y por qué: S23-M16 queda sin marcar, incluida la compilación del firmware y las pruebas de relé, multímetro, sombra, órdenes y pérdida de Wi-Fi, porque la maqueta y el firmware están pendientes en Sprint 3. La revisión manual de RNF04 en Chrome, Edge y Firefox queda a cargo de Mateo. Se automatizó la medición a 375 px en Chromium. Queda pendiente el recorrido RNF01 en dos navegadores con telemetría simultánea y exportaciones. Pasos 1, 3, 4 y 10 de la sección 12: se comprueba en el ensayo de la demo con navegador. S23-M17 queda abierto hasta completar ese recorrido y el cierre de Matías.
+- Pendientes o BLOQUEOS: S23-M16 y RF12 en el Sprint 3. En `/eventos` faltan filtros por dispositivo, tipo y fechas, y la paginación de 50 del conjunto completo (S23-M5 de Matías). Matías debe marcar sus casillas S23-M5 a S23-M8 y escribir su entrada en la Bitácora.
+- Último commit: 853af47
+
 ---
 
 ## 12. Demo de los Sprints 2 y 3 (la completa Mateo en S23-M17)
@@ -886,6 +894,6 @@ Con la plataforma y el simulador corriendo (dispositivo de Energía Andina con `
 - [x] 9. Simulador `W` (sin Wi-Fi) + `S` → conmuta igual; `W` → los eventos aparecen una sola vez; mientras, la alerta "Sin conexión" se abrió y se cerró.
 - [ ] 10. Pestaña Reglas: cambiar T_estable a 15 s → "Aplicada".
 - [x] 11. Ensayo de 5 minutos con una sombra en medio → comparación MEDIDA por fuente.
-- [ ] 12. Historial del día → exportar a Excel.
-- [ ] 13. Simulación económica de Hotel Las Palmas → 3 escenarios rotulados SIMULACIÓN, separados de lo medido.
-- [ ] 14. `consulta@sage.test`: ve todo de Energía Andina, sin botones de control.
+- [x] 12. Historial del día → exportar a Excel.
+- [x] 13. Simulación económica de Hotel Las Palmas → 3 escenarios rotulados SIMULACIÓN, separados de lo medido.
+- [x] 14. `consulta@sage.test`: ve todo de Energía Andina, sin botones de control.
