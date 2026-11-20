@@ -134,6 +134,11 @@
             }
         </MudPaper>
 
+        <ComparacionPorFuente Energia="@resultado.Energia" Factor="@resultado.Dispositivo.FactorEscala"
+                             ConmutacionesSolar="@(resultado.Eventos.Count(e => e.Tipo == "conmutacion" && e.A == "SOLAR"))"
+                             ConmutacionesRed="@(resultado.Eventos.Count(e => e.Tipo == "conmutacion" && e.A == "CARGADOR"))"
+                             Simulado="@Simulado" />
+
         <MudPaper Class="pa-4">
             <MudText Typo="Typo.h6">Eventos del periodo</MudText>
             <MudTable T="Evento" Items="@resultado.Eventos" Dense="true" Hover="true" Breakpoint="Breakpoint.Md">

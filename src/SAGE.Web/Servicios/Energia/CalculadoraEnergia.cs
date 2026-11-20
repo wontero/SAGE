@@ -18,7 +18,7 @@ public sealed class CalculadoraEnergia(
 
     // Inicio consolida por separado las empresas vinculadas al usuario.
     internal async Task<EnergiaPorFuente> CalcularEmpresaAsync(
-        int empresaId, int dispositivoId, DateTime desdeUtc, DateTime hastaUtc)
+        int empresaId, int dispositivoId, DateTime desdeUtc, DateTime hastaUtc, bool soloMedida = false)
     {
         await usuario.CargarAsync();
         if (usuario.EsOperador || usuario.DebeCambiarContrasena || !usuario.PuedeVerEmpresa(empresaId))
@@ -29,7 +29,7 @@ public sealed class CalculadoraEnergia(
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        if (fabrica is FabricaDispositivoSimulado)
+        if (!soloMedida && fabrica is FabricaDispositivoSimulado)
         {
             if (!await db.Dispositivos.AnyAsync(d => d.Id == dispositivoId && d.EmpresaId == empresaId))
                 throw new UnauthorizedAccessException("El dispositivo no pertenece a una empresa vinculada.");

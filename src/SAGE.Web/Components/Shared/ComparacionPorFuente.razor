@@ -1,0 +1,72 @@
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Energia
+
+<MudPaper Class="pa-4 mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h6">Comparación por fuente (@Etiqueta)</MudText>
+        <MudChip T="string" Color="Color.Info">@Etiqueta</MudChip>
+    </MudStack>
+
+    <MudTable T="Fila" Items="@filas" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+        <HeaderContent>
+            <MudTh>Fuente</MudTh>
+            <MudTh>Energía real</MudTh>
+            <MudTh>Energía escalada</MudTh>
+            <MudTh>Tiempo de uso</MudTh>
+            <MudTh>% del total</MudTh>
+            <MudTh>Conmutaciones</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Fuente">@context.Fuente</MudTd>
+            <MudTd DataLabel="Energía real">@Formato.Energia(context.Wh)</MudTd>
+            <MudTd DataLabel="Energía escalada">
+                @Formato.Energia(context.Wh, Factor)
+                <ChipEscala Factor="@Factor" />
+            </MudTd>
+            <MudTd DataLabel="Tiempo de uso">@Formato.Duracion(context.Tiempo)</MudTd>
+            <MudTd DataLabel="% del total">@Formato.Porcentaje(context.Porcentaje)</MudTd>
+            <MudTd DataLabel="Conmutaciones">@context.Conmutaciones</MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3">
+        <MudText Typo="Typo.subtitle2">Energía escalada (@unidad)</MudText>
+        <ChipEscala Factor="@Factor" />
+    </MudStack>
+    <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="@series"
+              ChartLabels="@Fuentes" Width="100%" Height="220px" />
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public EnergiaPorFuente Energia { get; set; } = default!;
+    [Parameter] public decimal Factor { get; set; } = 1;
+    [Parameter] public int ConmutacionesSolar { get; set; }
+    [Parameter] public int ConmutacionesRed { get; set; }
+    [Parameter] public bool Simulado { get; set; }
+
+    private static readonly string[] Fuentes = ["Solar", "Red"];
+    private string Etiqueta => Simulado ? "SIMULADO" : "MEDIDO";
+    private string unidad = "Wh";
+    private IReadOnlyList<Fila> filas = [];
+    private List<ChartSeries<double>> series = [];
+
+    protected override void OnParametersSet()
+    {
+        var porcentajeRed = Energia.TotalWh == 0 ? 0 : Energia.WhRed / Energia.TotalWh * 100;
+        filas =
+        [
+            new("Solar", Energia.WhSolar, Energia.TiempoSolar, Energia.PorcentajeSolar, ConmutacionesSolar),
+            new("Red", Energia.WhRed, Energia.TiempoRed, porcentajeRed, ConmutacionesRed),
+            new("Total", Energia.TotalWh, Energia.TiempoSolar + Energia.TiempoRed,
+                Energia.TotalWh == 0 ? 0 : 100, Energia.Conmutaciones)
+        ];
+
+        var solar = Energia.WhSolar * Factor;
+        var red = Energia.WhRed * Factor;
+        var divisor = Math.Max(solar, red) >= 1000 ? 1000 : 1;
+        unidad = divisor == 1000 ? "kWh" : "Wh";
+        series = [new() { Name = "Energía escalada", Data = new[] { (double)(solar / divisor), (double)(red / divisor) } }];
+    }
+
+    private sealed record Fila(string Fuente, decimal Wh, TimeSpan Tiempo, decimal Porcentaje, int Conmutaciones);
+}

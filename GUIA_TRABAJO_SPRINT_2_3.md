@@ -777,14 +777,14 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 - [ ] El Excel exportado tiene las mismas cifras que las tarjetas de la pantalla (RF08).
 - [ ] El gráfico de 7 días con datos generados carga en ≤ 3 s (medido con el reloj del navegador; anota el valor).
 
-### - [ ] S23-M15 · RF18 Comparación medida (ensayos y periodo)
+### - [x] S23-M15 · RF18 Comparación medida (ensayos y periodo)
 **Qué hacer**
 1. En `/ensayos/{id}` y en `/historial`, sección **"Comparación por fuente (MEDIDO)"** con chip "MEDIDO" (RNF12): tabla Solar / Red / Total con Energía (real y escalada), Tiempo de uso, % del total y Conmutaciones, y un gráfico de barras Solar vs Red. Usa `CalculadoraEnergia` con el intervalo del ensayo o el periodo.
 2. En `/simulacion`, debajo del resultado, el texto fijo: "Los resultados de simulación no usan las mediciones de la maqueta. Ver la comparación MEDIDA en Historial o Ensayos." (RNF12, RF18).
 
 **Criterios de aceptación**
-- [ ] Un ensayo con sombra provocada a mitad muestra energía en las dos fuentes y al menos 2 conmutaciones.
-- [ ] Ninguna pantalla mezcla un valor medido y uno simulado sin su chip (MEDIDO / SIMULACIÓN).
+- [x] Un ensayo con sombra provocada a mitad muestra energía en las dos fuentes y al menos 2 conmutaciones.
+- [x] Ninguna pantalla mezcla un valor medido y uno simulado sin su chip (MEDIDO / SIMULACIÓN).
 
 ### - [ ] S23-M16 · Firmware del ESP32 (State, Command y Singleton)
 **Qué hacer**

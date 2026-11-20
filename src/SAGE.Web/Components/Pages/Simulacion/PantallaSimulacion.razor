@@ -98,7 +98,7 @@
                 <div class="sage-sim-head">
                     <span class="sage-sim-badge">
                         <MudIcon Icon="@Icons.Material.Filled.Science" Size="Size.Small" />
-                        Simulación
+                        SIMULACIÓN
                     </span>
                     <span class="sage-person__mail">Horizonte @_resultado.HorizonteAnios años · params v@_resultado.ParametrosVersion</span>
                 </div>
@@ -267,12 +267,14 @@
                     <li>Consumo mensual: @_resultado.ConsumoMensualKwh.ToString("N2", FacturaReglas.Cultura) kWh (@_resultado.MesesBase meses base)</li>
                     <li>Sin inflación, sin degradación del panel, sin baterías.</li>
                     <li>Los excedentes solares no se venden; costos en Bs de hoy.</li>
-                    <li>Los resultados no usan mediciones de la maqueta.</li>
                     @foreach (var adv in _resultado.Advertencias)
                     {
                         <li class="is-warn">@adv</li>
                     }
                 </ul>
+                <MudText Typo="Typo.body2" Class="mt-3">
+                    Los resultados de simulación no usan las mediciones de la maqueta. Ver la comparación MEDIDA en Historial o Ensayos.
+                </MudText>
             </div>
         }
 

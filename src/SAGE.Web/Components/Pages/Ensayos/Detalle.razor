@@ -6,11 +6,13 @@
 @using MudBlazor
 @using SAGE.Web.Data
 @using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Energia
 @using SAGE.Web.Servicios.Seguridad
 @using SAGE.Web.Components.Shared
 
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
+@inject CalculadoraEnergia Calculadora
 
 <PageTitle>Ensayo — SAGE</PageTitle>
 
@@ -74,6 +76,12 @@
                 </MudGrid>
 
             </MudPaper>
+
+            @if (_energia is not null)
+            {
+                <ComparacionPorFuente Energia="@_energia" Factor="@_ensayo.Dispositivo.FactorEscala"
+                                     ConmutacionesSolar="@_conmutacionesSolar" ConmutacionesRed="@_conmutacionesRed" />
+            }
 
             <MudPaper Class="pa-4" Elevation="1">
 
@@ -140,6 +148,10 @@
     public int Id { get; set; }
 
     private Ensayo? _ensayo;
+    private EnergiaPorFuente? _energia;
+    private DateTime _finIntervalo;
+    private int _conmutacionesSolar;
+    private int _conmutacionesRed;
     private MudTable<Medicion>? _tabla;
     private int _total;
     private bool _cargando = true;
@@ -148,6 +160,8 @@
     {
         _cargando = true;
         _ensayo = null;
+        _energia = null;
+        _total = 0;
 
         try
         {
@@ -160,11 +174,35 @@
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
             // Otra empresa → "No encontrado" (no revela que existe).
-            _ensayo = await db.Ensayos
+            var ensayo = await db.Ensayos
                 .AsNoTracking()
                 .Include(e => e.Dispositivo)
                 .Include(e => e.CreadoPor)
                 .FirstOrDefaultAsync(e => e.Id == Id && e.Dispositivo.EmpresaId == empresaId);
+
+            if (ensayo is null)
+                return;
+
+            var fin = ensayo.Fin ?? DateTime.UtcNow;
+            var energia = fin < ensayo.Inicio
+                ? new EnergiaPorFuente(0, 0, TimeSpan.Zero, TimeSpan.Zero, 0)
+                : await Calculadora.CalcularEmpresaAsync(empresaId, ensayo.DispositivoId, ensayo.Inicio, fin,
+                    soloMedida: true);
+            var cambios = await db.Eventos.AsNoTracking()
+                .Where(e => e.DispositivoId == ensayo.DispositivoId && e.Dispositivo.EmpresaId == empresaId &&
+                    e.Tipo == "conmutacion" && e.Ts >= ensayo.Inicio && e.Ts <= fin)
+                .GroupBy(e => e.A)
+                .Select(g => new { Fuente = g.Key, Cantidad = g.Count() })
+                .ToListAsync();
+
+            if (Id != ensayo.Id || UsuarioActual.EmpresaActivaId != empresaId)
+                return;
+
+            _ensayo = ensayo;
+            _finIntervalo = fin;
+            _energia = energia;
+            _conmutacionesSolar = cambios.Find(c => c.Fuente == "SOLAR")?.Cantidad ?? 0;
+            _conmutacionesRed = cambios.Find(c => c.Fuente == "CARGADOR")?.Cantidad ?? 0;
         }
         finally
         {
@@ -179,7 +217,7 @@
 
         var empresaId = UsuarioActual.EmpresaActivaId;
         var inicio = _ensayo.Inicio;
-        var fin = _ensayo.Fin ?? DateTime.UtcNow;
+        var fin = _finIntervalo;
 
         await using var scope = ScopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
