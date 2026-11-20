@@ -678,6 +678,8 @@ namespace SAGE.Web.Data.Migrations
 
                     SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("DispositivoId", "BootId", "Ts"), new[] { "WhSolAcum", "WhRedAcum" });
 
+                    b.HasIndex("DispositivoId", "TsServidor", "Id");
+
                     b.ToTable("Mediciones");
                 });
 

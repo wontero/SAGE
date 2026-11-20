@@ -375,6 +375,9 @@ html.sage-logging-in .login-entering {
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--sage-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sage-toolbar__empresa {
@@ -410,6 +413,36 @@ html.sage-logging-in .login-entering {
 
 .sage-toolbar__btn:active {
   transform: scale(0.97);
+}
+
+.sage-toolbar__logout-icon {
+  display: none !important;
+}
+
+@media (width < 600px) {
+  .sage-toolbar__user,
+  .sage-toolbar__logout-text {
+    display: none;
+  }
+
+  .sage-toolbar__logout-icon {
+    display: block !important;
+  }
+
+  .sage-toolbar__btn {
+    padding: 0.5rem;
+  }
+
+  .sage-toolbar .mud-select,
+  .sage-toolbar__chip,
+  .sage-toolbar__empresa.mud-input-control {
+    min-width: 0;
+    margin-right: 0;
+  }
+
+  .sage-toolbar .mud-badge-root {
+    margin-inline: 0 !important;
+  }
 }
 
 .sage-sidebar.mud-drawer {
@@ -591,6 +624,16 @@ html.sage-logging-in .login-entering {
 
 .page-panel .mud-table-container {
   background: transparent;
+}
+
+.sage-main .mud-table {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sage-main .mud-table-container,
+.sage-main .mud-table-pagination {
+  overflow-x: auto;
 }
 
 .page-panel .mud-table-root .mud-table-head .mud-table-cell {
@@ -1298,6 +1341,7 @@ html.sage-enter .sage-main {
   gap: 0.65rem;
   align-items: flex-end;
   min-width: min(100%, 320px);
+  max-width: 100%;
 }
 
 .sage-sim-head {

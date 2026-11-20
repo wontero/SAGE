@@ -50,7 +50,7 @@
                     {
                         <div class="sage-tarifa__form">
                             <MudNumericField T="decimal" @bind-Value="_nuevaTarifa" Label="Nueva tarifa" Variant="Variant.Outlined"
-                                             Min="0.10m" Max="5.00m" Step="0.05m" HelperText="0,10 a 5,00" Style="min-width:160px;" />
+                                             Min="0.10m" Max="5.00m" Step="0.05m" HelperText="0,10 a 5,00" />
                             <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="FijarTarifa" Disabled="_guardandoTarifa">
                                 @(_guardandoTarifa ? "Guardando…" : "Fijar tarifa")
                             </MudButton>
@@ -133,7 +133,7 @@
                         </div>
 
                         <div class="sage-chart__canvas">
-                            <svg class="sage-chart__svg" viewBox="0 0 @_grafico.W @_grafico.H" role="img" preserveAspectRatio="xMidYMid meet">
+                            <svg class="sage-chart__svg" viewBox="0 0 @_grafico.W.ToString(inv) @_grafico.H.ToString(inv)" role="img" preserveAspectRatio="xMidYMid meet">
                                 <defs>
                                     <linearGradient id="sageFillAhorro" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stop-color="#34C759" stop-opacity="0.22" />
@@ -150,7 +150,8 @@
 
                                 @foreach (var tick in _grafico.YTicks)
                                 {
-                                    <line class="sage-chart__grid" x1="@_grafico.PadL" y1="@tick.Y" x2="@(_grafico.W - _grafico.PadR)" y2="@tick.Y" />
+                                    <line class="sage-chart__grid" x1="@_grafico.PadL.ToString(inv)" y1="@tick.Y.ToString(inv)"
+                                          x2="@((_grafico.W - _grafico.PadR).ToString(inv))" y2="@tick.Y.ToString(inv)" />
                                     @SvgText(_grafico.PadL - 8, tick.Y + 3, "sage-chart__axis", tick.Label, "end")
                                 }
 
@@ -173,25 +174,29 @@
                                 {
                                     var pt = _grafico.Puntos[i];
                                     var activo = i == focusIdx;
-                                    <circle cx="@pt.X" cy="@pt.YRed" r="@(activo ? 6 : 3.2)" class="sage-chart__dot sage-chart__dot--red @(activo ? "is-active" : null)" />
-                                    <circle cx="@pt.X" cy="@pt.YSolar" r="@(activo ? 6 : 3.2)" class="sage-chart__dot sage-chart__dot--solar @(activo ? "is-active" : null)" />
-                                    <circle cx="@pt.X" cy="@pt.YMixto" r="@(activo ? 6 : 3.2)" class="sage-chart__dot sage-chart__dot--mixto @(activo ? "is-active" : null)" />
+                                    var x = pt.X.ToString(inv);
+                                    var radio = activo ? "6" : "3.2";
+                                    <circle cx="@x" cy="@pt.YRed.ToString(inv)" r="@radio" class="sage-chart__dot sage-chart__dot--red @(activo ? "is-active" : null)" />
+                                    <circle cx="@x" cy="@pt.YSolar.ToString(inv)" r="@radio" class="sage-chart__dot sage-chart__dot--solar @(activo ? "is-active" : null)" />
+                                    <circle cx="@x" cy="@pt.YMixto.ToString(inv)" r="@radio" class="sage-chart__dot sage-chart__dot--mixto @(activo ? "is-active" : null)" />
                                 }
 
-                                <line class="sage-chart__scrub" x1="@focus.X" y1="@_grafico.PadT" x2="@focus.X" y2="@(_grafico.H - _grafico.PadB)" />
+                                <line class="sage-chart__scrub" x1="@focus.X.ToString(inv)" y1="@_grafico.PadT.ToString(inv)"
+                                      x2="@focus.X.ToString(inv)" y2="@((_grafico.H - _grafico.PadB).ToString(inv))" />
 
                                 @for (var i = 0; i < _grafico.Puntos.Count; i++)
                                 {
                                     var pt = _grafico.Puntos[i];
                                     var idx = i;
                                     <rect class="sage-chart__hit"
-                                          x="@(pt.X - _grafico.HitW / 2)"
-                                          y="@_grafico.PadT"
-                                          width="@_grafico.HitW"
-                                          height="@(_grafico.H - _grafico.PadT - _grafico.PadB)"
+                                          x="@((pt.X - _grafico.HitW / 2).ToString(inv))"
+                                          y="@_grafico.PadT.ToString(inv)"
+                                          width="@_grafico.HitW.ToString(inv)"
+                                          height="@((_grafico.H - _grafico.PadT - _grafico.PadB).ToString(inv))"
                                           @onmouseenter="@(() => SeleccionarAnio(idx, hover: true))"
                                           @onclick="@(() => SeleccionarAnio(idx, hover: false))"
-                                          @onfocus="@(() => SeleccionarAnio(idx, hover: false))"
+                                          @onfocus="@(() => SeleccionarAnio(idx, hover: true))"
+                                          @onkeyup="@(e => { if (e.Key is "Enter" or " ") SeleccionarAnio(idx, hover: false); })"
                                           tabindex="0"
                                           role="button"
                                           aria-label="@pt.Etiqueta" />

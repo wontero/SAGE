@@ -50,7 +50,7 @@
                 }
                 else if (UsuarioActual.Empresas.Count == 1)
                 {
-                    <span class="sage-toolbar__chip">
+                    <span class="sage-toolbar__chip" title="@UsuarioActual.Empresas[0].Nombre">
                         @UsuarioActual.Empresas[0].Nombre
                     </span>
                 }
@@ -103,8 +103,11 @@
                            value="@_currentUrl" />
 
                     <button type="submit"
-                            class="sage-toolbar__btn">
-                        Cerrar sesión
+                            class="sage-toolbar__btn"
+                            aria-label="Cerrar sesión"
+                            title="Cerrar sesión">
+                        <span class="sage-toolbar__logout-text">Cerrar sesión</span>
+                        <MudIcon Icon="@Icons.Material.Filled.Logout" Class="sage-toolbar__logout-icon" />
                     </button>
                 </form>
 
@@ -117,7 +120,8 @@
                ClipMode="DrawerClipMode.Always"
                Elevation="0"
                Class="sage-sidebar"
-               Variant="DrawerVariant.Persistent">
+               Variant="DrawerVariant.Responsive"
+               Breakpoint="Breakpoint.Md">
 
         <div class="sage-sidebar__head">
 

@@ -114,6 +114,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(m => new { m.DispositivoId, m.BootId, m.Ts })
                 .IncludeProperties(m => new { m.WhSolAcum, m.WhRedAcum });
 
+            entity.HasIndex(m => new { m.DispositivoId, m.TsServidor, m.Id });
+
             entity.HasOne(m => m.Dispositivo)
                 .WithMany()
                 .HasForeignKey(m => m.DispositivoId)

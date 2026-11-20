@@ -1,5 +1,5 @@
 @using Microsoft.EntityFrameworkCore
-@inject ApplicationDbContext Db
+@inject IServiceScopeFactory ScopeFactory
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -68,7 +68,9 @@
                 return;
             }
 
-            var nombreDuplicado = await Db.Empresas.AnyAsync(e =>
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var nombreDuplicado = await db.Empresas.AnyAsync(e =>
                 e.Nombre == nombre && (!_modelo.Id.HasValue || e.Id != _modelo.Id.Value));
             if (nombreDuplicado)
             {
@@ -76,7 +78,7 @@
                 return;
             }
 
-            var nitDuplicado = await Db.Empresas.AnyAsync(e =>
+            var nitDuplicado = await db.Empresas.AnyAsync(e =>
                 e.Nit == nit && (!_modelo.Id.HasValue || e.Id != _modelo.Id.Value));
             if (nitDuplicado)
             {
@@ -86,7 +88,7 @@
 
             if (_modelo.Id is null)
             {
-                Db.Empresas.Add(new Empresa
+                db.Empresas.Add(new Empresa
                 {
                     Nombre = nombre,
                     Nit = nit,
@@ -96,12 +98,12 @@
                     Activa = true,
                     FechaRegistro = DateTime.UtcNow
                 });
-                await Db.SaveChangesAsync();
+                await db.SaveChangesAsync();
                 Snackbar.Add("Empresa creada correctamente.", Severity.Success);
             }
             else
             {
-                var empresa = await Db.Empresas.FindAsync(_modelo.Id.Value);
+                var empresa = await db.Empresas.FindAsync(_modelo.Id.Value);
                 if (empresa is null)
                 {
                     _error = "La empresa ya no existe.";
@@ -113,7 +115,7 @@
                 empresa.Direccion = string.IsNullOrWhiteSpace(_modelo.Direccion) ? null : _modelo.Direccion.Trim();
                 empresa.Telefono = string.IsNullOrWhiteSpace(_modelo.Telefono) ? null : _modelo.Telefono.Trim();
                 empresa.CorreoContacto = string.IsNullOrWhiteSpace(_modelo.CorreoContacto) ? null : _modelo.CorreoContacto.Trim();
-                await Db.SaveChangesAsync();
+                await db.SaveChangesAsync();
                 Snackbar.Add("Empresa actualizada correctamente.", Severity.Success);
             }
 

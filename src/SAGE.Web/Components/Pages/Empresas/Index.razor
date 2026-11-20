@@ -1,8 +1,7 @@
 @page "/empresas"
 @attribute [Authorize(Roles = "Operador")]
-@using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
-@inject ApplicationDbContext Db
+@inject IServiceScopeFactory ScopeFactory
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -117,7 +116,9 @@
         _cargando = true;
         try
         {
-            var query = Db.Empresas.AsNoTracking().AsQueryable();
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var query = db.Empresas.AsNoTracking().AsQueryable();
             if (!string.IsNullOrWhiteSpace(_busqueda))
             {
                 var termino = _busqueda.Trim();
@@ -125,12 +126,12 @@
             }
 
             // Usuarios vinculados con rol Administrador (Identity guarda los roles aparte).
-            var adminRoleId = await Db.Roles
+            var adminRoleId = await db.Roles
                 .Where(r => r.Name == DatosIniciales.RolAdministrador)
                 .Select(r => r.Id)
                 .FirstOrDefaultAsync();
 
-            var adminUserIds = Db.UserRoles
+            var adminUserIds = db.UserRoles
                 .Where(ur => ur.RoleId == adminRoleId)
                 .Select(ur => ur.UserId);
 
@@ -214,7 +215,9 @@
             return;
         }
 
-        var empresa = await Db.Empresas.FindAsync(item.Id);
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var empresa = await db.Empresas.FindAsync(item.Id);
         if (empresa is null)
         {
             Snackbar.Add("La empresa ya no existe.", Severity.Error);
@@ -222,7 +225,7 @@
         }
 
         empresa.Activa = !empresa.Activa;
-        await Db.SaveChangesAsync();
+        await db.SaveChangesAsync();
         Snackbar.Add(empresa.Activa ? "Empresa activada." : "Empresa desactivada.", Severity.Success);
         await Recargar();
     }

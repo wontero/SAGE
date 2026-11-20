@@ -1,8 +1,7 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using SAGE.Web.Servicios.Seguridad
-@inject ApplicationDbContext Db
-@inject UserManager<ApplicationUser> UserManager
+@inject IServiceScopeFactory ScopeFactory
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IUsuarioActual UsuarioActual
 @inject ISnackbar Snackbar
@@ -70,8 +69,11 @@
                 return;
             }
 
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var usuarios = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var usuario = await UserManager.GetUserAsync(auth.User);
+            var usuario = await usuarios.GetUserAsync(auth.User);
             if (usuario is null)
             {
                 _error = "No se pudo identificar al usuario.";
@@ -92,14 +94,14 @@
                 return;
             }
 
-            var empresaActiva = await Db.Empresas.AnyAsync(e => e.Id == empresaId && e.Activa);
+            var empresaActiva = await db.Empresas.AnyAsync(e => e.Id == empresaId && e.Activa);
             if (!empresaActiva)
             {
                 _error = "La empresa no existe o está inactiva.";
                 return;
             }
 
-            var repetida = await Db.Facturas.AnyAsync(f =>
+            var repetida = await db.Facturas.AnyAsync(f =>
                 f.EmpresaId == empresaId && f.Anio == _anio && f.Mes == _mes);
             if (repetida)
             {
@@ -107,7 +109,7 @@
                 return;
             }
 
-            Db.Facturas.Add(new Factura
+            db.Facturas.Add(new Factura
             {
                 EmpresaId = empresaId,
                 Anio = _anio,
@@ -121,11 +123,10 @@
 
             try
             {
-                await Db.SaveChangesAsync();
+                await db.SaveChangesAsync();
             }
             catch (DbUpdateException)
             {
-                Db.ChangeTracker.Clear();
                 _error = "Ya existe la factura de ese mes";
                 return;
             }

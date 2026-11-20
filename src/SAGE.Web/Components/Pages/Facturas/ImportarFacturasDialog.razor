@@ -1,8 +1,6 @@
 @using Microsoft.AspNetCore.Identity
-@using Microsoft.EntityFrameworkCore
 @using SAGE.Web.Servicios.Seguridad
-@inject ApplicationDbContext Db
-@inject UserManager<ApplicationUser> UserManager
+@inject IServiceScopeFactory ScopeFactory
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IUsuarioActual UsuarioActual
 @inject ISnackbar Snackbar
@@ -96,8 +94,11 @@
                 return;
             }
 
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var usuarios = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var usuario = await UserManager.GetUserAsync(auth.User);
+            var usuario = await usuarios.GetUserAsync(auth.User);
             if (usuario is null)
             {
                 _errores.Add("No se pudo identificar al usuario.");
@@ -130,7 +131,7 @@
 
             memoria.Position = 0;
             var resultado = await FacturaExcelImporter.ImportarAsync(
-                memoria, empresaId, usuario.Id, Db);
+                memoria, empresaId, usuario.Id, db);
 
             if (resultado.Errores.Count > 0)
             {

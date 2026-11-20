@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
 @using Microsoft.EntityFrameworkCore
 @using SAGE.Web.Servicios.Seguridad
-@inject ApplicationDbContext Db
+@inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
 @inject IDialogService DialogService
 
@@ -108,7 +108,9 @@
             }
 
             // El filtro por empresa activa se aplica en la consulta (RNF01).
-            _filas = await Db.Facturas.AsNoTracking()
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            _filas = await db.Facturas.AsNoTracking()
                 .Where(f => f.EmpresaId == empresaId)
                 .OrderByDescending(f => f.Anio)
                 .ThenByDescending(f => f.Mes)
