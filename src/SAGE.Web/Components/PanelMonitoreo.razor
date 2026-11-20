@@ -9,6 +9,7 @@
 @using SAGE.Web.Data
 @using SAGE.Web.Servicios
 @using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Dispositivo
 @using SAGE.Web.Servicios.Seguridad
 @using SAGE.Web.Components.Shared
 @using SAGE.Web.Servicios.Ordenes
@@ -17,7 +18,7 @@
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
 @inject EstadoDispositivosEnVivo EnVivo
-@inject ICanalOrdenes CanalOrdenes
+@inject IFabricaDispositivo Fabrica
 @inject ISnackbar Snackbar
 
 <PageTitle>Monitoreo de dispositivo - SAGE</PageTitle>
@@ -62,7 +63,7 @@
 
                     <MudChip T="string"
                              Color="Color.Info">
-                        @(dispositivo.EsSimulado ? "SIMULADO" : "REAL")
+                        @(Fabrica is FabricaDispositivoSimulado || dispositivo.EsSimulado ? "SIMULADO" : "REAL")
                     </MudChip>
 
                     <ChipEscala Factor="@dispositivo.FactorEscala" />
@@ -635,9 +636,11 @@
 
         try
         {
-            await CanalOrdenes.EnviarModoAsync(dispositivo.Id, modo);
+            var orden = await Fabrica.CrearCanalOrdenes().EnviarModoAsync(dispositivo.Id, modo);
             await CargarOrdenesAsync();
-            Snackbar.Add("Orden enviada. Se entrega con la próxima telemetría.", Severity.Info);
+            Snackbar.Add(orden.EstaAbierta
+                ? "Orden enviada. Se entrega con la próxima telemetría."
+                : TextosOrdenes.EstadoConMotivo(orden), Severity.Info);
         }
         catch (InvalidOperationException ex)
         {
@@ -655,10 +658,10 @@
 
     private async Task CargarOrdenesAsync()
     {
-        if (dispositivo is null)
+        if (dispositivo is null || !PuedeControlar)
             return;
 
-        ordenes = (await CanalOrdenes.UltimasAsync(dispositivo.Id, 10)).ToList();
+        ordenes = (await Fabrica.CrearCanalOrdenes().UltimasAsync(dispositivo.Id, 10)).ToList();
     }
 
     private void AlCambiarOrdenes(int dispositivoId)
@@ -769,7 +772,13 @@
                 return;
 
             // Primero la orden: si hay una entregada esperando resultado, no se guarda nada.
-            await CanalOrdenes.EnviarParametrosAsync(dispositivo.Id, parametros);
+            var orden = await Fabrica.CrearCanalOrdenes().EnviarParametrosAsync(dispositivo.Id, parametros);
+            if (Fabrica is FabricaDispositivoSimulado)
+            {
+                await CargarOrdenesAsync();
+                Snackbar.Add(TextosOrdenes.EstadoConMotivo(orden), Severity.Info);
+                return;
+            }
 
             await using (var scope = ScopeFactory.CreateAsyncScope())
             {
@@ -908,11 +917,9 @@
             if (dispositivo is null)
                 return;
 
-            var ultima = await db.Mediciones
-                .AsNoTracking()
-                .Where(m => m.DispositivoId == Id)
-                .OrderByDescending(m => m.TsServidor)
-                .FirstOrDefaultAsync();
+            var lector = Fabrica.CrearLector();
+            var ultima = (await lector.MedicionesRecibidasAsync(Id, DateTime.MinValue, DateTime.MaxValue, 1))
+                .FirstOrDefault();
 
             if (ultima is not null)
             {
@@ -924,7 +931,7 @@
                 estado = estado with
                 {
                     EnLinea =
-                        dispositivo.UltimoContacto.HasValue &&
+                        Fabrica is FabricaDispositivoSimulado || dispositivo.UltimoContacto.HasValue &&
                         DateTime.UtcNow -
                         dispositivo.UltimoContacto.Value
                         <= TimeSpan.FromSeconds(30)
@@ -933,22 +940,14 @@
 
             var estadoVivo = EnVivo.Obtener(Id);
 
-            if (estadoVivo is not null &&
+            if (Fabrica is not FabricaDispositivoSimulado && estadoVivo is not null &&
                 estadoVivo.EmpresaId == empresaId)
             {
                 estado = estadoVivo;
             }
 
-            var desde = DateTime.UtcNow.AddMinutes(-5);
-
-            var mediciones = await db.Mediciones
-                .AsNoTracking()
-                .Where(m =>
-                    m.DispositivoId == Id &&
-                    m.TsServidor >= desde)
-                .OrderByDescending(m => m.TsServidor)
-                .Take(300)
-                .ToListAsync();
+            var ahora = DateTime.UtcNow;
+            var mediciones = await lector.MedicionesRecibidasAsync(Id, ahora.AddMinutes(-5), ahora, 300);
 
             foreach (var m in mediciones.OrderBy(m => m.TsServidor))
             {
@@ -976,6 +975,7 @@
     {
         if (destruido ||
             dispositivo is null ||
+            Fabrica is FabricaDispositivoSimulado ||
             nuevo.DispositivoId != Id ||
             nuevo.EmpresaId != empresaId)
         {
@@ -1026,7 +1026,7 @@
 
     private async Task CargarEventosAsync()
     {
-        if (dispositivo is null)
+        if (dispositivo is null || Fabrica is FabricaDispositivoSimulado)
             return;
 
         await using var scope =

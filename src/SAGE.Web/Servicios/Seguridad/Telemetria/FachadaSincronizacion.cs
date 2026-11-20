@@ -6,7 +6,7 @@ using SAGE.Web.Data;
 using SAGE.Web.Servicios.Alertas;
 using SAGE.Web.Servicios.EnVivo;
 using SAGE.Web.Servicios.Ordenes;
-using Dispositivo = SAGE.Web.Data.Dispositivo;
+using DispositivoEntidad = SAGE.Web.Data.Dispositivo;
 
 namespace SAGE.Web.Servicios.Telemetria;
 
@@ -199,7 +199,7 @@ public sealed class FachadaSincronizacion
     // AUTENTICACIÓN
     // =====================================================
 
-    private async Task<Dispositivo?> AutenticarAsync(
+    private async Task<DispositivoEntidad?> AutenticarAsync(
         string token,
         CancellationToken ct)
     {
@@ -263,7 +263,7 @@ public sealed class FachadaSincronizacion
     // =====================================================
 
     private async Task<bool> RegistrarMedicionAsync(
-        Dispositivo dispositivo,
+        DispositivoEntidad dispositivo,
         TelemetriaRequest paquete,
         Medicion medicion,
         CancellationToken ct)
@@ -287,7 +287,7 @@ public sealed class FachadaSincronizacion
     // =====================================================
 
     private static void RegistrarContacto(
-        Dispositivo dispositivo,
+        DispositivoEntidad dispositivo,
         TelemetriaRequest paquete,
         DateTime horaServidor,
         bool medicionNueva)
@@ -312,7 +312,7 @@ public sealed class FachadaSincronizacion
     // =====================================================
 
     private async Task<List<Evento>> RegistrarEventosAsync(
-        Dispositivo dispositivo,
+        DispositivoEntidad dispositivo,
         TelemetriaRequest paquete,
         DateTime horaServidor,
         CancellationToken ct)
@@ -395,7 +395,7 @@ public sealed class FachadaSincronizacion
     // Por cada resultado de una orden DE ESTE dispositivo, Resolver(...).
     // Los resultados de órdenes de otro dispositivo se ignoran con LogWarning.
     private async Task<bool> ActualizarResultadosOrdenesAsync(
-        Dispositivo dispositivo,
+        DispositivoEntidad dispositivo,
         TelemetriaRequest paquete,
         DateTime horaServidor,
         CancellationToken ct)
@@ -453,7 +453,7 @@ public sealed class FachadaSincronizacion
     // Primero expira las vencidas del dispositivo; después toma la
     // pendiente más antigua, la entrega y la devuelve (formato sección 4).
     private async Task<(object? Orden, bool Cambiaron)> EntregarOrdenPendienteAsync(
-        Dispositivo dispositivo,
+        DispositivoEntidad dispositivo,
         DateTime horaServidor,
         CancellationToken ct)
     {

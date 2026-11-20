@@ -753,8 +753,8 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 
 **Criterios de aceptación**
 - [ ] Con `Dispositivo:Modo = Simulado`, `/mediciones` y el historial muestran datos sintéticos sin simulador corriendo, y una orden se resuelve al instante.
-- [ ] Con `Dispositivo:Modo = Real` todo funciona como antes.
-- [ ] Llamar a `EnviarModoAsync` como Consulta (desde una prueba) lanza la excepción y no crea filas en `Ordenes`.
+- [x] Con `Dispositivo:Modo = Real` todo funciona como antes.
+- [x] Llamar a `EnviarModoAsync` como Consulta (desde una prueba) lanza la excepción y no crea filas en `Ordenes`.
 
 ### - [ ] S23-M14 · RF14 Energía por fuente, RF04 historial y RF08 exportación
 **Qué hacer**

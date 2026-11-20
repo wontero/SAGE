@@ -15,7 +15,7 @@ public sealed class ServicioAlertas
     }
 
     public async Task<bool> EvaluarAsync(
-        Dispositivo dispositivo,
+        Data.Dispositivo dispositivo,
         Medicion? medicion,
         IReadOnlyList<Evento> eventosNuevos,
         CancellationToken ct = default)

@@ -7,11 +7,11 @@ using SAGE.Web.Servicios.Seguridad;
 
 namespace SAGE.Web.Servicios.Ordenes;
 
-// S23-M9: guarda las órdenes en la base. NO revisa permisos
-// (eso lo hará el Proxy de S23-M13; hasta entonces lo controla la pantalla).
+// La fábrica lo entrega envuelto por CanalOrdenesProtegido.
 // Crea su propio DbContext por llamada para no compartirlo entre
 // operaciones concurrentes del mismo circuito de Blazor.
 // Patrón: Command — rol: invocador
+// Patrón: Abstract Factory — rol: producto concreto
 public sealed class CanalOrdenesBD : ICanalOrdenes
 {
     public static readonly string[] ModosValidos = ["AUTO", "SOLAR", "CARGADOR"];

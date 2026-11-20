@@ -6,6 +6,7 @@ namespace SAGE.Web.Servicios.Ordenes;
 // S23-M9: canal por el que la plataforma envía órdenes a un dispositivo.
 // Las órdenes se guardan y viajan en la respuesta de la siguiente telemetría.
 // Patrón: Command — rol: invocador
+// Patrón: Abstract Factory — rol: producto abstracto
 public interface ICanalOrdenes
 {
     // AUTO | SOLAR | CARGADOR

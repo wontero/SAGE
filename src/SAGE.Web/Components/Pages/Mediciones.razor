@@ -7,11 +7,14 @@
 @using SAGE.Web.Data
 @using SAGE.Web.Servicios
 @using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Dispositivo
+@using SAGE.Web.Components.Shared
 @using SAGE.Web.Servicios.Seguridad
 
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
 @inject EstadoDispositivosEnVivo EnVivo
+@inject IFabricaDispositivo Fabrica
 
 <PageTitle>Mediciones — SAGE</PageTitle>
 
@@ -20,6 +23,10 @@
         <div class="page-head__text">
             <p class="page-kicker">Telemetría en tiempo real</p>
             <h1 class="page-title">Mediciones</h1>
+            @if (FabricacionSimulada)
+            {
+                <MudChip T="string" Color="Color.Info">SIMULADO</MudChip>
+            }
             <p class="page-meta">
                 Últimas 200 mediciones de la empresa activa.
                 Actualización automática.
@@ -95,7 +102,8 @@
                     </MudTd>
 
                     <MudTd DataLabel="P solar">
-                        @Formato.Potencia(context.PSolMw)
+                        @Formato.Potencia(context.PSolMw, factores[context.DispositivoId])
+                        <ChipEscala Factor="@factores[context.DispositivoId]" />
                     </MudTd>
 
                     <MudTd DataLabel="Modo">
@@ -122,6 +130,7 @@
 
 @code {
     private List<Medicion> mediciones = new();
+    private Dictionary<int, decimal> factores = new();
 
     private bool cargando = true;
     private bool destruido;
@@ -156,13 +165,19 @@
             var db = scope.ServiceProvider
                 .GetRequiredService<ApplicationDbContext>();
 
-            mediciones = await db.Mediciones
+            factores = await db.Dispositivos
                 .AsNoTracking()
-                .Where(m => m.Dispositivo.EmpresaId == empresa)
+                .Where(d => d.EmpresaId == empresa)
+                .ToDictionaryAsync(d => d.Id, d => d.FactorEscala);
+
+            var lector = Fabrica.CrearLector();
+            var lecturas = await Task.WhenAll(factores.Keys.Select(id =>
+                lector.MedicionesRecibidasAsync(id, DateTime.MinValue, DateTime.MaxValue, 200)));
+            mediciones = lecturas.SelectMany(m => m)
                 .OrderByDescending(m => m.TsServidor)
                 .ThenByDescending(m => m.Id)
                 .Take(200)
-                .ToListAsync();
+                .ToList();
         }
         catch
         {
@@ -206,31 +221,19 @@
         {
             if (destruido ||
                 empresaId != estado.EmpresaId ||
-                UsuarioActual.EmpresaActivaId != empresaId)
+                UsuarioActual.EmpresaActivaId != empresaId ||
+                FabricacionSimulada)
             {
                 return;
             }
 
-            await using var scope =
-                ScopeFactory.CreateAsyncScope();
-
-            var db = scope.ServiceProvider
-                .GetRequiredService<ApplicationDbContext>();
-
-            var nuevas = await db.Mediciones
-                .AsNoTracking()
-                .Where(m =>
-                    m.DispositivoId == estado.DispositivoId &&
-                    m.Dispositivo.EmpresaId == estado.EmpresaId &&
-                    m.TsServidor >= estado.TsServidor)
-                .OrderByDescending(m => m.TsServidor)
-                .ThenByDescending(m => m.Id)
-                .Take(200)
-                .ToListAsync();
+            var nuevas = await Fabrica.CrearLector().MedicionesRecibidasAsync(
+                estado.DispositivoId, estado.TsServidor, DateTime.MaxValue, 200);
 
             if (destruido)
                 return;
 
+            factores[estado.DispositivoId] = estado.FactorEscala;
             foreach (var nueva in nuevas)
             {
                 if (mediciones.Any(m => m.Id == nueva.Id))
@@ -265,4 +268,6 @@
         // Evitar suscripciones colgadas.
         EnVivo.Cambio -= AlCambiarEstado;
     }
+
+    private bool FabricacionSimulada => Fabrica is FabricaDispositivoSimulado;
 }
