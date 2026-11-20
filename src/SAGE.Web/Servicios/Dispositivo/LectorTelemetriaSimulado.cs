@@ -12,6 +12,25 @@ internal sealed class LectorTelemetriaSimulado : ILectorTelemetria
     public Task<IReadOnlyList<Evento>> EventosAsync(int dispositivoId, DateTime desdeUtc, DateTime hastaUtc) =>
         Task.FromResult<IReadOnlyList<Evento>>([]);
 
+    public Task<IReadOnlyList<PuntoPotenciaHistorial>> PuntosAsync(int dispositivoId, DateTime desdeUtc, DateTime hastaUtc)
+    {
+        const int maximo = PuntoPotenciaHistorial.MaximoPuntos;
+        var muestras = Generar(dispositivoId, desdeUtc, hastaUtc, int.MaxValue);
+        var primeras = muestras.Take(maximo + 1).ToList();
+        if (primeras.Count <= maximo)
+            return Task.FromResult<IReadOnlyList<PuntoPotenciaHistorial>>(primeras.AsEnumerable().Reverse()
+                .Select(m => new PuntoPotenciaHistorial(m.Ts, m.PSolMw, m.PRedMw)).ToList());
+
+        var duracionMs = (long)(hastaUtc - desdeUtc).TotalMilliseconds + 1;
+        var promedio = muestras.AggregateBy(
+            m => (long)(m.Ts - desdeUtc).TotalMilliseconds * maximo / duracionMs,
+            (Ts: hastaUtc, Solar: 0m, Red: 0m, Cantidad: 0),
+            (a, m) => (m.Ts, a.Solar + m.PSolMw, a.Red + m.PRedMw, a.Cantidad + 1));
+        return Task.FromResult<IReadOnlyList<PuntoPotenciaHistorial>>(promedio.OrderBy(p => p.Key)
+            .Select(p => new PuntoPotenciaHistorial(p.Value.Ts, p.Value.Solar / p.Value.Cantidad,
+                p.Value.Red / p.Value.Cantidad)).ToList());
+    }
+
     internal static IEnumerable<Medicion> Generar(int dispositivoId, DateTime desdeUtc, DateTime hastaUtc, int maximo)
     {
         var limite = hastaUtc < DateTime.UtcNow ? hastaUtc : DateTime.UtcNow;

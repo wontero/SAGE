@@ -46,4 +46,34 @@ internal sealed class LectorTelemetriaBD(IServiceScopeFactory scopeFactory, IUsu
             .ThenByDescending(e => e.Id)
             .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<PuntoPotenciaHistorial>> PuntosAsync(
+        int dispositivoId, DateTime desdeUtc, DateTime hastaUtc)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var empresaId = usuario.EmpresaActivaId;
+        const int maximo = PuntoPotenciaHistorial.MaximoPuntos;
+        var consulta = db.Mediciones.AsNoTracking()
+            .Where(m => m.DispositivoId == dispositivoId && m.Dispositivo.EmpresaId == empresaId
+                && m.Ts >= desdeUtc && m.Ts <= hastaUtc);
+        var cantidad = await consulta.OrderBy(m => m.Ts).Take(maximo + 1).CountAsync();
+        if (cantidad <= maximo)
+        {
+            return await consulta.OrderBy(m => m.Ts).ThenBy(m => m.Id)
+                .Select(m => new PuntoPotenciaHistorial(m.Ts, m.PSolMw, m.PRedMw))
+                .Take(maximo)
+                .ToListAsync();
+        }
+
+        return await db.Database.SqlQuery<PuntoPotenciaHistorial>($"""
+            SELECT MIN(m.Ts) AS Ts, AVG(m.PSolMw) AS PSolMw, AVG(m.PRedMw) AS PRedMw
+            FROM Mediciones m INNER JOIN Dispositivos d ON d.Id = m.DispositivoId
+            WHERE m.DispositivoId = {dispositivoId} AND d.EmpresaId = {empresaId}
+                AND m.Ts >= {desdeUtc} AND m.Ts <= {hastaUtc}
+            GROUP BY DATEDIFF_BIG(millisecond, {desdeUtc}, m.Ts) * {maximo}
+                / (DATEDIFF_BIG(millisecond, {desdeUtc}, {hastaUtc}) + 1)
+            ORDER BY MIN(m.Ts)
+            """).ToListAsync();
+    }
 }

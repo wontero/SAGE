@@ -91,6 +91,8 @@ public static class Formato
         return v.ToString("N2", Cultura) + " V";
     }
 
+    public static string Porcentaje(decimal valor) => valor.ToString("N1", Cultura) + " %";
+
     public static string Corriente(decimal ma)
     {
         return ma.ToString("N1", Cultura) + " mA";

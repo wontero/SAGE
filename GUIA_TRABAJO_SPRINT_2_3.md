@@ -730,7 +730,7 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 - Los criterios de S23-M11 se cumplen con el simulador (sombra, orden rechazada, Wi-Fi cortado).
 - Si algo falla, regla 3.
 
-### - [ ] S23-M13 · Proxy de protección y Abstract Factory
+### - [x] S23-M13 · Proxy de protección y Abstract Factory
 **Qué hacer**
 1. `Servicios/Dispositivo/ILectorTelemetria.cs`:
    ```csharp
@@ -752,7 +752,7 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 5. Pruebas `tests/SAGE.Tests/ProxyTests.cs`: Consulta → excepción y el real no recibe la llamada; Técnico de otra empresa → excepción; Técnico de la empresa → delega.
 
 **Criterios de aceptación**
-- [ ] Con `Dispositivo:Modo = Simulado`, `/mediciones` y el historial muestran datos sintéticos sin simulador corriendo, y una orden se resuelve al instante.
+- [x] Con `Dispositivo:Modo = Simulado`, `/mediciones` y el historial muestran datos sintéticos sin simulador corriendo, y una orden se resuelve al instante.
 - [x] Con `Dispositivo:Modo = Real` todo funciona como antes.
 - [x] Llamar a `EnviarModoAsync` como Consulta (desde una prueba) lanza la excepción y no crea filas en `Ordenes`.
 
@@ -772,8 +772,8 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 5. Pruebas `tests/SAGE.Tests/CalculadoraEnergiaTests.cs`: un solo arranque; dos arranques (reinicio en medio); referencia antes del intervalo; corte de 30 s cuenta solo 5 s.
 
 **Criterios de aceptación**
-- [ ] 30 min de simulador en solar: la energía solar del historial coincide con `P promedio × 0,5 h` dentro de ±5 % (RF14, con los valores reales).
-- [ ] Un reinicio del simulador en medio del periodo no resta ni duplica energía.
+- [x] 30 min de simulador en solar: la energía solar del historial coincide con `P promedio × 0,5 h` dentro de ±5 % (RF14, con los valores reales).
+- [x] Un reinicio del simulador en medio del periodo no resta ni duplica energía.
 - [ ] El Excel exportado tiene las mismas cifras que las tarjetas de la pantalla (RF08).
 - [ ] El gráfico de 7 días con datos generados carga en ≤ 3 s (medido con el reloj del navegador; anota el valor).
 

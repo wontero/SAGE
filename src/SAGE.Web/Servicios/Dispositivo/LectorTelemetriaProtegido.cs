@@ -28,6 +28,13 @@ public sealed class LectorTelemetriaProtegido(
         return await lector.MedicionesRecibidasAsync(dispositivoId, desdeUtc, hastaUtc, maximo);
     }
 
+    async Task<IReadOnlyList<PuntoPotenciaHistorial>> ILectorTelemetria.PuntosAsync(
+        int dispositivoId, DateTime desdeUtc, DateTime hastaUtc)
+    {
+        await VerificarAccesoAsync(dispositivoId);
+        return await lector.PuntosAsync(dispositivoId, desdeUtc, hastaUtc);
+    }
+
     private async Task VerificarAccesoAsync(int dispositivoId)
     {
         await usuario.CargarAsync();

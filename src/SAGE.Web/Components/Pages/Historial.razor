@@ -1,0 +1,340 @@
+@page "/historial"
+@attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@using MudBlazor.Charts
+@using SAGE.Web.Components.Shared
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Dispositivo
+@using SAGE.Web.Servicios.Energia
+@using SAGE.Web.Servicios.Reportes
+@using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Servicios.Telemetria
+
+@inject IUsuarioActual UsuarioActual
+@inject IServiceScopeFactory ScopeFactory
+@inject IFabricaDispositivo Fabrica
+@inject CalculadoraEnergia Calculadora
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject ILogger<Historial> Logger
+
+<PageTitle>Historial — SAGE</PageTitle>
+
+<div class="page">
+    <header class="page-head">
+        <div class="page-head__text">
+            <h1 class="page-title">Historial</h1>
+            @if (Simulado)
+            {
+                <MudChip T="string" Color="Color.Info">SIMULADO</MudChip>
+            }
+        </div>
+    </header>
+
+    @if (error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@error</MudAlert>
+    }
+
+    @if (dispositivos.Count > 0)
+    {
+        <MudPaper Class="pa-4 mb-4">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="int" Label="Dispositivo" @bind-Value="dispositivoId">
+                        @foreach (var dispositivo in dispositivos)
+                        {
+                            <MudSelectItem Value="@dispositivo.Id">@dispositivo.Nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="Periodo" Label="Periodo" @bind-Value="periodo">
+                        <MudSelectItem Value="Periodo.UltimaHora">Última hora</MudSelectItem>
+                        <MudSelectItem Value="Periodo.Hoy">Hoy</MudSelectItem>
+                        <MudSelectItem Value="Periodo.UltimosSieteDias">Últimos 7 días</MudSelectItem>
+                        <MudSelectItem Value="Periodo.Personalizado">Rango personalizado</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                @if (periodo == Periodo.Personalizado)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudDateRangePicker Label="Fechas (Bolivia)" @bind-DateRange="fechas" DateFormat="dd/MM/yyyy" />
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudTimePicker Label="Hora de inicio" @bind-Time="horaInicio" />
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudTimePicker Label="Hora de fin" @bind-Time="horaFin" />
+                    </MudItem>
+                }
+            </MudGrid>
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary"
+                       OnClick="ConsultarAsync" Disabled="@(cargando || exportando)">Consultar</MudButton>
+        </MudPaper>
+    }
+
+    @if (cargando)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (consulta is { } resultado)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mb-4">
+            <MudText Typo="Typo.subtitle1">
+                @resultado.Dispositivo.Nombre · @Formato.HoraLocal(resultado.Desde) a @Formato.HoraLocal(resultado.Hasta) (Bolivia)
+            </MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Download"
+                       OnClick="ExportarAsync" Disabled="@exportando">@(exportando ? "Exportando…" : "Exportar a Excel")</MudButton>
+        </MudStack>
+
+        <MudGrid Spacing="3" Class="mb-4">
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="pa-4">
+                    <MudText>Energía solar</MudText>
+                    <MudText Typo="Typo.h6">@Formato.Energia(resultado.Energia.WhSolar, resultado.Dispositivo.FactorEscala)</MudText>
+                    <ChipEscala Factor="@resultado.Dispositivo.FactorEscala" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="pa-4">
+                    <MudText>Energía red</MudText>
+                    <MudText Typo="Typo.h6">@Formato.Energia(resultado.Energia.WhRed, resultado.Dispositivo.FactorEscala)</MudText>
+                    <ChipEscala Factor="@resultado.Dispositivo.FactorEscala" />
+                </MudPaper>
+            </MudItem>
+            @foreach (var (titulo, valor) in Indicadores(resultado.Energia))
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudPaper Class="pa-4">
+                        <MudText>@titulo</MudText>
+                        <MudText Typo="Typo.h6">@valor</MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Potencia solar y red (W)</MudText>
+                <ChipEscala Factor="@resultado.Dispositivo.FactorEscala" />
+            </MudStack>
+            @if (series.Count == 0)
+            {
+                <MudText>No hay mediciones en este periodo.</MudText>
+            }
+            else
+            {
+                <MudChart T="double" ChartType="ChartType.Timeseries" ChartSeries="@series" ChartOptions="@opciones"
+                          Width="100%" Height="300px" />
+            }
+        </MudPaper>
+
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6">Eventos del periodo</MudText>
+            <MudTable T="Evento" Items="@resultado.Eventos" Dense="true" Hover="true" Breakpoint="Breakpoint.Md">
+                <HeaderContent>
+                    <MudTh>Hora (Bolivia)</MudTh>
+                    <MudTh>Tipo</MudTh>
+                    <MudTh>De → A</MudTh>
+                    <MudTh>Estado</MudTh>
+                    <MudTh>Motivo</MudTh>
+                    <MudTh>Origen</MudTh>
+                    <MudTh>Orden</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Hora (Bolivia)">@Formato.HoraLocal(context.Ts)</MudTd>
+                    <MudTd DataLabel="Tipo">@TextosEventos.Tipo(context.Tipo)</MudTd>
+                    <MudTd DataLabel="De → A">@TextosEventos.DeA(context.De, context.A)</MudTd>
+                    <MudTd DataLabel="Estado">@TextosEventos.Estado(context.Estado)</MudTd>
+                    <MudTd DataLabel="Motivo">@TextosEventos.Motivo(context.Motivo)</MudTd>
+                    <MudTd DataLabel="Origen">@TextosEventos.Origen(context.Origen)</MudTd>
+                    <MudTd DataLabel="Orden">@context.OrdenId</MudTd>
+                </RowTemplate>
+                <NoRecordsContent>No hay eventos en este periodo.</NoRecordsContent>
+                <PagerContent><MudTablePager RowsPerPageString="Filas por página" /></PagerContent>
+            </MudTable>
+        </MudPaper>
+    }
+    else if (error is null)
+    {
+        <MudAlert Severity="Severity.Info">No hay dispositivos en la empresa activa.</MudAlert>
+    }
+</div>
+
+@code {
+    private enum Periodo { UltimaHora, Hoy, UltimosSieteDias, Personalizado }
+    private sealed record Consulta(Dispositivo Dispositivo, DateTime Desde, DateTime Hasta,
+        EnergiaPorFuente Energia, IReadOnlyList<Evento> Eventos);
+
+    private IReadOnlyList<Dispositivo> dispositivos = [];
+    private int dispositivoId;
+    private Periodo periodo;
+    private DateRange fechas = new();
+    private TimeSpan? horaInicio = TimeSpan.Zero;
+    private TimeSpan? horaFin = new(23, 59, 59);
+    private Consulta? consulta;
+    private List<ChartSeries<double>> series = [];
+    private TimeSeriesChartOptions opciones = new();
+    private string? error;
+    private bool cargando = true;
+    private bool exportando;
+    private bool Simulado => Fabrica is FabricaDispositivoSimulado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await UsuarioActual.CargarAsync();
+            if (UsuarioActual.EmpresaActivaId is not int empresa)
+                return;
+
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            dispositivos = await db.Dispositivos.AsNoTracking().Where(d => d.EmpresaId == empresa)
+                .OrderBy(d => d.Nombre).ThenBy(d => d.Id).ToListAsync();
+            if (dispositivos.Count == 0)
+                return;
+
+            var hoy = Formato.ALocal(DateTime.UtcNow).Date;
+            fechas = new DateRange(hoy, hoy);
+            dispositivoId = dispositivos[0].Id;
+            await ConsultarAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al cargar dispositivos para el historial");
+            error = "No se pudieron cargar los dispositivos.";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private async Task ConsultarAsync()
+    {
+        cargando = true;
+        error = null;
+        consulta = null;
+        try
+        {
+            var ahora = DateTime.UtcNow;
+            var desde = periodo switch
+            {
+                Periodo.Hoy => Formato.DesdeLocal(Formato.ALocal(ahora).Date),
+                Periodo.UltimosSieteDias => ahora.AddDays(-7),
+                Periodo.Personalizado when fechas.Start is DateTime fecha && horaInicio is TimeSpan hora =>
+                    Formato.DesdeLocal(fecha.Date + hora),
+                Periodo.Personalizado => (DateTime?)null,
+                _ => ahora.AddHours(-1)
+            };
+            var hasta = periodo == Periodo.Personalizado
+                ? fechas.End is DateTime fechaFin && horaFin is TimeSpan fin
+                    ? Formato.DesdeLocal(fechaFin.Date + fin)
+                    : (DateTime?)null
+                : ahora;
+
+            if (desde is null || hasta is null || desde >= hasta)
+            {
+                error = "Seleccioná un rango con la hora de fin posterior a la de inicio.";
+                return;
+            }
+
+            var dispositivo = dispositivos.Single(d => d.Id == dispositivoId);
+            if (dispositivo.EmpresaId != UsuarioActual.EmpresaActivaId)
+                return;
+
+            var lector = Fabrica.CrearLector();
+            var puntos = lector.PuntosAsync(dispositivo.Id, desde.Value, hasta.Value);
+            var energia = Calculadora.CalcularAsync(dispositivo.Id, desde.Value, hasta.Value);
+            var eventos = lector.EventosAsync(dispositivo.Id, desde.Value, hasta.Value);
+            await Task.WhenAll(puntos, energia, eventos);
+
+            if (dispositivo.EmpresaId != UsuarioActual.EmpresaActivaId)
+                return;
+
+            CargarGrafico(await puntos, dispositivo.FactorEscala, hasta.Value - desde.Value);
+            consulta = new Consulta(dispositivo, desde.Value, hasta.Value, await energia, await eventos);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al consultar el historial");
+            error = "No se pudo cargar el historial.";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void CargarGrafico(IReadOnlyList<PuntoPotenciaHistorial> puntos, decimal factor, TimeSpan periodo)
+    {
+        opciones = new TimeSeriesChartOptions
+        {
+            TimeLabelFormat = periodo.TotalHours > 24 ? "dd/MM HH:mm" : "HH:mm",
+            TimeLabelSpacing = TimeSpan.FromTicks(Math.Max(TimeSpan.TicksPerSecond, periodo.Ticks / 6)),
+            TooltipTimeLabelFormat = "dd/MM/yyyy HH:mm:ss",
+            ShowDataMarkers = false
+        };
+        series = puntos.Count == 0 ? [] :
+        [
+            new() { Name = "Solar", Data = puntos.Select(p => new TimeValue<double>(
+                Formato.ALocal(p.Ts), (double)(p.PSolMw * factor / 1000))).ToArray() },
+            new() { Name = "Red", Data = puntos.Select(p => new TimeValue<double>(
+                Formato.ALocal(p.Ts), (double)(p.PRedMw * factor / 1000))).ToArray() }
+        ];
+    }
+
+    private static (string Titulo, string Valor)[] Indicadores(EnergiaPorFuente energia) =>
+    [
+        ("% solar", Formato.Porcentaje(energia.PorcentajeSolar)),
+        ("Tiempo en solar", Formato.Duracion(energia.TiempoSolar)),
+        ("Tiempo en red", Formato.Duracion(energia.TiempoRed)),
+        ("Conmutaciones", energia.Conmutaciones.ToString())
+    ];
+
+    private async Task ExportarAsync()
+    {
+        if (consulta is not { } resultado || exportando ||
+            resultado.Dispositivo.EmpresaId != UsuarioActual.EmpresaActivaId)
+            return;
+
+        exportando = true;
+        try
+        {
+            var dispositivo = resultado.Dispositivo;
+            var lecturas = await Fabrica.CrearLector().MedicionesAsync(dispositivo.Id,
+                resultado.Desde, resultado.Hasta, int.MaxValue);
+
+            using var archivo = new MemoryStream();
+            HistorialExcel.Escribir(archivo, dispositivo.Nombre, resultado.Desde, resultado.Hasta,
+                dispositivo.FactorEscala, resultado.Energia, lecturas, resultado.Eventos);
+
+            if (dispositivo.EmpresaId != UsuarioActual.EmpresaActivaId)
+                return;
+
+            archivo.Position = 0;
+            var nombre = string.Join("_", dispositivo.Nombre.Split(Path.GetInvalidFileNameChars()));
+            var fecha = Formato.ALocal(resultado.Hasta);
+            using var referencia = new DotNetStreamReference(archivo);
+            await JS.InvokeVoidAsync("descargarArchivo", $"SAGE_historial_{nombre}_{fecha:yyyyMMdd-HHmm}.xlsx", referencia);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al exportar el historial");
+            Snackbar.Add("No se pudo exportar el historial.", Severity.Error);
+        }
+        finally
+        {
+            exportando = false;
+        }
+    }
+}

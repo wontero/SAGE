@@ -108,6 +108,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 m.Seq
             }).IsUnique();
 
+            entity.HasIndex(m => new { m.DispositivoId, m.Ts })
+                .IncludeProperties(m => new { m.PSolMw, m.PRedMw, m.WhSolAcum, m.WhRedAcum, m.BootId, m.FuenteSeleccionada });
+
             entity.HasOne(m => m.Dispositivo)
                 .WithMany()
                 .HasForeignKey(m => m.DispositivoId)

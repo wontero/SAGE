@@ -13,6 +13,7 @@ using SAGE.Web.Servicios.Alertas;
 using SAGE.Web.Servicios.EnVivo;
 using SAGE.Web.Servicios.Ordenes;
 using SAGE.Web.Servicios.Dispositivo;
+using SAGE.Web.Servicios.Energia;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -156,6 +157,7 @@ else
 // Cada 1 s expira las órdenes que no se entregaron (30 s)
 // o que no se confirmaron (60 s).
 builder.Services.AddHostedService<ExpiradorOrdenes>();
+builder.Services.AddScoped<CalculadoraEnergia>();
 
 // =====================================================
 // CONSTRUIR APLICACIÓN
@@ -168,6 +170,20 @@ var app = builder.Build();
 // =====================================================
 
 await DatosIniciales.InicializarAsync(app.Services);
+
+var indice = Array.IndexOf(args, "--generar-historial");
+if (app.Environment.IsDevelopment() && indice >= 0)
+{
+    if (args.Length <= indice + 2 || !int.TryParse(args[indice + 1], out var dispositivoId) || dispositivoId <= 0
+        || !int.TryParse(args[indice + 2], out var dias) || dias <= 0 || dias > (DateTime.UtcNow - DateTime.MinValue).Days)
+        throw new ArgumentException("Uso: --generar-historial <dispositivoId> <dias>");
+
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var cantidad = await GeneradorHistorial.GenerarAsync(db, dispositivoId, dias);
+    Console.WriteLine($"Mediciones generadas: {cantidad:N0}.");
+    return;
+}
 
 // =====================================================
 // IMPORTACIÓN DE DEMOSTRACIÓN

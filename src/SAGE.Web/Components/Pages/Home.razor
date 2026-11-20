@@ -6,13 +6,19 @@
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
 @using SAGE.Web.Data
+@using SAGE.Web.Components.Shared
 @using SAGE.Web.Servicios
+@using SAGE.Web.Servicios.Dispositivo
 @using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Energia
 @using SAGE.Web.Servicios.Seguridad
 
 @inject IUsuarioActual UsuarioActual
 @inject IServiceScopeFactory ScopeFactory
 @inject EstadoDispositivosEnVivo EnVivo
+@inject CalculadoraEnergia Calculadora
+@inject IFabricaDispositivo Fabrica
+@inject ILogger<Home> Logger
 
 <PageTitle>Inicio — SAGE</PageTitle>
 
@@ -215,6 +221,22 @@
                     }
 
                     <MudPaper Class="pa-4 mt-4">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                            <MudText Typo="Typo.h6">Energía hoy</MudText>
+                            @if (EnergiaSimulada)
+                            {
+                                <MudChip T="string" Color="Color.Info">SIMULADO</MudChip>
+                            }
+                            @foreach (var factor in _empresaActiva.Factores)
+                            {
+                                <ChipEscala Factor="@factor" />
+                            }
+                        </MudStack>
+                        <MudText>Solar · @Formato.Energia(_empresaActiva.WhSolarHoy)</MudText>
+                        <MudText>Red · @Formato.Energia(_empresaActiva.WhRedHoy)</MudText>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-4 mt-4">
 
                         <MudText Typo="Typo.h6">
                             Última medición
@@ -304,6 +326,7 @@
                                 <MudTh>Dispositivos</MudTh>
                                 <MudTh>Solar</MudTh>
                                 <MudTh>Red</MudTh>
+                                <MudTh>Energía hoy</MudTh>
                                 <MudTh>Alertas</MudTh>
                                 <MudTh>Consumo 12 meses</MudTh>
                                 <MudTh>Monto 12 meses</MudTh>
@@ -326,6 +349,19 @@
 
                                 <MudTd DataLabel="Red">
                                     @Potencia(context.PRedMw)
+                                </MudTd>
+
+                                <MudTd DataLabel="Energía hoy">
+                                    <MudText>Solar · @Formato.Energia(context.WhSolarHoy)</MudText>
+                                    <MudText>Red · @Formato.Energia(context.WhRedHoy)</MudText>
+                                    @foreach (var factor in context.Factores)
+                                    {
+                                        <ChipEscala Factor="@factor" />
+                                    }
+                                    @if (EnergiaSimulada)
+                                    {
+                                        <MudChip T="string" Color="Color.Info">SIMULADO</MudChip>
+                                    }
                                 </MudTd>
 
                                 <MudTd DataLabel="Alertas">
@@ -367,6 +403,19 @@
 
                                 <MudTh>
                                     @Potencia(_resumenes.Sum(r => r.PRedMw))
+                                </MudTh>
+
+                                <MudTh>
+                                    <MudText>Solar · @Formato.Energia(_resumenes.Sum(r => r.WhSolarHoy))</MudText>
+                                    <MudText>Red · @Formato.Energia(_resumenes.Sum(r => r.WhRedHoy))</MudText>
+                                    @foreach (var factor in _resumenes.SelectMany(r => r.Factores).Distinct())
+                                    {
+                                        <ChipEscala Factor="@factor" />
+                                    }
+                                    @if (EnergiaSimulada)
+                                    {
+                                        <MudChip T="string" Color="Color.Info">SIMULADO</MudChip>
+                                    }
                                 </MudTh>
 
                                 <MudTh>
@@ -432,6 +481,9 @@
     private bool _esOperador;
     private bool _cargando = true;
     private bool _destruido;
+    private bool _actualizandoEnergia;
+    private DateTime _proximaEnergiaUtc;
+    private bool EnergiaSimulada => Fabrica is FabricaDispositivoSimulado;
 
     private string? _error;
 
@@ -678,6 +730,7 @@
 
         SincronizarEmpresaActiva();
         ActualizarGrafico();
+        await ActualizarEnergiaAsync(ahora);
     }
 
     private void SincronizarEmpresaActiva()
@@ -700,7 +753,7 @@
         if (!UsuarioActual.PuedeVerEmpresa(estado.EmpresaId))
             return;
 
-        _ = InvokeAsync(() =>
+        _ = InvokeAsync(async () =>
         {
             if (_destruido)
                 return;
@@ -722,7 +775,49 @@
             ActualizarGrafico();
 
             StateHasChanged();
+
+            var ahora = DateTime.UtcNow;
+            if (estado.EnLinea && !_cargando && !_actualizandoEnergia && ahora >= _proximaEnergiaUtc)
+            {
+                await ActualizarEnergiaAsync(ahora);
+                if (!_destruido)
+                    StateHasChanged();
+            }
         });
+    }
+
+    private async Task ActualizarEnergiaAsync(DateTime ahora)
+    {
+        _actualizandoEnergia = true;
+        _proximaEnergiaUtc = ahora.AddSeconds(10);
+        try
+        {
+            var inicio = Formato.DesdeLocal(Formato.ALocal(ahora).Date);
+            foreach (var resumen in _resumenes.ToArray())
+            {
+                decimal solar = 0, red = 0;
+                foreach (var dispositivo in resumen.Dispositivos)
+                {
+                    if (_destruido)
+                        return;
+
+                    var energia = await Calculadora.CalcularEmpresaAsync(resumen.EmpresaId, dispositivo.Id, inicio, ahora);
+                    solar += energia.WhSolar * dispositivo.FactorEscala;
+                    red += energia.WhRed * dispositivo.FactorEscala;
+                }
+
+                resumen.WhSolarHoy = solar;
+                resumen.WhRedHoy = red;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al calcular la energía de hoy");
+        }
+        finally
+        {
+            _actualizandoEnergia = false;
+        }
     }
 
     private void AlCambiarAlertas(int empresaId)
@@ -894,6 +989,10 @@
 
         public decimal PSolarMw { get; set; }
         public decimal PRedMw { get; set; }
+
+        public decimal WhSolarHoy { get; set; }
+        public decimal WhRedHoy { get; set; }
+        public IEnumerable<decimal> Factores => Dispositivos.Select(d => d.FactorEscala).Distinct();
 
         public int AlertasAbiertas { get; set; }
         public decimal ConsumoKwh { get; set; }

@@ -11,4 +11,7 @@ public interface ILectorTelemetria
     internal Task<IReadOnlyList<Medicion>> MedicionesRecibidasAsync(
         int dispositivoId, DateTime desdeUtc, DateTime hastaUtc, int maximo) =>
         MedicionesAsync(dispositivoId, desdeUtc, hastaUtc, maximo);
+
+    internal Task<IReadOnlyList<PuntoPotenciaHistorial>> PuntosAsync(
+        int dispositivoId, DateTime desdeUtc, DateTime hastaUtc) => throw new NotSupportedException();
 }

@@ -667,6 +667,10 @@ namespace SAGE.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DispositivoId", "Ts");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("DispositivoId", "Ts"), new[] { "PSolMw", "PRedMw", "WhSolAcum", "WhRedAcum", "BootId", "FuenteSeleccionada" });
+
                     b.HasIndex("DispositivoId", "BootId", "Seq")
                         .IsUnique();
 
