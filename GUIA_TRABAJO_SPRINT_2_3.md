@@ -791,7 +791,12 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 1. Carpeta `firmware/sage_esp32/`:
    - `sage_esp32.ino` (setup/loop), `ControladorFuente.h/.cpp`, `Estados.h/.cpp`, `Ordenes.h/.cpp`, `Medicion.h/.cpp`, `Telemetria.h/.cpp`, `config.example.h`.
    - `config.h` (Wi-Fi, URL del servidor, token) se crea copiando `config.example.h` y está en `.gitignore`.
-2. Hardware según el diseño §2 y §3: INA219 solar en `0x40`, red en `0x41`, I²C en GPIO21 (SDA) / GPIO22 (SCL), calibración `setCalibration_16V_400mA()`, relé en **GPIO26 activo en alto** (bajo = NC = red). `digitalWrite(26, LOW)` es **lo primero** de `setup()`.
+2. Hardware en su **versión mínima** (20/11/2026, reemplaza a los dos INA219 del diseño §2 y §3; guía de armado: https://claude.ai/artifact/JnEq1omb5W4KGw5uuv7bJZ):
+   - Un solo INA219 en `0x40`, **entre COM del relé y la lámpara**; I²C en GPIO21 (SDA) / GPIO22 (SCL); calibración `setCalibration_16V_400mA()`. Mide V, I y P de la fuente que está alimentando la lámpara.
+   - Divisor 10 kΩ/10 kΩ desde la salida de cada rama (después del fusible): solar → **GPIO34**, red → **GPIO35** (ADC1, funciona con Wi-Fi). Tensión = lectura × 3,3 / 4095 × 2, con el factor calibrado en el ensayo del divisor.
+   - `Medicion` arma las dos ramas del contrato así: la rama seleccionada toma `v`, `i_ma` y `p_mw` del INA219; la rama en reposo toma `v` del divisor, con `i_ma = 0` y `p_mw = 0`. Los `wh_acum` se acumulan en la rama seleccionada.
+   - Relé en **GPIO26 activo en alto** (bajo = NC = red). `digitalWrite(26, LOW)` es **lo primero** de `setup()`.
+   - La lógica de referencia ya probada en Wokwi está en `D:\Desktop\proyectos\SAGE\simulacion_wokwi\sketch.ino` (mismos estados, motivos y umbrales; `T_ESTABLE` allí es 10 s, acá 30 s).
 3. Misma lógica que el simulador de S23-M11 (tablas 4.2, 4.3, sección 3.6 y la tabla de eventos de la sección 4):
    - `ControladorFuente` es **Singleton** (`static ControladorFuente& instancia()`, constructor privado, copia eliminada) y **contexto** del State.
    - Estados como clases que heredan de `EstadoFuente` (`nombre()`, `entrar(c)`, `evaluar(c, lecturas)`), con instancias estáticas.
