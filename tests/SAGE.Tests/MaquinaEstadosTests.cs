@@ -302,6 +302,7 @@ public class MaquinaEstadosTests
             var p2 = new ProcesadorOrdenes(c2, ruta);
             var arranque2 = p2.Arrancar();
 
+            Assert.True(p1.BootId > 1_000_000_000, "Un estado nuevo no debe reutilizar boot_id bajos de corridas anteriores.");
             Assert.Equal(p1.BootId + 1, p2.BootId);
             Assert.Equal(7, p2.UltimaEjecutada);
             Assert.Equal(ControladorFuente.ModoCargador, arranque2.Modo);

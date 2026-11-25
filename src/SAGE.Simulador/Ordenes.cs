@@ -181,7 +181,9 @@ public sealed class ProcesadorOrdenes
     // Lee el estado guardado, incrementa el boot_id, aplica parámetros y lo vuelve a guardar.
     public EstadoPersistido Arrancar()
     {
-        var estado = Leer() ?? new EstadoPersistido();
+        // Sin estado guardado (token nuevo o archivo borrado) el boot_id arranca en la hora Unix:
+        // si volviera a 1, la plataforma descartaría como repetidos los boot_id + seq de corridas anteriores.
+        var estado = Leer() ?? new EstadoPersistido { BootId = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
 
         estado.BootId++;
         BootId = estado.BootId;
