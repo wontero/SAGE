@@ -1,0 +1,155 @@
+@implements IDisposable
+
+@using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Data
+@using SAGE.Web.Servicios.EnVivo
+@using SAGE.Web.Servicios.Seguridad
+
+@inject IUsuarioActual UsuarioActual
+@inject EstadoDispositivosEnVivo EnVivo
+@inject IServiceScopeFactory ScopeFactory
+@inject NavigationManager NavigationManager
+
+@* Patrón: Observer — rol: observador. Aviso rojo arriba cuando se abre una alerta nueva. *@
+
+@if (_aviso is not null)
+{
+    <div class="sage-aviso-alerta" role="alert" aria-live="assertive">
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense="true" Class="sage-aviso-alerta__caja">
+            <div class="sage-aviso-alerta__fila">
+                <span class="sage-aviso-alerta__texto">
+                    <b>Alerta nueva · @_aviso.Dispositivo:</b> @_aviso.Mensaje
+                </span>
+                <span class="sage-aviso-alerta__acciones">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Inherit" Size="Size.Small" OnClick="Abrir">
+                        Ver alerta
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Inherit" Size="Size.Small" OnClick="Ignorar">
+                        Ignorar
+                    </MudButton>
+                </span>
+            </div>
+        </MudAlert>
+    </div>
+}
+
+@code {
+    private sealed record Aviso(long Id, string Dispositivo, string Mensaje);
+
+    private Aviso? _aviso;
+
+    // La alerta más nueva ya conocida: solo las posteriores generan aviso.
+    private long _ultimoId;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UsuarioActual.CargarAsync();
+
+        EnVivo.AlertasCambiaron += OnAlertasCambiaron;
+        UsuarioActual.EmpresaCambiada += OnEmpresaCambiada;
+
+        _ultimoId = await UltimoIdAsync();
+    }
+
+    private async Task<long> UltimoIdAsync()
+    {
+        if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            return 0;
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        return await db.Alertas
+            .AsNoTracking()
+            .Where(a => a.Dispositivo.EmpresaId == empresaId)
+            .MaxAsync(a => (long?)a.Id) ?? 0;
+    }
+
+    private async Task RevisarAsync()
+    {
+        if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            return;
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        // Filtro por empresa en la consulta (regla 10).
+        var nueva = await db.Alertas
+            .AsNoTracking()
+            .Where(a => a.Dispositivo.EmpresaId == empresaId && a.Activa && a.Id > _ultimoId)
+            .OrderByDescending(a => a.Id)
+            .Select(a => new Aviso(a.Id, a.Dispositivo.Nombre, a.Mensaje))
+            .FirstOrDefaultAsync();
+
+        if (nueva is not null)
+        {
+            _ultimoId = nueva.Id;
+            _aviso = nueva;
+            return;
+        }
+
+        // Si la alerta del aviso ya se cerró sola, el aviso desaparece.
+        if (_aviso is not null &&
+            !await db.Alertas.AnyAsync(a => a.Id == _aviso.Id && a.Activa))
+        {
+            _aviso = null;
+        }
+    }
+
+    private void OnAlertasCambiaron(int empresaId)
+    {
+        if (_disposed || UsuarioActual.EmpresaActivaId != empresaId)
+            return;
+
+        _ = EnInterfazAsync(RevisarAsync);
+    }
+
+    private void OnEmpresaCambiada()
+    {
+        if (_disposed)
+            return;
+
+        _ = EnInterfazAsync(async () =>
+        {
+            _aviso = null;
+            _ultimoId = await UltimoIdAsync();
+        });
+    }
+
+    private async Task EnInterfazAsync(Func<Task> accion)
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_disposed)
+                    return;
+
+                await accion();
+
+                if (!_disposed)
+                    StateHasChanged();
+            });
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+        {
+            // El circuito se cerró; el aviso no es necesario.
+        }
+    }
+
+    private void Abrir()
+    {
+        _aviso = null;
+        NavigationManager.NavigateTo("/alertas");
+    }
+
+    private void Ignorar() => _aviso = null;
+
+    public void Dispose()
+    {
+        _disposed = true;
+        EnVivo.AlertasCambiaron -= OnAlertasCambiaron;
+        UsuarioActual.EmpresaCambiada -= OnEmpresaCambiada;
+    }
+}

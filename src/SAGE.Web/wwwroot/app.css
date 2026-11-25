@@ -1821,3 +1821,34 @@ html.sage-enter .sage-main {
     -webkit-backdrop-filter: none;
   }
 }
+
+/* Aviso de alerta nueva: queda pegado arriba, debajo de la barra, aunque se baje en la página. */
+.sage-aviso-alerta {
+  position: sticky;
+  top: calc(var(--mud-appbar-height, 64px) + 0.5rem);
+  z-index: 1200;
+  margin-bottom: 1rem;
+}
+
+.sage-aviso-alerta__caja .mud-alert-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.sage-aviso-alerta__fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.sage-aviso-alerta__texto {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sage-aviso-alerta__acciones {
+  display: flex;
+  gap: 0.5rem;
+}

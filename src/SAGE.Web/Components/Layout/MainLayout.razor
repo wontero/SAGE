@@ -151,6 +151,12 @@
 
     <MudMainContent Class="sage-main">
 
+        <AuthorizeView Roles="Administrador,Tecnico,Consulta">
+            <Authorized Context="avisoContext">
+                <AvisoAlertaNueva />
+            </Authorized>
+        </AuthorizeView>
+
         <div @key="UsuarioActual.EmpresaActivaId">
             @Body
         </div>
