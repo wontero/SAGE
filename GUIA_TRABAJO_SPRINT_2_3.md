@@ -446,7 +446,7 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 - Los criterios de S23-M2 y S23-M3 se cumplen (prueba al menos el selector de `admin@sage.test` y el cambio obligatorio de contraseña).
 - Con el simulador actual se guardan mediciones en la empresa del dispositivo.
 
-### - [ ] S23-M5 · Recepción de telemetría con Adapter y Facade, y eventos (RF13)
+### - [x] S23-M5 · Recepción de telemetría con Adapter y Facade, y eventos (RF13)
 **Qué hacer**
 1. Entidad `Evento` en `Data/Evento.cs`: `Id` (long), `DispositivoId`, `BootId` (long), `Seq` (long), `Ts` (UTC), `TsValida`, `TsServidor`, `Tipo`, `Estado`, `De` (nullable), `A` (nullable), `Motivo`, `Origen` (strings, máx. 30), `OrdenId` (long?, sin FK por ahora: Ethan la agrega en S23-M9). Índice **único** `(DispositivoId, BootId, Seq)`. Migración `AgregarEventos`.
 2. `TelemetriaRequest`: agregar `parametros_version` (int, **opcional**: sin `[JsonRequired]`, 0 por defecto). Agregar las clases `EventoTelemetriaRequest` y `ResultadoOrdenRequest` con los campos de la sección 4, y cambiar `Eventos` y `ResultadosOrdenes` de `JsonElement` a `List<EventoTelemetriaRequest>` y `List<ResultadoOrdenRequest>` (siguen siendo obligatorios).
@@ -499,11 +499,11 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 8. Pruebas `tests/SAGE.Tests/AdaptadorTelemetriaTests.cs`: mapeo correcto de un paquete; `ts_valida = false` usa la hora del servidor; un `modo` inválido lanza `FormatException`; un evento con motivo desconocido devuelve `null`.
 
 **Criterios de aceptación**
-- [ ] Todo lo del Sprint 1 sigue funcionando: 200 con token correcto, 401 sin token o con token falso, una sola fila al repetir `seq`.
-- [ ] Un paquete con 2 eventos guarda 2 filas en `Eventos`; reenviarlo no duplica nada (RF13).
-- [ ] Un paquete con `"modo": "TURBO"` responde 400 y no guarda nada.
+- [x] Todo lo del Sprint 1 sigue funcionando: 200 con token correcto, 401 sin token o con token falso, una sola fila al repetir `seq`.
+- [x] Un paquete con 2 eventos guarda 2 filas en `Eventos`; reenviarlo no duplica nada (RF13).
+- [x] Un paquete con `"modo": "TURBO"` responde 400 y no guarda nada.
 - [ ] Una petición HTTP (no HTTPS) a `/api/dispositivo/telemetria` no se redirige.
-- [ ] `TelemetriaEndpoints.cs` no contiene consultas a la base (todo está en la fachada).
+- [x] `TelemetriaEndpoints.cs` no contiene consultas a la base (todo está en la fachada).
 
 ### - [ ] S23-M6 · Tiempo real: Singleton + Observer, monitoreo y escala
 **Qué hacer**
@@ -590,7 +590,7 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 
 **Criterios de aceptación**
 - [ ] Al detener el simulador, en ≤ 35 s aparece la alerta "Sin conexión" y la campana sube sin recargar; al volver a arrancarlo, se cierra.
-- [ ] Un paquete con un evento `solar_insuficiente` abre la alerta; uno con `solar_comprobada` la cierra (probado con `docs/api_telemetria.http`).
+- [x] Un paquete con un evento `solar_insuficiente` abre la alerta; uno con `solar_comprobada` la cierra (probado con `docs/api_telemetria.http`).
 - [ ] Un usuario de otra empresa no ve esa alerta ni su campana cambia.
 
 ### - [ ] S23-M8 · Inicio por empresa y "Todas mis empresas"
@@ -604,7 +604,7 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
 
 **Criterios de aceptación**
 - [ ] `admin@sage.test` ve las 2 pestañas; con un simulador en cada empresa, las dos filas cambian en vivo y el Total es la suma.
-- [ ] `admin.palmas@sage.test` (1 empresa) no ve la pestaña "Todas mis empresas".
+- [x] `admin.palmas@sage.test` (1 empresa) no ve la pestaña "Todas mis empresas".
 - [ ] El Operador ve su tablero sin ningún dato de energía.
 
 **Al terminar:** marca S23-M5 a S23-M8, escribe tu entrada en la Bitácora y haz push. Avísale a Ethan.
@@ -882,16 +882,24 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 - Pendientes o BLOQUEOS: S23-M16 y RF12 en el Sprint 3. En `/eventos` faltan filtros por dispositivo, tipo y fechas, y la paginación de 50 del conjunto completo (S23-M5 de Matías). Matías debe marcar sus casillas S23-M5 a S23-M8 y escribir su entrada en la Bitácora.
 - Último commit: 853af47
 
+### 2026-11-25 09:46 (UTC-4) ? Mateo ? Cierre del Sprint 2 (verificaci?n de S23-M5 a S23-M8)
+- Hecho: filtros por dispositivo, tipo y fechas de Bolivia y paginaci?n de 50 en SQL para `/eventos`, con empresa activa en la consulta; prueba de filtros, p?ginas y SQL generado. Base aislada `SAGE_Entrega_S2`, puerto 5394. Se crearon Panader?a Sol y su administrador all?, sin usar la base `SAGE`.
+- Comprobado: API HTTP con 401 sin token y falso, 200 con token y repetici?n, 400 con modo TURBO; SQL: 2 mediciones AUTO y 2 eventos tras reenviar el paquete. Una alerta solar se abri? y cerr? por eventos; SQL confirm? ambos estados. El Operador no accedi? a monitoreo, eventos, mediciones ni facturas; su Inicio no tiene energ?a. `admin.palmas` no tiene pesta?a consolidada. El selector cambi? entre empresas y la fila de Andina pas? de 1,87 a 1,86 kW en vivo. Monitoreo: Solar seleccionada y comprobada, con ?2000 y potencia 1,85?1,87 kW en muestras separadas 1,1 s; T_estable 15 s mostr? versi?n 1 Aplicada. Chromium y Edge: 12 rutas principales a 375 px, ancho del documento 375 px. `Dispose` desuscribe los tres eventos de monitoreo. Build: 0 errores y advertencias; 152 pruebas correctas.
+- Correcciones a trabajo anterior: S23-M5, filtros y paginaci?n faltantes. Desv?os: se enviaron peticiones basadas en `docs/api_telemetria.http` con los eventos del contrato; este archivo solo trae ejemplos sin eventos.
+- Criterios no comprobados y por qu?: S23-M6: falta medir latencia consola-pantalla ? 2 s, recorrer dos navegadores con un simulador por empresa, reproducir exactamente 0,967 W ? 1,93 kW y verificar desconexi?n ? 35 s. S23-M7: falta comprobar campana/desconexi?n y aislamiento de alertas en vivo con dos empresas. S23-M8: falta comprobar dos simuladores y el Total consolidado. Los encabezados correspondientes quedan abiertos. RNF04: Firefox no est? instalado en Playwright; no se descarg?. No se repitieron todos los pasos ya marcados de la secci?n 12 de punta a punta en esta sesi?n, por lo que queda abierto el segundo criterio y encabezado S23-M17.
+- Pendientes o BLOQUEOS: S23-M16, RF12 y T07 pasan al Sprint 3 por falta de hardware y firmware. El Product Backlog v1.1 (Excel) pas? RF12 al Sprint 3; la ERS 2.1 (PDF) todav?a lo sit?a en Sprint 2. Completar los recorridos manuales mencionados antes de dar por verificado el cierre integral.
+- ?ltimo commit: d0c6833 (c?digo S23-M5; esta entrada queda en el commit siguiente).
+
 ---
 
 ## 12. Demo de los Sprints 2 y 3 (la completa Mateo en S23-M17)
 
 Con la plataforma y el simulador corriendo (dispositivo de Energía Andina con `FactorEscala = 2000`):
 
-- [ ] 1. `operador@sage.test`: crea la empresa "Panadería Sol" y su administrador. Muestra que no ve ningún dato de energía.
+- [x] 1. `operador@sage.test`: crea la empresa "Panadería Sol" y su administrador. Muestra que no ve ningún dato de energía.
 - [x] 2. El nuevo administrador entra → obligado a cambiar la contraseña → ve solo Panadería Sol.
-- [ ] 3. `admin@sage.test`: cambia entre sus 2 empresas con el selector; Inicio → "Todas mis empresas" con una fila por empresa en vivo.
-- [ ] 4. `/monitoreo/{id}`: modo Automático con sol → Solar · comprobada, potencia "×2000" cambiando cada segundo.
+- [x] 3. `admin@sage.test`: cambia entre sus 2 empresas con el selector; Inicio → "Todas mis empresas" con una fila por empresa en vivo.
+- [x] 4. `/monitoreo/{id}`: modo Automático con sol → Solar · comprobada, potencia "×2000" cambiando cada segundo.
 - [x] 5. Simulador `S` (sombra) → en ≤ 2 s pasa a Red, evento "Solar insuficiente" y alerta.
 - [x] 6. Simulador `S` (sin sombra) → tras ~30 s, prueba y regreso a solar ("Solar comprobada").
 - [x] 7. Con sombra, orden **Solar** → "Rechazada: Solar no disponible".
