@@ -41,27 +41,35 @@
             @error
         </MudAlert>
     }
-    else if (eventos.Count == 0)
-    {
-        <div class="home-list">
-            <div class="home-row home-row--muted">
-                <span class="home-row__label">
-                    No hay eventos registrados
-                    para esta empresa.
-                </span>
-            </div>
-        </div>
-    }
     else
     {
+        <MudPaper Class="pa-4 mb-4">
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="int?" Label="Dispositivo" @bind-Value="dispositivoId" Clearable="true">
+                        @foreach (var dispositivo in dispositivos)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)dispositivo.Id)">@dispositivo.Nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" Label="Tipo" @bind-Value="tipo" Clearable="true">
+                        @foreach (var valor in new[] { "conmutacion", "estado", "alerta", "reinicio" })
+                        {
+                            <MudSelectItem T="string" Value="@valor">@TextosEventos.Tipo(valor)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudDateRangePicker Label="Fechas (Bolivia)" @bind-DateRange="fechas" DateFormat="dd/MM/yyyy" Clearable="true" />
+                </MudItem>
+            </MudGrid>
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="FiltrarAsync">Filtrar</MudButton>
+        </MudPaper>
         <div class="page-panel">
-            <MudTable Items="eventos"
-                      Dense="true"
-                      Hover="true"
-                      Breakpoint="Breakpoint.Md"
-                      Elevation="0"
-                      RowsPerPage="10">
-
+            <MudTable T="Evento" @ref="tabla" ServerData="CargarEventosAsync" Dense="true" Hover="true"
+                      Breakpoint="Breakpoint.Md" Elevation="0" RowsPerPage="50">
                 <HeaderContent>
                     <MudTh>Hora (Bolivia)</MudTh>
                     <MudTh>Dispositivo</MudTh>
@@ -108,8 +116,9 @@
                     </MudTd>
                 </RowTemplate>
 
+                <NoRecordsContent>No hay eventos para estos filtros.</NoRecordsContent>
                 <PagerContent>
-                    <MudTablePager />
+                    <MudTablePager RowsPerPageString="Filas por p?gina" PageSizeOptions="@(new int[] { 50 })" />
                 </PagerContent>
             </MudTable>
         </div>
@@ -117,51 +126,66 @@
 </div>
 
 @code {
-    private List<Evento> eventos = new();
-
+    private MudTable<Evento>? tabla;
+    private List<Dispositivo> dispositivos = [];
+    private int? dispositivoId;
+    private string? tipo;
+    private DateRange fechas = new();
     private bool cargando = true;
-
     private string? error;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // Obtener el usuario y la empresa seleccionada.
             await UsuarioActual.CargarAsync();
-
             if (UsuarioActual.EmpresaActivaId is not int empresaId)
             {
-                error = "No tenés una empresa activa.";
+                error = "No ten?s una empresa activa.";
                 return;
             }
-
-            // Crear un ámbito para consultar SQL Server.
-            await using var scope =
-                ScopeFactory.CreateAsyncScope();
-
-            var db = scope.ServiceProvider
-                .GetRequiredService<ApplicationDbContext>();
-
-            // RNF01: consultar únicamente los eventos
-            // de dispositivos de la empresa activa.
-            eventos = await db.Eventos
-                .AsNoTracking()
-                .Include(e => e.Dispositivo)
-                .Where(e =>
-                    e.Dispositivo.EmpresaId == empresaId)
-                .OrderByDescending(e => e.TsServidor)
-                .ThenByDescending(e => e.Seq)
-                .Take(50)
-                .ToListAsync();
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            dispositivos = await db.Dispositivos.AsNoTracking().Where(d => d.EmpresaId == empresaId)
+                .OrderBy(d => d.Nombre).ToListAsync();
         }
         catch (Exception)
         {
-            error = "No se pudieron cargar los eventos.";
+            error = "No se pudieron cargar los dispositivos.";
         }
-        finally
+        finally { cargando = false; }
+    }
+
+    private async Task FiltrarAsync()
+    {
+        if (tabla is not null)
         {
-            cargando = false;
+            tabla.NavigateTo(0);
+            await tabla.ReloadServerData();
+        }
+    }
+
+    private async Task<TableData<Evento>> CargarEventosAsync(TableState estado, CancellationToken ct)
+    {
+        if (UsuarioActual.EmpresaActivaId is not int empresaId)
+            return new TableData<Evento>();
+        try
+        {
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var desde = fechas.Start is DateTime inicio ? Formato.DesdeLocal(inicio.Date) : (DateTime?)null;
+            var hasta = fechas.End is DateTime fin ? Formato.DesdeLocal(fin.Date.AddDays(1)) : (DateTime?)null;
+            var consulta = ConsultaEventos.Filtrar(db.Eventos.AsNoTracking().Include(e => e.Dispositivo),
+                empresaId, dispositivoId, tipo, desde, hasta);
+            var total = await consulta.CountAsync(ct);
+            var items = await ConsultaEventos.Pagina(consulta, estado.Page).ToListAsync(ct);
+            return new TableData<Evento> { Items = items, TotalItems = total };
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            error = "No se pudieron cargar los eventos.";
+            return new TableData<Evento>();
         }
     }
 }
+
