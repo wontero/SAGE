@@ -138,6 +138,7 @@
 
     private DateTime? _inicioFecha;
     private TimeSpan? _inicioHora;
+    private TimeSpan? _inicioHoraPorDefecto;
 
     private bool _conFin;
     private DateTime? _finFecha;
@@ -152,6 +153,7 @@
         var ahoraLocal = Formato.ALocal(DateTime.UtcNow);
         _inicioFecha = ahoraLocal.Date;
         _inicioHora = new TimeSpan(ahoraLocal.Hour, ahoraLocal.Minute, 0);
+        _inicioHoraPorDefecto = _inicioHora;
         _finFecha = ahoraLocal.Date;
         _finHora = _inicioHora;
 
@@ -217,7 +219,12 @@
             return;
         }
 
-        var inicio = Formato.DesdeLocal(_inicioFecha.Value.Date + _inicioHora.Value);
+        // Si no tocaron la hora sugerida, el ensayo empieza al crearlo (con segundos): la sugerencia
+        // es la hora en que se abrió el diálogo, sin segundos, y sumaría el tiempo de llenar el formulario.
+        var inicio = _inicioHora == _inicioHoraPorDefecto &&
+                     _inicioFecha.Value.Date == Formato.ALocal(DateTime.UtcNow).Date
+            ? DateTime.UtcNow
+            : Formato.DesdeLocal(_inicioFecha.Value.Date + _inicioHora.Value);
         DateTime? fin = null;
 
         if (_conFin)
