@@ -39,6 +39,18 @@ public class CalculadoraEnergiaTests
     }
 
     [Fact]
+    public void ContadorMenorQueLaReferenciaSeTomaComoReinicioYNuncaDaNegativo()
+    {
+        // Otra corrida reusó el BootId 1: la referencia vieja (7/10) es mayor que el contador nuevo (2/3).
+        var resultado = CalculadoraEnergia.CalcularMuestras(
+            [Medir(3, 1, 2m, 3m, "SOLAR"), Medir(0, 1, 1m, 1m, "SOLAR")],
+            [Medir(-1, 1, 7m, 10m, "SOLAR")], 0);
+
+        Assert.Equal(2m, resultado.WhSolar);
+        Assert.Equal(3m, resultado.WhRed);
+    }
+
+    [Fact]
     public void CorteDeTreintaSegundosSumaSoloCincoALaFuenteAnterior()
     {
         var resultado = CalculadoraEnergia.CalcularMuestras(

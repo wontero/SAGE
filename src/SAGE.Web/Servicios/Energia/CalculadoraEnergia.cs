@@ -60,8 +60,12 @@ public sealed class CalculadoraEnergia(
                 FROM Mediciones m WITH (FORCESEEK (IX_Mediciones_DispositivoId_Ts (DispositivoId, Ts)))
                 WHERE m.DispositivoId = {dispositivoId} AND m.Ts >= {desdeUtc} AND m.Ts <= {hastaUtc}
             ), Energias AS (
-                SELECT SUM(u.WhSolAcum - COALESCE(r.WhSolAcum, 0)) AS WhSolar,
-                    SUM(u.WhRedAcum - COALESCE(r.WhRedAcum, 0)) AS WhRed
+                -- Si el contador quedó por debajo de la referencia, es otra corrida con el mismo BootId:
+                -- se toma como reinicio del contador (cuenta desde 0) en vez de dar energía negativa.
+                SELECT SUM(CASE WHEN u.WhSolAcum >= COALESCE(r.WhSolAcum, 0)
+                                THEN u.WhSolAcum - COALESCE(r.WhSolAcum, 0) ELSE u.WhSolAcum END) AS WhSolar,
+                    SUM(CASE WHEN u.WhRedAcum >= COALESCE(r.WhRedAcum, 0)
+                             THEN u.WhRedAcum - COALESCE(r.WhRedAcum, 0) ELSE u.WhRedAcum END) AS WhRed
                 FROM Arranques a
                 CROSS APPLY (
                     SELECT TOP (1) m.WhSolAcum, m.WhRedAcum
@@ -108,8 +112,8 @@ public sealed class CalculadoraEnergia(
             if (arranques.Add(medicion.BootId))
             {
                 porArranque.TryGetValue(medicion.BootId, out var referencia);
-                whSolar += medicion.WhSolAcum - (referencia?.WhSolAcum ?? 0);
-                whRed += medicion.WhRedAcum - (referencia?.WhRedAcum ?? 0);
+                whSolar += Delta(medicion.WhSolAcum, referencia?.WhSolAcum ?? 0);
+                whRed += Delta(medicion.WhRedAcum, referencia?.WhRedAcum ?? 0);
             }
 
             if (siguiente is not null)
@@ -125,6 +129,10 @@ public sealed class CalculadoraEnergia(
         }
 
         return new(whSolar, whRed, tiempoSolar, tiempoRed, conmutaciones);
+
+        // Mismo criterio que la consulta SQL: un contador menor que la referencia se toma como reinicio.
+        static decimal Delta(decimal actual, decimal referencia) =>
+            actual >= referencia ? actual - referencia : actual;
     }
 
     private sealed record Totales(
