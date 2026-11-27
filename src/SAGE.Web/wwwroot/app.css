@@ -1511,7 +1511,6 @@ html.sage-enter .sage-main {
 
 .sage-chart__area {
   opacity: 0;
-  animation: sage-chart-fade 700ms var(--sage-spring) 80ms both;
 }
 
 .sage-chart__area--ahorro {
@@ -1550,7 +1549,7 @@ html.sage-enter .sage-main {
 .sage-chart__dot {
   stroke: #fff;
   stroke-width: 1.75;
-  transition: r 140ms var(--sage-spring);
+  transition: r 140ms var(--sage-spring), opacity 200ms ease-out;
   cursor: pointer;
 }
 
@@ -1626,6 +1625,40 @@ html.sage-enter .sage-main {
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--sage-text);
+}
+
+
+.sage-chart__line,
+.sage-chart__area,
+.sage-chart__toggle {
+  transition: opacity 200ms ease-out;
+}
+
+.ocultar-red :is(.sage-chart__line--red, .sage-chart__dot--red, .sage-chart__area--red, .sage-chart__area--ahorro),
+.ocultar-solar :is(.sage-chart__line--solar, .sage-chart__dot--solar, .sage-chart__area--ahorro),
+.ocultar-mixto :is(.sage-chart__line--mixto, .sage-chart__dot--mixto) {
+  opacity: 0;
+}
+
+.sage-chart__toggle {
+  padding: 0.15rem 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sage-chart__toggle[aria-pressed="false"] {
+  opacity: 0.65;
+  text-decoration: line-through;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sage-chart__line,
+  .sage-chart__dot,
+  .sage-chart__area,
+  .sage-chart__toggle {
+    transition: none;
+  }
 }
 
 .sage-delta {
@@ -1755,18 +1788,11 @@ html.sage-enter .sage-main {
   to { stroke-dashoffset: 0; }
 }
 
-@keyframes sage-chart-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .sage-chart__line,
-  .sage-chart__area {
+  .sage-chart__line {
     animation: none !important;
     stroke-dasharray: none;
     stroke-dashoffset: 0;
-    opacity: 1;
   }
 }
 

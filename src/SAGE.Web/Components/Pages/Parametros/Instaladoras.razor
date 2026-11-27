@@ -1,0 +1,141 @@
+@using Microsoft.EntityFrameworkCore
+@using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Servicios.Simulacion
+@inject IServiceScopeFactory ScopeFactory
+@inject IUsuarioActual UsuarioActual
+@inject ISnackbar Snackbar
+
+<section class="home-group" aria-label="Instaladoras">
+    <h2 class="home-group__title">Instaladoras</h2>
+    <div class="page-panel sage-panel-pad">
+        <MudTable Items="_instaladoras" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>Precio (Bs/kWp)</MudTh>
+                <MudTh>Mantenimiento (Bs por kWp al año)</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh>Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                <MudTd DataLabel="Precio (Bs/kWp)">@context.BsPorKwp.ToString("#,0.####", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Mantenimiento (Bs por kWp al año)">@context.MantenimientoBsKwpAnio.ToString("#,0.####", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Estado">@(context.Activa ? "Activa" : "Inactiva")</MudTd>
+                <MudTd DataLabel="Acciones">
+                    <MudButton OnClick="@(() => Editar(context))" Disabled="_guardando" aria-label="@($"Editar {context.Nombre}")">Editar</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+        <MudButton Variant="Variant.Outlined" OnClick="@(() => Editar(new Instaladora()))" Disabled="_guardando" Class="mt-3">Nueva instaladora</MudButton>
+
+        @if (_edicion is not null)
+        {
+            <MudForm @ref="_formulario" @key="_edicion">
+                <MudText Typo="Typo.h6" Class="mt-3">@(_edicion.Id == 0 ? "Nueva instaladora" : $"Editar {_edicion.Nombre}")</MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField T="string" @bind-Value="_nombre" Label="Nombre" Variant="Variant.Outlined"
+                                      Validation="@(new Func<string?, string?>(ValidarNombre))" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField T="decimal?" @bind-Value="_precio" Label="Precio (Bs/kWp instalado)" Variant="Variant.Outlined"
+                                         Culture="FacturaReglas.Cultura" Format="#,0.####" Validation="@(new Func<decimal?, string?>(RangosSimulacion.Precio))" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField T="decimal?" @bind-Value="_mantenimiento" Label="Mantenimiento (Bs por kWp al año)" Variant="Variant.Outlined"
+                                         Culture="FacturaReglas.Cultura" Format="#,0.####" Validation="@(new Func<decimal?, string?>(RangosSimulacion.MantenimientoPorKwp))" />
+                    </MudItem>
+                </MudGrid>
+                <MudSwitch T="bool" @bind-Value="_activa" Color="Color.Primary" Label="Activa" />
+                <MudStack Row="true">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Guardar" Disabled="_guardando">Guardar instaladora</MudButton>
+                    <MudButton OnClick="@(() => _edicion = null)" Disabled="_guardando">Cancelar</MudButton>
+                </MudStack>
+            </MudForm>
+        }
+    </div>
+</section>
+
+@code {
+    private List<Instaladora> _instaladoras = [];
+    private Instaladora? _edicion;
+    private MudForm _formulario = null!;
+    private string? _nombre;
+    private decimal? _precio;
+    private decimal? _mantenimiento;
+    private bool _activa;
+    private bool _guardando;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        if (!UsuarioActual.EsOperador)
+            return;
+
+        using var scope = ScopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        _instaladoras = await db.Instaladoras.AsNoTracking().OrderBy(i => i.Nombre).ToListAsync();
+    }
+
+    private void Editar(Instaladora instaladora)
+    {
+        _edicion = instaladora;
+        _nombre = instaladora.Nombre;
+        _precio = instaladora.Id == 0 ? null : instaladora.BsPorKwp;
+        _mantenimiento = instaladora.MantenimientoBsKwpAnio;
+        _activa = instaladora.Activa;
+    }
+
+    private static string? ValidarNombre(string? nombre)
+    {
+        var texto = nombre?.Trim();
+        if (string.IsNullOrEmpty(texto) || texto.Length > 120)
+            return "Ingresá un nombre de 1 a 120 caracteres.";
+        return string.Equals(texto, "Referencia SAGE", StringComparison.OrdinalIgnoreCase)
+            ? "Referencia SAGE es el nombre de los parámetros vigentes." : null;
+    }
+
+    private async Task Guardar()
+    {
+        if (_guardando || !UsuarioActual.EsOperador || UsuarioActual.DebeCambiarContrasena || _edicion is not { } edicion)
+            return;
+
+        _guardando = true;
+        try
+        {
+            await _formulario.ValidateAsync();
+            if (!_formulario.IsValid)
+                return;
+
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var instaladora = edicion.Id == 0 ? new Instaladora() : await db.Instaladoras.FindAsync(edicion.Id);
+            if (instaladora is null)
+            {
+                Snackbar.Add("No se encontró la instaladora.", Severity.Error);
+                return;
+            }
+
+            instaladora.Nombre = _nombre!.Trim();
+            instaladora.BsPorKwp = _precio!.Value;
+            instaladora.MantenimientoBsKwpAnio = _mantenimiento!.Value;
+            instaladora.Activa = _activa;
+            if (edicion.Id == 0)
+                db.Instaladoras.Add(instaladora);
+
+            await db.SaveChangesAsync();
+            _edicion = null;
+            await CargarAsync();
+            Snackbar.Add("Instaladora guardada.", Severity.Success);
+        }
+        catch (DbUpdateException)
+        {
+            Snackbar.Add("No se pudo guardar la instaladora.", Severity.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+}

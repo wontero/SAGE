@@ -42,11 +42,11 @@
         <div class="home-list">
             <div class="home-row">
                 <span class="home-row__label">Consumo</span>
-                <span class="home-row__value home-row__value--emphasis">@_consumo12.ToString("N2", FacturaReglas.Cultura) kWh</span>
+                <span class="home-row__value home-row__value--emphasis">@_consumo12.ToString("#,0.##", FacturaReglas.Cultura) kWh</span>
             </div>
             <div class="home-row">
                 <span class="home-row__label">Monto</span>
-                <span class="home-row__value home-row__value--emphasis">@_monto12.ToString("N2", FacturaReglas.Cultura) Bs</span>
+                <span class="home-row__value home-row__value--emphasis">@_monto12.ToString("#,0.##", FacturaReglas.Cultura) Bs</span>
             </div>
         </div>
     </section>
@@ -63,9 +63,9 @@
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Periodo">@context.Periodo</MudTd>
-                <MudTd DataLabel="Consumo (kWh)">@context.ConsumoKwh.ToString("N2", FacturaReglas.Cultura)</MudTd>
-                <MudTd DataLabel="Monto (Bs)">@context.MontoBs.ToString("N2", FacturaReglas.Cultura)</MudTd>
-                <MudTd DataLabel="Bs/kWh">@context.BsPorKwh.ToString("N4", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Consumo (kWh)">@context.ConsumoKwh.ToString("#,0.###", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Monto (Bs)">@context.MontoBs.ToString("#,0.##", FacturaReglas.Cultura)</MudTd>
+                <MudTd DataLabel="Bs/kWh">@context.BsPorKwh.ToString("#,0.####", FacturaReglas.Cultura)</MudTd>
                 <MudTd DataLabel="Origen">
                     <MudChip T="string" Size="Size.Small" Color="@(context.Origen == OrigenFactura.Excel ? Color.Info : Color.Default)">
                         @context.Origen

@@ -1,0 +1,18 @@
+<MudTable Items="Facturas" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+    <HeaderContent>
+        <MudTh>Período</MudTh>
+        <MudTh>Consumo (kWh)</MudTh>
+        <MudTh>Monto (Bs)</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Período">@FacturaReglas.Periodo(context.Anio, context.Mes)</MudTd>
+        <MudTd DataLabel="Consumo (kWh)">@context.ConsumoKwh.ToString("#,0.###", FacturaReglas.Cultura)</MudTd>
+        <MudTd DataLabel="Monto (Bs)">@context.MontoBs.ToString("#,0.##", FacturaReglas.Cultura)</MudTd>
+    </RowTemplate>
+    <NoRecordsContent>Registrá al menos una factura para calcular el consumo.</NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter, EditorRequired]
+    public IEnumerable<FacturaBaseSimulacion> Facturas { get; set; } = [];
+}

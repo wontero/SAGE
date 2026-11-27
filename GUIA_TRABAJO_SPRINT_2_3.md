@@ -139,19 +139,25 @@ En el Sprint 1 el Administrador era global (sin empresa) y veía todo. **Eso cam
 - La simulación económica **nunca** usa mediciones escaladas: usa las facturas.
 
 ### 3.4 Simulación económica (RF05–RF07)
-Tres escenarios sobre el consumo facturado de la empresa activa:
-- **Red:** todo el consumo se paga a la tarifa.
-- **Solar:** la potencia solar (kWp) que cubre el 100 % del consumo del año. No hay baterías: "solar" significa "genera en el año lo que se consume en el año", no "desconectado de la red".
-- **Mixto:** la potencia que elige el usuario (menor que la del escenario Solar); lo que falte se paga a la red.
+Tres escenarios sobre las últimas 12 facturas como máximo de la empresa activa:
+- **Solo red:** todo el consumo se paga a la tarifa elegida.
+- **Solar sugerido:** SAGE dimensiona la potencia según el consumo, la cobertura deseada y la producción por kWp. La cobertura inicial es 100 %.
+- **Tu propuesta:** el usuario elige la potencia o la calcula a partir de un presupuesto.
 
-Fórmulas exactas en S23-M4. Los parámetros globales los mantiene el Operador; cada empresa puede fijar su propia tarifa. Valores iniciales (todos marcados **"Supuesto — verificar"** en pantalla):
+La tarifa inicial es el monto total dividido por el consumo total de las facturas. También se puede usar la tarifa configurada (de la empresa o general) o ingresar una manual. El horizonte y la tarifa son comunes. Cada escenario solar permite editar precio, mantenimiento y producción, e ingresar una cotización total. La energía faltante se paga a la red y la energía excedente vale 0.
 
-| Parámetro | Valor inicial | Rango permitido |
+El Operador mantiene los parámetros globales y las instaladoras. Cada empresa puede fijar su tarifa. Referencia SAGE sale de los parámetros vigentes.
+
+| Parámetro | Valor inicial de referencia | Rango permitido |
 |---|---|---|
-| Tarifa (Bs/kWh) | 0,90 | 0,10 a 5,00 |
-| Costo de instalación (Bs/kWp) | 8 000 | 1 000 a 50 000 |
-| Generación solar (kWh/kWp/mes) | 125 | 50 a 250 |
-| Mantenimiento (Bs/año) | 600 | 0 a 50 000 |
+| Tarifa (Bs/kWh) | 0,90 (configurada general) | 0,10 a 5,00 |
+| Precio de instalación (Bs/kWp) | 8 000 | 2 000 a 30 000 |
+| Producción solar (kWh/kWp/mes) | 125 | 50 a 200 |
+| Mantenimiento (Bs/año) | 600 | 0 o más |
+| Potencia (kWp) | 3 para Tu propuesta | 0,1 a 500 |
+| Cobertura (%) | 100 | 50 a 300 |
+| Horizonte (años) | 10 | 1 a 25 |
+| Inversión manual y presupuesto (Bs) | — | Mayor que 0 |
 
 ### 3.5 Demo con el ESP32
 El servidor corre en una laptop. Laptop y ESP32 se conectan al **hotspot de un celular**. El ESP32 usa **HTTP** (no HTTPS) hacia la IP de la laptop. Es una limitación aceptada de la maqueta: el token sigue protegiendo el acceso.
@@ -398,35 +404,34 @@ Para que nadie las invente dos veces, estas piezas tienen dueño y forma fija:
    - `Simulacion` (guardada): `Id`, `EmpresaId`, `UsuarioId`, `Fecha`, `ParametrosVersion`, `TarifaUsadaBsKwh`, `ConsumoMensualKwh`, `MesesBase`, `KwpSolar`, `KwpMixto`, `HorizonteAnios`, `InversionSolarBs`, `InversionMixtoBs`, `CostoAnualRedBs`, `CostoAnualSolarBs`, `CostoAnualMixtoBs`, `CostoAcumRedBs`, `CostoAcumSolarBs`, `CostoAcumMixtoBs`, `RecuperacionSolarAnios` (decimal?, null = no se recupera en el horizonte), `RecuperacionMixtoAnios` (decimal?), `Advertencias` (`List<string>` guardada como texto unido por `\n` con un `ValueConverter`).
    - Migración `ParametrosYSimulacion`.
 2. Página `/parametros` (`Operador`): muestra la versión vigente y el historial de versiones; "Nueva versión" con los 4 valores, validados con los rangos de la sección 3.4; guardar crea una versión nueva (nunca se edita una anterior). Encima, el aviso "Supuesto — verificar con la tarifa vigente de la AETN/CRE" mientras la versión vigente sea la 1.
-3. En `/simulacion`, el Administrador ve la tarjeta "Tarifa de la empresa" con la tarifa propia vigente (o "Usa la tarifa general: X Bs/kWh") y un botón para fijar una nueva (rango 0,10 a 5,00).
-4. **Builder** en `Servicios/Simulacion/SimulacionBuilder.cs`, con esta interfaz exacta:
+3. En `/simulacion`, el Administrador puede fijar una tarifa de empresa. Administrador y Técnico simulan y guardan. Consulta solo puede ver y abrir los resultados guardados. Las consultas filtran por la empresa activa.
+4. **Builder** en `Servicios/Simulacion/SimulacionBuilder.cs`, con la interfaz vigente:
    ```csharp
    // Patrón: Builder — rol: constructor
    public class SimulacionBuilder
    {
        public SimulacionBuilder ParaEmpresa(Empresa empresa);
-       public SimulacionBuilder ConConsumo(IEnumerable<Factura> facturas);       // últimas 12 como máximo
+       public SimulacionBuilder ConConsumo(IEnumerable<Factura> facturas);
        public SimulacionBuilder ConParametros(ParametrosEconomicos parametros);
-       public SimulacionBuilder ConTarifa(decimal tarifaBsKwh);                  // la de la empresa o la general
-       public SimulacionBuilder ConPotenciaMixta(decimal kwp);
+       public SimulacionBuilder ConTarifa(OrigenTarifaSimulacion origen, decimal configurada, decimal? manual = null);
+       public SimulacionBuilder ConSolarSugerido(decimal cobertura, DatosEscenarioSolar datos);
+       public SimulacionBuilder ConPropuesta(decimal kwp, DatosEscenarioSolar datos, decimal? presupuesto = null);
        public SimulacionBuilder ConHorizonte(int anios);
-       public Simulacion Construir();
+       public Data.Simulacion Construir();
+       public static (decimal Consumo, decimal? Tarifa) ResumirFacturas(IReadOnlyCollection<Factura> facturas);
+       public static decimal PotenciaPorPresupuesto(decimal presupuesto, decimal bsPorKwp);
+       public static string NombreTarifa(OrigenTarifaSimulacion origen);
    }
    ```
-   `Construir()` valida y lanza excepción con mensaje en español si: falta empresa o parámetros; no hay facturas ("No hay consumo facturado: registre al menos una factura"); horizonte fuera de 1 a 25; kWp mixto ≤ 0 o ≥ kWp solar ("Para cubrir todo el consumo use el escenario Solar").
-5. **Fórmulas exactas** (C = consumo mensual promedio en kWh de las facturas usadas; T = tarifa; G = generación kWh/kWp/mes; K = costo Bs/kWp; M = mantenimiento Bs/año; N = horizonte; P = kWp mixto):
-   - `KwpSolar = ceil((C / G) × 10) / 10` (redondeo hacia arriba a 0,1 kWp).
-   - Red: `CostoAnualRed = 12 × C × T`; `CostoAcumRed = N × CostoAnualRed`.
-   - Solar: `InversionSolar = KwpSolar × K`; `CostoAnualSolar = M`; `CostoAcumSolar = InversionSolar + N × M`.
-   - Mixto: `kWhRedAnual = max(0, 12 × C − 12 × G × P)`; `InversionMixto = P × K`; `CostoAnualMixto = kWhRedAnual × T + M`; `CostoAcumMixto = InversionMixto + N × CostoAnualMixto`.
-   - Recuperación de un escenario: `ahorroAnual = CostoAnualRed − CostoAnualEscenario`. Si `ahorroAnual ≤ 0` o `Inversion / ahorroAnual > N` → `null`; si no → `Inversion / ahorroAnual` redondeado a 1 decimal.
-   - Advertencias: menos de 3 meses → "Menos de 3 meses de consumo: baja confiabilidad". De 3 a 11 meses → "Menos de 12 meses de consumo: el resultado es orientativo".
-   - Supuestos que se muestran siempre: sin inflación, sin degradación del panel, sin baterías, excedentes solares no se venden, costos en Bs de hoy, **los datos de la maqueta no se usan**.
-6. Página `/simulacion` (Admin, Técnico, Consulta), componente `PantallaSimulacion` (es el **director** del Builder: `// Patrón: Builder — rol: director`):
-   - Admin y Técnico: entrada de kWp mixto y horizonte (por defecto 3 kWp y 10 años), botón "Simular", resultado y botón "Guardar".
-   - Resultado: chip grande **"SIMULACIÓN"** (RNF12); tabla de 3 escenarios (kWp, inversión Bs, costo anual Bs, costo acumulado a N años Bs, ahorro acumulado frente a Red Bs, recuperación en años o "No se recupera en el horizonte"); gráfico de líneas del costo acumulado año por año de los 3 escenarios (`MudChart` tipo `Line`); lista de supuestos con los valores usados y la versión de parámetros.
-   - Lista de simulaciones guardadas de la empresa activa (Consulta solo ve esta lista y puede abrirlas).
-7. Pruebas en `tests/SAGE.Tests/SimulacionBuilderTests.cs`: un caso calculado a mano (C = 1 000 kWh, T = 0,90, G = 125, K = 8 000, M = 600, N = 10, P = 3) con todos los resultados comprobados; y cada validación de `Construir()`.
+   `Construir()` valida la empresa, los parámetros, las facturas y los rangos de la sección 3.4. Retorna el producto con los tres escenarios y la lista de pasos numéricos del cálculo.
+5. **Fórmulas** para consumo mensual promedio C, tarifa elegida T, producción G, precio por kWp K, mantenimiento anual M y horizonte N:
+   - Solar sugerido: `kWp = ceil((C × cobertura / 100 ÷ G) × 10) / 10`. Tu propuesta: potencia ingresada o `floor((presupuesto ÷ K) × 10) / 10`.
+   - Solo red: `costo anual = 12 × C × T` y `costo acumulado = N × costo anual`.
+   - Cada escenario solar: `inversión = kWp × K` o el importe de la cotización; `kWh de red al mes = max(0, C − G × kWp)`; `excedente al mes = max(0, G × kWp − C)`; `costo anual = 12 × kWh de red al mes × T + M`; `costo acumulado = inversión + N × costo anual`.
+   - `ahorro anual = costo anual de Solo red − costo anual del escenario`. La recuperación es `inversión / ahorro anual`, redondeada a un decimal, si el ahorro es positivo y la recuperación queda dentro del horizonte.
+   - Menos de 3 meses: "Menos de 3 meses de consumo: baja confiabilidad". De 3 a 11 meses: "Menos de 12 meses de consumo: el resultado es orientativo".
+6. `PantallaSimulacion` dirige el Builder, muestra facturas, resultados, chip SIMULACIÓN (RNF12), gráfico acumulado, desglose y limitaciones. La migración `SimulacionPersonalizable` agrega `Instaladoras` y el detalle nullable de la corrida en JSON. Los campos históricos `*Mixto*` guardan los resultados de Tu propuesta.
+7. Pruebas en `tests/SAGE.Tests/SimulacionBuilderTests.cs`: caso calculado a mano, orígenes de tarifa, cobertura, excedentes, cotización manual, presupuesto, rangos y desglose.
 
 **Criterios de aceptación**
 - [x] `dotnet test` pasa con el caso calculado a mano.
@@ -786,6 +791,19 @@ Reescribe `src/SAGE.Simulador` para que se comporte **como el firmware** (diseñ
 - [x] Un ensayo con sombra provocada a mitad muestra energía en las dos fuentes y al menos 2 conmutaciones.
 - [x] Ninguna pantalla mezcla un valor medido y uno simulado sin su chip (MEDIDO / SIMULACIÓN).
 
+### - [x] S23-M18 · Simulación económica personalizable y transparente (Mateo)
+- Al abrir `/simulacion`, el resumen muestra el consumo promedio, la potencia para cubrirlo, la inversión con Referencia SAGE y el gasto mensual según las facturas. El desplegable muestra las facturas usadas y compara las tarifas. Sin consumo facturado, se ofrece el enlace a `/facturas` y se deshabilitan la sugerencia y la simulación.
+- El presupuesto se evalúa antes de los escenarios con los precios de referencia de la instaladora elegida. La potencia se redondea hacia abajo a una décima y se limita a la necesaria para cubrir el consumo. El presupuesto se aplica a la inversión inicial. La sugerencia muestra el sobrante para cobertura total o la energía que queda a cargo de la red para un sistema mixto. Al usarla en Tu propuesta, se guardan el presupuesto, la instaladora, la potencia y el sobrante, con el cálculo en el desglose.
+- La cobertura solar, el modo y valor de Tu propuesta, el horizonte y la tarifa usada se ven de entrada. Las facturas, los precios y la producción, el cambio de tarifa, la tarifa de empresa, el desglose y las limitaciones se abren a pedido.
+- Comparación simultánea de Solo red, Solar sugerido y Tu propuesta. Tabla de facturas, tres orígenes de tarifa, personalización solar, cálculo por presupuesto, excedente con valor cero y pasos del Builder en "Cómo se calculó".
+- El Operador crea, edita y activa o desactiva instaladoras en `/parametros`. El seed incluye Chuvolteos y Avatar. Referencia SAGE usa los parámetros vigentes y en `/simulacion` aparecen las instaladoras activas.
+- La corrida guarda una copia de las entradas, las facturas usadas, los excedentes y el desglose. El historial mantiene las simulaciones anteriores y muestra los tres escenarios de la empresa activa.
+- Cada botón de la leyenda oculta o muestra su serie y sus puntos con una transición de opacidad de 200 ms. El nombre queda tachado y atenuado, la serie sale del tooltip y el eje Y conserva su escala. Con movimiento reducido, el cambio es inmediato.
+- Tu propuesta se define por defecto con una meta de energía mensual. La potencia se redondea hacia arriba a la décima de kWp y se muestra junto a su producción mensual. También se puede ingresar kWp directamente. Aplicar un presupuesto selecciona el modo kWp. La corrida guarda el modo y la meta en kWh/mes cuando corresponde, y muestra la conversión en el desglose.
+- El Operador configura mantenimiento en Bs por kWp al año. La migración `MantenimientoPorKwp` deja Referencia SAGE en 80, Chuvolteos en 95 y Avatar en 65. Cada escenario multiplica la potencia por la tasa, admite un monto anual manual y permite volver al calculado.
+- Rangos para edificios grandes con potencia de 0,1 a 5.000 kWp, meta de 1 a 1.000.000 kWh/mes y mantenimiento de 0 a 1.000 Bs por kWp al año. La meta tiene que producir una potencia dentro del rango. Simulación y facturas usan separador de miles y omiten ceros decimales de relleno. Las etiquetas del gráfico abrevian miles y millones.
+- La base local `SAGE` usa 12 facturas de noviembre de 2025 a octubre de 2026 para Hotel Las Palmas y Energía Andina, cargadas con el script `D:\Desktop\proyectos\SAGE\facturas_demo_grandes.sql`, fuera del repositorio.
+
 ### - [ ] S23-M16 · Firmware del ESP32 (State, Command y Singleton)
 **Qué hacer**
 1. Carpeta `firmware/sage_esp32/`:
@@ -889,6 +907,11 @@ Cada agente agrega **una entrada al terminar** (y otra si deja un BLOQUEO). No b
 - Criterios no comprobados y por qu?: S23-M6: falta medir latencia consola-pantalla ? 2 s, recorrer dos navegadores con un simulador por empresa, reproducir exactamente 0,967 W ? 1,93 kW y verificar desconexi?n ? 35 s. S23-M7: falta comprobar campana/desconexi?n y aislamiento de alertas en vivo con dos empresas. S23-M8: falta comprobar dos simuladores y el Total consolidado. Los encabezados correspondientes quedan abiertos. RNF04: Firefox no est? instalado en Playwright; no se descarg?. No se repitieron todos los pasos ya marcados de la secci?n 12 de punta a punta en esta sesi?n, por lo que queda abierto el segundo criterio y encabezado S23-M17.
 - Pendientes o BLOQUEOS: S23-M16, RF12 y T07 pasan al Sprint 3 por falta de hardware y firmware. El Product Backlog v1.1 (Excel) pas? RF12 al Sprint 3; la ERS 2.1 (PDF) todav?a lo sit?a en Sprint 2. Completar los recorridos manuales mencionados antes de dar por verificado el cierre integral.
 - ?ltimo commit: d0c6833 (c?digo S23-M5; esta entrada queda en el commit siguiente).
+
+### 2026-11-26 — Mateo — S23-M18
+- Build sin errores ni advertencias y 177 pruebas correctas. Migración `SimulacionPersonalizable` aplicada en `SAGE`. En Chromium, el Administrador comparó los tres escenarios, vio los excedentes y el desglose, guardó y reabrió corridas nuevas y una histórica. Consulta vio el historial de su empresa y Técnico vio el formulario. El Operador editó el precio y desactivó una instaladora. Se comprobó que el historial conserva el precio original y que el selector muestra las activas. Se restauraron el precio y el estado usados en la prueba. El alta de instaladoras no se ejercitó en el navegador.
+- 2026-11-26 — Ajustes de S23-M18. Migración aplicada en la base local SAGE y 184 pruebas correctas. SQL confirmó 12 facturas por empresa y las tres corridas guardadas existentes. En Chrome se verificaron el selector de series, la meta de 2.500 kWh/mes a 20 kWp, el mantenimiento automático y manual, el presupuesto de 8.000.000 Bs a 1.000 kWp, las cifras de ambos edificios y las unidades en /parametros. La preferencia de movimiento reducido se revisó en CSS.
+- 2026-11-26 — Se reordenó `/simulacion` según lo acordado con el dueño. La solución pasó 187 pruebas. En Chrome, con Administrador, se comprobó el resumen al cargar, las 12 facturas y ambas tarifas en el desplegable, los presupuestos de 7.000.000 Bs y 2.000.000 Bs, la validación de un importe cero, los paneles plegados y la aplicación de la sugerencia. A 375 px se verificó el ancho con la sugerencia, el resultado y el desglose abierto. Se guardó y reabrió una corrida de Energía Andina con Avatar, con el presupuesto y el sobrante en el desglose. Quedó pendiente probar en el navegador una empresa sin facturas y fijar una tarifa de empresa durante este recorrido.
 
 ---
 

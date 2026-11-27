@@ -51,4 +51,6 @@ public class Simulacion
     public decimal? RecuperacionMixtoAnios { get; set; }
 
     public List<string> Advertencias { get; set; } = new();
+
+    public DetalleSimulacion? Detalle { get; set; }
 }

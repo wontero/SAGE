@@ -32,6 +32,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ParametrosEconomicos> ParametrosEconomicos
         => Set<ParametrosEconomicos>();
 
+    public DbSet<Instaladora> Instaladoras => Set<Instaladora>();
+
     public DbSet<TarifaEmpresa> TarifasEmpresa
         => Set<TarifaEmpresa>();
 
@@ -298,7 +300,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(p => p.GeneracionKwhKwpMes)
                 .HasPrecision(18, 4);
 
-            entity.Property(p => p.MantenimientoBsAnio)
+            entity.Property(p => p.MantenimientoBsKwpAnio)
                 .HasPrecision(18, 4);
 
             entity.HasOne(p => p.CreadoPor)
@@ -333,6 +335,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         builder.Entity<Simulacion>(entity =>
         {
+            entity.Property(s => s.Detalle).HasConversion(
+                detalle => System.Text.Json.JsonSerializer.Serialize(detalle, (System.Text.Json.JsonSerializerOptions?)null),
+                json => System.Text.Json.JsonSerializer.Deserialize<DetalleSimulacion>(json, (System.Text.Json.JsonSerializerOptions?)null));
+
             entity.Property(s => s.TarifaUsadaBsKwh)
                 .HasPrecision(18, 4);
 

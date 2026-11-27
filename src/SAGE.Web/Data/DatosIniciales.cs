@@ -105,10 +105,18 @@ public static class DatosIniciales
                 TarifaBsKwh = 0.90m,
                 CostoInstalacionBsKwp = 8000m,
                 GeneracionKwhKwpMes = 125m,
-                MantenimientoBsAnio = 600m,
+                MantenimientoBsKwpAnio = 80m,
                 VigenteDesde = DateTime.UtcNow,
                 CreadoPorId = operador.Id
             });
+            await db.SaveChangesAsync();
+        }
+
+        if (!await db.Instaladoras.AnyAsync())
+        {
+            db.Instaladoras.AddRange(
+                new Instaladora { Nombre = "Chuvolteos", BsPorKwp = 7200m, MantenimientoBsKwpAnio = 95m },
+                new Instaladora { Nombre = "Avatar", BsPorKwp = 8700m, MantenimientoBsKwpAnio = 65m });
             await db.SaveChangesAsync();
         }
     }

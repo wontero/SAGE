@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Administrador,Tecnico,Consulta")]
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.DependencyInjection
+@using SAGE.Web.Servicios
 @using SAGE.Web.Servicios.Seguridad
 @using SAGE.Web.Servicios.Simulacion
 @inject IServiceScopeFactory ScopeFactory
@@ -32,84 +33,251 @@
     }
     else
     {
-        <section class="home-group" aria-label="Tarifa de la empresa">
-            <h2 class="home-group__title">Tarifa de la empresa</h2>
-            <div class="page-panel sage-panel-pad">
-                <div class="sage-tarifa">
-                    <div>
-                        <p class="sage-tarifa__caption">
-                            @(_tarifaPropia is not null ? "Tarifa propia" : "Tarifa general")
-                        </p>
-                        <p class="sage-tarifa__value">
-                            @((_tarifaPropia ?? _tarifaGeneral).ToString("N2", FacturaReglas.Cultura))
-                            <span style="font-size:0.95rem;font-weight:600;color:var(--sage-muted);">Bs/kWh</span>
-                        </p>
-                    </div>
-
-                    @if (_puedeFijarTarifa)
-                    {
-                        <div class="sage-tarifa__form">
-                            <MudNumericField T="decimal" @bind-Value="_nuevaTarifa" Label="Nueva tarifa" Variant="Variant.Outlined"
-                                             Min="0.10m" Max="5.00m" Step="0.05m" HelperText="0,10 a 5,00" />
-                            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="FijarTarifa" Disabled="_guardandoTarifa">
-                                @(_guardandoTarifa ? "Guardando…" : "Fijar tarifa")
-                            </MudButton>
-                        </div>
-                    }
-                </div>
-            </div>
-        </section>
-
-        @if (_puedeSimular)
+        @if (_puedeSimular && UsuarioActual.EmpresaActivaId.HasValue)
         {
-            <div class="page-panel sage-panel-pad">
-                <h2 class="home-group__title">Nueva simulación</h2>
+            <section class="page-panel sage-panel-pad">
+                <h2 class="home-group__title">Lo que SAGE calcula con tus facturas</h2>
+                @if (_tarifaFacturas is not decimal tarifaFacturas)
+                {
+                    <MudText>Cargá tus facturas en <MudLink Href="/facturas">Facturas</MudLink> para calcular el consumo y simular.</MudText>
+                }
+                else
+                {
+                    <MudText>Usás en promedio <strong>@Numero(_consumo) kWh por mes</strong> (@_facturas.Count @(_facturas.Count == 1 ? "factura" : "facturas")).</MudText>
+                    @if (_parametros is { } parametros)
+                    {
+                        var referencia = SimulacionBuilder.CalcularReferencia(_consumo, tarifaFacturas, parametros);
+                        <MudText>Para cubrirlo todo con solar necesitás <strong>≈ @Numero(referencia.PotenciaKwp) kWp</strong>.</MudText>
+                        <MudText Typo="Typo.body2">@Numero(_consumo) kWh ÷ @Numero(parametros.GeneracionKwhKwpMes) kWh por kWp ≈ @Numero(referencia.PotenciaKwp) kWp</MudText>
+                        <MudText>Inversión aproximada (Referencia SAGE) · @Numero(referencia.PotenciaKwp) × @Numero(parametros.CostoInstalacionBsKwp) = <strong>@Numero(referencia.InversionBs) Bs</strong></MudText>
+                        <MudText>Pagás hoy ≈ <strong>@Numero(decimal.Round(referencia.CostoRedMensualBs, 2)) Bs por mes</strong> de luz.</MudText>
+                    }
+                    <MudExpansionPanels Class="mt-3">
+                        <MudExpansionPanel Text="Ver las facturas usadas">
+                            <FacturasSimulacion Facturas="_facturasBase" />
+                            <MudText Class="mt-3">Tarifa de tus facturas · @Tarifa(_tarifaFacturas)</MudText>
+                            <MudText>Tarifa configurada (@(_tarifaPropia.HasValue ? "empresa" : "general")) · @Tarifa(_tarifaConfigurada)</MudText>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+            </section>
+
+            <section class="page-panel sage-panel-pad mt-4">
+                <h2 class="home-group__title">¿Cuánto podés invertir?</h2>
                 <MudGrid>
                     <MudItem xs="12" sm="6">
-                        <MudNumericField T="decimal" @bind-Value="_kwpMixto" Label="Potencia mixta (kWp)" Variant="Variant.Outlined" Min="0.1m" Step="0.5m" />
+                        <MudNumericField T="decimal?" @bind-Value="_presupuesto" @bind-Value:after="LimpiarSugerencia"
+                                         Label="Presupuesto total (Bs)" Variant="Variant.Outlined" Disabled="@(!HayBase)"
+                                         Culture="FacturaReglas.Cultura" Format="#,0.####"
+                                         Error="@(_errorPresupuesto is not null)" ErrorText="@_errorPresupuesto" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudNumericField T="int" @bind-Value="_horizonte" Label="Horizonte (años)" Variant="Variant.Outlined" Min="1" Max="25" />
+                        <MudSelect T="int" @bind-Value="_instaladoraPresupuestoId" @bind-Value:after="LimpiarSugerencia"
+                                   Label="Precios de referencia de" Variant="Variant.Outlined" Disabled="@(!HayBase)">
+                            <MudSelectItem T="int" Value="0">Referencia SAGE</MudSelectItem>
+                            @foreach (var instaladora in _instaladoras)
+                            {
+                                <MudSelectItem Value="instaladora.Id">@instaladora.Nombre</MudSelectItem>
+                            }
+                        </MudSelect>
                     </MudItem>
                 </MudGrid>
+                <MudButton Class="mt-3" Variant="Variant.Outlined" Color="Color.Primary" OnClick="SugerirSistema" Disabled="@(!HayBase)">Sugerir sistema</MudButton>
+                @if (_sugerencia is { } sugerencia)
+                {
+                    <div class="mt-3" role="status">
+                        @if (sugerencia.EnergiaRedKwhMes == 0m)
+                        {
+                            <MudText>Con @Numero(sugerencia.PresupuestoBs) Bs te alcanza para cubrir todo tu consumo con solar (@Numero(sugerencia.PotenciaKwp) kWp por @Numero(sugerencia.InversionBs) Bs) y te sobran @Numero(sugerencia.SobranteBs) Bs.</MudText>
+                        }
+                        else
+                        {
+                            <MudText>Con @Numero(sugerencia.PresupuestoBs) Bs te alcanza para un sistema mixto de @Numero(sugerencia.PotenciaKwp) kWp. Cubre @PorcentajeCobertura(sugerencia.Cobertura) % de tu consumo (@Numero(sugerencia.EnergiaCubiertaKwhMes) de @Numero(_consumo) kWh/mes). El resto, @Numero(sugerencia.EnergiaRedKwhMes) kWh/mes, lo seguís pagando a la red.</MudText>
+                        }
+                    </div>
+                    <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" OnClick="AplicarSugerencia">Usar esta sugerencia en Tu propuesta</MudButton>
+                }
+            </section>
 
-                @if (!string.IsNullOrWhiteSpace(_error))
+            <div class="page-panel sage-panel-pad mt-4">
+                <h2 class="home-group__title">Escenarios</h2>
+                <MudForm @ref="_formulario" Disabled="@(!HayBase)">
+                    <MudGrid Class="mt-1">
+                        <MudItem xs="12" sm="6">
+                            <MudText>Solo red · Tarifa usada (@SimulacionBuilder.NombreTarifa(_origenTarifa)) · @Tarifa(TarifaActiva)</MudText>
+                            @if (_origenTarifa == OrigenTarifaSimulacion.Facturas && _tarifaFacturas.HasValue &&
+                                 RangosSimulacion.Tarifa(_tarifaFacturas) is { } errorTarifa)
+                            {
+                                <MudText Color="Color.Error" Typo="Typo.caption">@errorTarifa Elegí la tarifa configurada o ingresá una manual.</MudText>
+                            }
+                            <MudExpansionPanels Class="mt-2">
+                                <MudExpansionPanel Text="Cambiar tarifa" KeepContentAlive="true" Disabled="@(!HayBase)">
+                                    <MudSelect T="OrigenTarifaSimulacion" @bind-Value="_origenTarifa" Label="Tarifa para los tres escenarios" Variant="Variant.Outlined">
+                                        @foreach (var origen in Enum.GetValues<OrigenTarifaSimulacion>())
+                                        {
+                                            <MudSelectItem Value="origen">@SimulacionBuilder.NombreTarifa(origen)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    @if (_origenTarifa == OrigenTarifaSimulacion.Manual)
+                                    {
+                                        <MudNumericField T="decimal?" @bind-Value="_tarifaManual" Label="Tarifa manual (Bs/kWh)" Variant="Variant.Outlined"
+                                                         Culture="FacturaReglas.Cultura" Format="#,0.####" Validation="@(new Func<decimal?, string?>(RangosSimulacion.Tarifa))" />
+                                    }
+                                </MudExpansionPanel>
+                            </MudExpansionPanels>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="int?" @bind-Value="_horizonte" Label="Horizonte (años)" Variant="Variant.Outlined"
+                                             Culture="FacturaReglas.Cultura" Format="#,0" Validation="@(new Func<int?, string?>(RangosSimulacion.Horizonte))" />
+                        </MudItem>
+                        @foreach (var entrada in new[] { _solar, _propuesta })
+                        {
+                            var esPropuesta = entrada == _propuesta;
+                            var potencia = Potencia(entrada);
+                            var mantenimiento = entrada.MantenimientoManual ? entrada.Mantenimiento : potencia * entrada.MantenimientoPorKwp;
+                            <MudItem xs="12" md="6">
+                                <MudPaper Outlined="true" Class="pa-4">
+                                    <MudStack Spacing="2">
+                                        <MudText Typo="Typo.h6">@(esPropuesta ? "Tu propuesta" : "Solar sugerido")</MudText>
+                                        @if (esPropuesta)
+                                        {
+                                            <MudSelect T="ModoPropuesta" @bind-Value="_modoPropuesta" @bind-Value:after="DesvincularPresupuesto"
+                                                       Label="Definir por" Variant="Variant.Outlined">
+                                                <MudSelectItem Value="ModoPropuesta.KwhMes">kWh por mes que quiero cubrir</MudSelectItem>
+                                                <MudSelectItem Value="ModoPropuesta.Kwp">kWp</MudSelectItem>
+                                            </MudSelect>
+                                            @if (_modoPropuesta == ModoPropuesta.KwhMes)
+                                            {
+                                                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                                    <MudNumericField T="decimal?" @bind-Value="_metaKwhMes" Label="Quiero cubrir (kWh/mes)"
+                                                                     Variant="Variant.Outlined" Culture="FacturaReglas.Cultura" Format="#,0.####"
+                                                                     Validation="@(new Func<decimal?, string?>(ValidarMeta))" />
+                                                    @if (potencia is decimal kwp)
+                                                    {
+                                                        <MudText Typo="Typo.body2">= @PotenciaConProduccion(kwp, entrada.Produccion)</MudText>
+                                                    }
+                                                </MudStack>
+                                            }
+                                            else
+                                            {
+                                                <MudNumericField T="decimal?" @bind-Value="_kwpPropuesta" @bind-Value:after="DesvincularPresupuesto" Label="Potencia de tu propuesta (kWp)"
+                                                                 Variant="Variant.Outlined" Culture="FacturaReglas.Cultura" Format="#,0.####" Step="0.1m"
+                                                                 Validation="@(new Func<decimal?, string?>(RangosSimulacion.Potencia))" />
+                                                @if (potencia is decimal kwp && entrada.Produccion is decimal produccion)
+                                                {
+                                                    <MudText Typo="Typo.caption">≈ @Numero(kwp * produccion) kWh/mes</MudText>
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <MudNumericField T="decimal?" @bind-Value="_cobertura" Label="Cobertura que quiero (%)" Variant="Variant.Outlined"
+                                                             Culture="FacturaReglas.Cultura" Format="#,0.####" Validation="@(new Func<decimal?, string?>(RangosSimulacion.Cobertura))" />
+                                            @if (potencia is decimal kwp)
+                                            {
+                                                <MudText Typo="Typo.caption">@PotenciaConProduccion(kwp, entrada.Produccion)</MudText>
+                                            }
+                                        }
+                                        @if (esPropuesta && _presupuestoAplicado is decimal aplicado)
+                                        {
+                                            <MudText Typo="Typo.caption">Presupuesto aplicado · @Numero(aplicado) Bs · @entrada.Nombre</MudText>
+                                        }
+                                        <MudExpansionPanels>
+                                            <MudExpansionPanel Text="Personalizar precios y producción" KeepContentAlive="true" Disabled="@(!HayBase)">
+                                                <MudStack Spacing="2">
+                                                    <MudSelect T="int" Value="entrada.InstaladoraId" ValueChanged="@(id => ElegirInstaladora(entrada, id))"
+                                                               Label="Instaladora" Variant="Variant.Outlined">
+                                                        <MudSelectItem T="int" Value="0">Referencia SAGE</MudSelectItem>
+                                                        @foreach (var instaladora in _instaladoras)
+                                                        {
+                                                            <MudSelectItem Value="instaladora.Id">@instaladora.Nombre</MudSelectItem>
+                                                        }
+                                                    </MudSelect>
+                                                    <MudNumericField T="decimal?" @bind-Value="entrada.Precio" @bind-Value:after="@(() => PrecioCambiado(entrada))"
+                                                                     Label="Precio (Bs/kWp instalado)" Variant="Variant.Outlined" Culture="FacturaReglas.Cultura" Format="#,0.####"
+                                                                     Validation="@(new Func<decimal?, string?>(RangosSimulacion.Precio))" />
+                                                    <MudSwitch T="bool" @bind-Value="entrada.EsManual" @bind-Value:after="@(() => PrecioCambiado(entrada))" Color="Color.Primary" Label="Ya tengo cotización" />
+                                                    @if (entrada.EsManual)
+                                                    {
+                                                        <MudNumericField T="decimal?" @bind-Value="entrada.Cotizacion" Label="Inversión total cotizada (Bs)"
+                                                                         Variant="Variant.Outlined" Culture="FacturaReglas.Cultura" Format="#,0.####"
+                                                                         Validation="@(new Func<decimal?, string?>(RangosSimulacion.Inversion))" />
+                                                    }
+                                                    <MudNumericField T="decimal?" Value="mantenimiento" ValueChanged="@(valor => EditarMantenimiento(entrada, valor))"
+                                                                     Label="Mantenimiento (Bs/año)" Variant="Variant.Outlined"
+                                                                     Culture="FacturaReglas.Cultura" Format="#,0.####"
+                                                                     HelperText="@(entrada.MantenimientoPorKwp is decimal tasa ? $"≈ {Numero(tasa)} Bs por kWp al año, valor estándar" : null)"
+                                                                     Validation="@(new Func<decimal?, string?>(v => entrada.MantenimientoManual ? RangosSimulacion.Mantenimiento(v) : null))" />
+                                                    @if (entrada.MantenimientoManual)
+                                                    {
+                                                        <MudButton Size="Size.Small" OnClick="@(() => entrada.MantenimientoManual = false)">Volver al calculado</MudButton>
+                                                    }
+                                                    <MudNumericField T="decimal?" @bind-Value="entrada.Produccion" @bind-Value:after="@(() => PrecioCambiado(entrada))" Label="Producción (kWh por kWp al mes)" Variant="Variant.Outlined"
+                                                                     Culture="FacturaReglas.Cultura" Format="#,0.####" Validation="@(new Func<decimal?, string?>(RangosSimulacion.Produccion))"
+                                                                     HelperText="≈ 4,2 horas de sol pico por día, típico de Bolivia; bajalo si tenés sombra o mala orientación" />
+                                                </MudStack>
+                                            </MudExpansionPanel>
+                                        </MudExpansionPanels>
+                                    </MudStack>
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudForm>
+
+                @if (_error is not null)
                 {
                     <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
                 }
 
                 <div class="page-actions mt-3">
-                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Simular" Disabled="_simulando">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Simular" Disabled="@(!HayBase || _simulando || _guardando)">
                         @(_simulando ? "Calculando…" : "Simular")
                     </MudButton>
-                    @if (_resultado is not null)
-                    {
-                        <MudButton Color="Color.Default" Variant="Variant.Outlined" OnClick="Guardar" Disabled="_guardando">
-                            @(_guardando ? "Guardando…" : "Guardar resultado")
-                        </MudButton>
-                    }
                 </div>
             </div>
+
+            @if (UsuarioActual.EsAdministrador && _parametros is not null)
+            {
+                <MudExpansionPanels Class="mt-3">
+                    <MudExpansionPanel Text="Tarifa de la empresa">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                            <MudNumericField T="decimal?" @bind-Value="_nuevaTarifa" Label="Nueva tarifa de la empresa (Bs/kWh)"
+                                             Variant="Variant.Outlined" Culture="FacturaReglas.Cultura" Format="#,0.####"
+                                             Validation="@(new Func<decimal?, string?>(RangosSimulacion.Tarifa))" @ref="_campoNuevaTarifa" />
+                            <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="FijarTarifa" Disabled="_guardandoTarifa">
+                                Fijar tarifa
+                            </MudButton>
+                        </MudStack>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
         }
+
+        <MudText Typo="Typo.body2" Class="my-3">Precios referenciales, no son una cotización</MudText>
 
         @if (_resultado is not null)
         {
-            <div class="page-panel sage-panel-pad">
+            <div class="page-panel sage-panel-pad" tabindex="-1" @ref="_panelResultado" aria-label="Resultado de la simulación">
                 <div class="sage-sim-head">
                     <MudChip T="string" Color="Color.Info" Size="Size.Small">SIMULACIÓN</MudChip>
-                    <span class="sage-person__mail">Horizonte @_resultado.HorizonteAnios años · params v@_resultado.ParametrosVersion</span>
+                    <span class="sage-person__mail">Horizonte @_resultado.HorizonteAnios años · parámetros v@_resultado.ParametrosVersion</span>
+                    @if (_resultado.Id == 0 && _puedeSimular)
+                    {
+                        <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="Guardar" Disabled="_guardando">Guardar resultado</MudButton>
+                    }
                 </div>
 
                 <div class="sage-scenarios">
                     @foreach (var fila in _filasResultado)
                     {
-                        <div class="sage-scenario @(fila.Nombre == "Solar" ? "sage-scenario--best" : null)">
+                        <div class="sage-scenario @(fila.Nombre == "Solar sugerido" ? "sage-scenario--best" : null)">
                             <p class="sage-scenario__name">@fila.Nombre</p>
-                            <div class="sage-scenario__stat"><span>kWp</span><span>@fila.Kwp</span></div>
-                            <div class="sage-scenario__stat"><span>Inversión</span><span>@fila.Inversion.ToString("N0", FacturaReglas.Cultura)</span></div>
-                            <div class="sage-scenario__stat"><span>Costo anual</span><span>@fila.CostoAnual.ToString("N0", FacturaReglas.Cultura)</span></div>
-                            <div class="sage-scenario__stat"><span>Acum. @_resultado.HorizonteAnios a.</span><span>@fila.CostoAcum.ToString("N0", FacturaReglas.Cultura)</span></div>
-                            <div class="sage-scenario__stat"><span>Ahorro vs red</span><span>@fila.AhorroAcum.ToString("N0", FacturaReglas.Cultura)</span></div>
+                            <div class="sage-scenario__stat"><span>Potencia</span><span>@fila.Kwp</span></div>
+                            <div class="sage-scenario__stat"><span>Inversión</span><span>@Numero(fila.Inversion) Bs</span></div>
+                            <div class="sage-scenario__stat"><span>Costo anual</span><span>@Numero(fila.CostoAnual) Bs/año</span></div>
+                            <div class="sage-scenario__stat"><span>Acum. @_resultado.HorizonteAnios a.</span><span>@Numero(fila.CostoAcum) Bs</span></div>
+                            <div class="sage-scenario__stat"><span>Ahorro vs red</span><span>@Numero(fila.AhorroAcum) Bs</span></div>
                             <div class="sage-scenario__stat"><span>Recuperación</span><span>@fila.Recuperacion</span></div>
                         </div>
                     }
@@ -124,7 +292,7 @@
                     var inv = System.Globalization.CultureInfo.InvariantCulture;
                     var tipLeft = Math.Clamp(focus.X / _grafico.W * 100, 12, 78);
 
-                    <div class="sage-chart" aria-label="Costo acumulado por escenario">
+                    <div class="sage-chart @(_ocultarRed ? "ocultar-red" : null) @(_ocultarSolar ? "ocultar-solar" : null) @(_ocultarMixto ? "ocultar-mixto" : null)" aria-label="Costo acumulado por escenario">
                         <div class="sage-chart__head">
                             <div>
                                 <h3 class="sage-chart__title">Costo acumulado</h3>
@@ -163,7 +331,7 @@
 
                                 <g clip-path="url(#sagePastClip)">
                                     <path class="sage-chart__area sage-chart__area--ahorro" d="@_grafico.PathAhorro" fill="url(#sageFillAhorro)" />
-                                    <path class="sage-chart__area" d="@_grafico.PathRedArea" fill="url(#sageFillRed)" />
+                                    <path class="sage-chart__area sage-chart__area--red" d="@_grafico.PathRedArea" fill="url(#sageFillRed)" />
                                     <path class="sage-chart__line sage-chart__line--red" d="@_grafico.PathRed" />
                                     <path class="sage-chart__line sage-chart__line--solar" d="@_grafico.PathSolar" />
                                     <path class="sage-chart__line sage-chart__line--mixto" d="@_grafico.PathMixto" />
@@ -209,9 +377,18 @@
 
                             <div @key="_tipKey" class="sage-chart__tip @(_anioFijado ? "is-locked" : null)" style="@($"left:{tipLeft.ToString("0.##", inv)}%")">
                                 <p class="sage-chart__tip-year">@focus.Etiqueta@(_anioFijado ? " · fijado" : "")</p>
-                                <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--red"></span><span>Red</span><b>@Bs(focus.Red)</b></div>
-                                <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--solar"></span><span>Solar</span><b>@Bs(focus.Solar)</b></div>
-                                <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--mixto"></span><span>Mixto</span><b>@Bs(focus.Mixto)</b></div>
+                                @if (!_ocultarRed)
+                                {
+                                    <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--red"></span><span>Solo red</span><b>@Bs(focus.Red)</b></div>
+                                }
+                                @if (!_ocultarSolar)
+                                {
+                                    <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--solar"></span><span>Solar sugerido</span><b>@Bs(focus.Solar)</b></div>
+                                }
+                                @if (!_ocultarMixto)
+                                {
+                                    <div class="sage-chart__tip-row"><span class="sage-chart__swatch sage-chart__swatch--mixto"></span><span>Tu propuesta</span><b>@Bs(focus.Mixto)</b></div>
+                                }
                             </div>
                         </div>
 
@@ -220,7 +397,8 @@
                                 <div class="sage-delta__left">
                                     <span class="sage-chart__swatch sage-chart__swatch--red"></span>
                                     <div>
-                                        <p class="sage-delta__name">Red</p>
+                                        <button type="button" class="sage-delta__name sage-chart__toggle"
+                                                aria-pressed="@(!_ocultarRed ? "true" : "false")" @onclick="@(() => _ocultarRed = !_ocultarRed)">Solo red</button>
                                         <p class="sage-delta__sub">Escenario base</p>
                                     </div>
                                 </div>
@@ -233,7 +411,8 @@
                                 <div class="sage-delta__left">
                                     <span class="sage-chart__swatch sage-chart__swatch--solar"></span>
                                     <div>
-                                        <p class="sage-delta__name">Solar</p>
+                                        <button type="button" class="sage-delta__name sage-chart__toggle"
+                                                aria-pressed="@(!_ocultarSolar ? "true" : "false")" @onclick="@(() => _ocultarSolar = !_ocultarSolar)">Solar sugerido</button>
                                         <p class="sage-delta__sub">Comparado con red</p>
                                     </div>
                                 </div>
@@ -248,7 +427,8 @@
                                 <div class="sage-delta__left">
                                     <span class="sage-chart__swatch sage-chart__swatch--mixto"></span>
                                     <div>
-                                        <p class="sage-delta__name">Mixto</p>
+                                        <button type="button" class="sage-delta__name sage-chart__toggle"
+                                                aria-pressed="@(!_ocultarMixto ? "true" : "false")" @onclick="@(() => _ocultarMixto = !_ocultarMixto)">Tu propuesta</button>
                                         <p class="sage-delta__sub">Comparado con red</p>
                                     </div>
                                 </div>
@@ -263,20 +443,43 @@
                     </div>
                 }
 
-                <h3 class="home-group__title" style="margin-top:1.25rem;">Supuestos</h3>
-                <ul class="sage-assumptions">
-                    <li>Tarifa usada: @_resultado.TarifaUsadaBsKwh.ToString("N2", FacturaReglas.Cultura) Bs/kWh</li>
-                    <li>Consumo mensual: @_resultado.ConsumoMensualKwh.ToString("N2", FacturaReglas.Cultura) kWh (@_resultado.MesesBase meses base)</li>
-                    <li>Sin inflación, sin degradación del panel, sin baterías.</li>
-                    <li>Los excedentes solares no se venden; costos en Bs de hoy.</li>
-                    @foreach (var adv in _resultado.Advertencias)
+                @foreach (var adv in _resultado.Advertencias)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mt-3">@adv</MudAlert>
+                }
+                @if (_resultado.Detalle is { } detalle)
+                {
+                    @foreach (var (nombre, excedente) in new[] { ("Solar sugerido", detalle.ExcedenteSolarKwhMes), ("Tu propuesta", detalle.ExcedentePropuestaKwhMes) })
                     {
-                        <li class="is-warn">@adv</li>
+                        @if (excedente > 0m)
+                        {
+                            <MudAlert Severity="Severity.Info" Class="mt-3">
+                                <strong>@nombre.</strong> Tu sistema produce @Numero(excedente) kWh/mes de más; ese excedente no se cuenta como ahorro
+                            </MudAlert>
+                        }
                     }
-                </ul>
-                <MudText Typo="Typo.body2" Class="mt-3">
-                    Los resultados de simulación no usan las mediciones de la maqueta. Ver la comparación MEDIDA en Historial o Ensayos.
-                </MudText>
+                    <MudExpansionPanels Class="mt-4" @key="_resultado">
+                        <MudExpansionPanel Text="Cómo se calculó">
+                            <MudText>Facturas usadas en esta corrida</MudText>
+                            <FacturasSimulacion Facturas="detalle.Facturas" />
+                            <ol class="sage-assumptions mt-3">
+                                @foreach (var paso in detalle.Pasos)
+                                {
+                                    <li>@paso</li>
+                                }
+                            </ol>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+                <MudExpansionPanels Class="mt-3">
+                    <MudExpansionPanel Text="Limitaciones del modelo">
+                        <ul class="sage-assumptions">
+                            <li>No considera suba anual de tarifa, pérdida de rendimiento de los paneles, créditos, intereses ni cambio de inversor.</li>
+                            <li>El excedente no se vende a la red. Los costos se expresan en Bs de hoy y el modelo no incluye baterías.</li>
+                            <li>La simulación usa facturas. La comparación MEDIDA con datos de la maqueta está en Historial y Ensayos.</li>
+                        </ul>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
             </div>
         }
 
@@ -289,24 +492,32 @@
                 <MudTable Items="_guardadas" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
                     <HeaderContent>
                         <MudTh>Fecha</MudTh>
-                        <MudTh>Consumo</MudTh>
-                        <MudTh>Solar</MudTh>
-                        <MudTh>Mixto</MudTh>
                         <MudTh>Horizonte</MudTh>
                         <MudTh>Tarifa</MudTh>
+                        <MudTh>Solo red</MudTh>
+                        <MudTh>Solar sugerido</MudTh>
+                        <MudTh>Tu propuesta</MudTh>
+                        <MudTh>Detalle</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="Fecha">@FechaLocal(context.Fecha)</MudTd>
-                        <MudTd DataLabel="Consumo">@context.ConsumoMensualKwh.ToString("N1", FacturaReglas.Cultura) kWh/mes</MudTd>
-                        <MudTd DataLabel="Solar">@context.KwpSolar.ToString("N1", FacturaReglas.Cultura) kWp</MudTd>
-                        <MudTd DataLabel="Mixto">@context.KwpMixto.ToString("N1", FacturaReglas.Cultura) kWp</MudTd>
+                        <MudTd DataLabel="Fecha">@Formato.HoraLocal(context.Fecha)</MudTd>
                         <MudTd DataLabel="Horizonte">@context.HorizonteAnios años</MudTd>
-                        <MudTd DataLabel="Tarifa">@context.TarifaUsadaBsKwh.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Tarifa">
+                            @Tarifa(context.Detalle?.TarifaUsadaBsKwh ?? context.TarifaUsadaBsKwh)
+                            @if (context.Detalle is { } datos)
+                            {
+                                <MudText Typo="Typo.caption">@SimulacionBuilder.NombreTarifa(datos.OrigenTarifa)</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Solo red">@Numero(context.CostoAcumRedBs) Bs</MudTd>
+                        <MudTd DataLabel="Solar sugerido">@Numero(context.CostoAcumSolarBs) Bs · @ResumenPotencia(context, solar: true)</MudTd>
+                        <MudTd DataLabel="Tu propuesta">@Numero(context.CostoAcumMixtoBs) Bs · @ResumenPotencia(context, solar: false)</MudTd>
+                        <MudTd DataLabel="Detalle"><MudButton OnClick="@(() => MostrarResultado(context))">Ver resultado</MudButton></MudTd>
                     </RowTemplate>
                     <NoRecordsContent>
                         <div class="sage-empty">
                             <p class="sage-empty__title">Todavía no hay guardadas</p>
-                            <p class="sage-empty__text">Simulá y guardá para comparar después.</p>
+                            <p class="sage-empty__text">Los resultados guardados de esta empresa aparecerán acá.</p>
                         </div>
                     </NoRecordsContent>
                 </MudTable>
@@ -322,62 +533,96 @@
     private bool _guardandoTarifa;
     private bool _puedeSimular => !UsuarioActual.EsOperador && !UsuarioActual.DebeCambiarContrasena &&
         (UsuarioActual.EsAdministrador || UsuarioActual.EsTecnico);
-    private bool _puedeFijarTarifa;
     private string? _error;
+    private string? _errorPresupuesto;
+    private MudForm _formulario = null!;
+    private MudNumericField<decimal?>? _campoNuevaTarifa;
 
-    private decimal _tarifaGeneral = 0.90m;
+    private ParametrosEconomicos? _parametros;
+    private List<Instaladora> _instaladoras = [];
+    private List<Factura> _facturas = [];
+    private List<FacturaBaseSimulacion> _facturasBase = [];
+    private decimal _consumo;
+    private decimal? _tarifaFacturas;
     private decimal? _tarifaPropia;
-    private decimal _nuevaTarifa = 0.90m;
+    private decimal? _tarifaConfigurada => _tarifaPropia ?? _parametros?.TarifaBsKwh;
+    private decimal? _nuevaTarifa;
+    private OrigenTarifaSimulacion _origenTarifa = OrigenTarifaSimulacion.Facturas;
+    private decimal? _tarifaManual = 0.90m;
+    private decimal? TarifaActiva => _origenTarifa switch
+    {
+        OrigenTarifaSimulacion.Configurada => _tarifaConfigurada,
+        OrigenTarifaSimulacion.Manual => _tarifaManual,
+        _ => _tarifaFacturas
+    };
+    private bool HayBase => _tarifaFacturas.HasValue && _parametros is not null;
 
-    private decimal _kwpMixto = 3m;
-    private int _horizonte = 10;
+    private readonly EntradaSolar _solar = new();
+    private readonly EntradaSolar _propuesta = new();
+    private decimal? _cobertura = 100m;
+    private decimal? _kwpPropuesta = 3m;
+    private decimal? _metaKwhMes = 375m;
+    private ModoPropuesta _modoPropuesta = ModoPropuesta.KwhMes;
+    private Dictionary<int, decimal> _produccionHistorica = [];
+    private decimal? _presupuesto;
+    private int _instaladoraPresupuestoId;
+    private SugerenciaPresupuesto? _sugerencia;
+    private decimal? _presupuestoAplicado;
+    private int? _horizonte = 10;
 
     private Data.Simulacion? _resultado;
-    private List<FilaResultado> _filasResultado = new();
+    private ElementReference _panelResultado;
+    private bool _enfocarResultado;
+    private List<FilaResultado> _filasResultado = [];
     private GraficoAcumulado? _grafico;
     private int? _hoverAnio;
     private bool _anioFijado;
     private int _tipKey;
+    private bool _ocultarRed, _ocultarSolar, _ocultarMixto;
 
-    private List<Data.Simulacion> _guardadas = new();
+    private List<Data.Simulacion> _guardadas = [];
 
     protected override async Task OnInitializedAsync()
     {
         await UsuarioActual.CargarAsync();
-        _puedeFijarTarifa = UsuarioActual.EsAdministrador;
-        await CargarAsync();
-    }
-
-    private async Task CargarAsync()
-    {
-        _cargando = true;
         try
         {
-            if (UsuarioActual.EmpresaActivaId is not int empresaId)
-            {
+            if (UsuarioActual.EmpresaActivaId is not int empresaId || !UsuarioActual.PuedeVerEmpresa(empresaId))
                 return;
-            }
 
             using var scope = ScopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            _guardadas = await db.Simulaciones.AsNoTracking()
+                .Where(s => s.EmpresaId == empresaId)
+                .OrderByDescending(s => s.Fecha).ToListAsync();
 
-            var parametros = await db.ParametrosEconomicos.AsNoTracking()
-                .OrderByDescending(p => p.Version)
-                .FirstOrDefaultAsync();
-            _tarifaGeneral = parametros?.TarifaBsKwh ?? 0.90m;
+            var versiones = _guardadas.Where(s => s.Detalle is null).Select(s => s.ParametrosVersion).Distinct().ToArray();
+            _produccionHistorica = await db.ParametrosEconomicos.AsNoTracking().Where(p => versiones.Contains(p.Version))
+                .ToDictionaryAsync(p => p.Version, p => p.GeneracionKwhKwpMes);
 
+            if (!_puedeSimular)
+                return;
+
+            _parametros = await db.ParametrosEconomicos.AsNoTracking()
+                .OrderByDescending(p => p.Version).FirstOrDefaultAsync();
             _tarifaPropia = await db.TarifasEmpresa.AsNoTracking()
                 .Where(t => t.EmpresaId == empresaId)
                 .OrderByDescending(t => t.VigenteDesde)
-                .Select(t => (decimal?)t.TarifaBsKwh)
-                .FirstOrDefaultAsync();
-
-            _nuevaTarifa = _tarifaPropia ?? _tarifaGeneral;
-
-            _guardadas = await db.Simulaciones.AsNoTracking()
-                .Where(s => s.EmpresaId == empresaId)
-                .OrderByDescending(s => s.Fecha)
-                .ToListAsync();
+                .Select(t => (decimal?)t.TarifaBsKwh).FirstOrDefaultAsync();
+            _nuevaTarifa = _tarifaConfigurada;
+            _instaladoras = await db.Instaladoras.AsNoTracking().Where(i => i.Activa)
+                .OrderBy(i => i.Nombre).ToListAsync();
+            _facturas = await db.Facturas.AsNoTracking()
+                .Where(f => f.EmpresaId == empresaId)
+                .OrderByDescending(f => f.Anio).ThenByDescending(f => f.Mes)
+                .Take(12).ToListAsync();
+            (_consumo, _tarifaFacturas) = SimulacionBuilder.ResumirFacturas(_facturas);
+            _facturasBase = _facturas.Select(f => new FacturaBaseSimulacion(f.Anio, f.Mes, f.ConsumoKwh, f.MontoBs)).ToList();
+            _solar.Produccion = _propuesta.Produccion = _parametros?.GeneracionKwhKwpMes;
+            if (_propuesta.Produccion is decimal produccion)
+                _metaKwhMes = _kwpPropuesta * produccion;
+            ElegirInstaladora(_solar, 0);
+            ElegirInstaladora(_propuesta, 0);
         }
         finally
         {
@@ -385,76 +630,128 @@
         }
     }
 
-    private async Task Simular()
+    private void ElegirInstaladora(EntradaSolar entrada, int id)
     {
-        if (_simulando || !_puedeSimular)
+        var instaladora = _instaladoras.Find(i => i.Id == id);
+        entrada.InstaladoraId = id;
+        entrada.Nombre = instaladora?.Nombre ?? "Referencia SAGE";
+        entrada.Precio = instaladora?.BsPorKwp ?? _parametros?.CostoInstalacionBsKwp;
+        entrada.MantenimientoPorKwp = instaladora?.MantenimientoBsKwpAnio ?? _parametros?.MantenimientoBsKwpAnio;
+        PrecioCambiado(entrada);
+    }
+
+    private decimal? Potencia(EntradaSolar entrada)
+    {
+        if (entrada == _propuesta && _modoPropuesta == ModoPropuesta.Kwp)
+            return RangosSimulacion.Potencia(_kwpPropuesta) is null ? _kwpPropuesta : null;
+
+        var energia = entrada == _solar
+            ? RangosSimulacion.Cobertura(_cobertura) is null ? _consumo * (_cobertura / 100m) : null
+            : RangosSimulacion.MetaKwh(_metaKwhMes) is null ? _metaKwhMes : null;
+        return energia is > 0m && RangosSimulacion.Produccion(entrada.Produccion) is null
+            ? SimulacionBuilder.PotenciaPorEnergia(energia.Value, entrada.Produccion!.Value) : null;
+    }
+
+    private string? ValidarMeta(decimal? valor) =>
+        RangosSimulacion.MetaKwh(valor) ??
+        (RangosSimulacion.Produccion(_propuesta.Produccion) is null
+            ? RangosSimulacion.Potencia(SimulacionBuilder.PotenciaPorEnergia(valor!.Value, _propuesta.Produccion!.Value))
+            : null);
+
+    private static void EditarMantenimiento(EntradaSolar entrada, decimal? valor)
+    {
+        entrada.Mantenimiento = valor;
+        entrada.MantenimientoManual = true;
+    }
+
+    private void PrecioCambiado(EntradaSolar entrada)
+    {
+        if (entrada == _propuesta)
+            DesvincularPresupuesto();
+    }
+
+    private void DesvincularPresupuesto() => _presupuestoAplicado = null;
+
+    private void LimpiarSugerencia()
+    {
+        _errorPresupuesto = null;
+        _sugerencia = null;
+    }
+
+    private void SugerirSistema()
+    {
+        LimpiarSugerencia();
+        if (!HayBase)
             return;
 
-        _error = null;
-        _simulando = true;
+        var referencia = new EntradaSolar();
+        ElegirInstaladora(referencia, _instaladoraPresupuestoId);
         try
         {
-            if (UsuarioActual.EmpresaActivaId is not int empresaId || !UsuarioActual.PuedeVerEmpresa(empresaId))
-            {
-                _error = "No tenés una empresa activa válida.";
-                return;
-            }
-
-            using var scope = ScopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            var empresa = await db.Empresas.AsNoTracking().FirstOrDefaultAsync(e => e.Id == empresaId && e.Activa);
-            var parametros = await db.ParametrosEconomicos.AsNoTracking()
-                .OrderByDescending(p => p.Version)
-                .FirstOrDefaultAsync();
-
-            if (empresa is null || parametros is null)
-            {
-                _error = "Faltan parámetros económicos para simular.";
-                return;
-            }
-
-            var facturas = await db.Facturas.AsNoTracking()
-                .Where(f => f.EmpresaId == empresaId)
-                .OrderByDescending(f => f.Anio)
-                .ThenByDescending(f => f.Mes)
-                .Take(12)
-                .ToListAsync();
-
-            var tarifa = _tarifaPropia ?? parametros.TarifaBsKwh;
-
-            if (UsuarioActual.EmpresaActivaId != empresaId)
-                return;
-
-            var simulacion = new SimulacionBuilder()
-                .ParaEmpresa(empresa)
-                .ConParametros(parametros)
-                .ConConsumo(facturas)
-                .ConTarifa(tarifa)
-                .ConPotenciaMixta(_kwpMixto)
-                .ConHorizonte(_horizonte)
-                .Construir();
-
-            _resultado = simulacion;
-            ConstruirTabla(simulacion);
-            ConstruirGrafico(simulacion);
-            _hoverAnio = _grafico?.Puntos.Count > 0 ? _grafico.Puntos.Count - 1 : null;
-            _anioFijado = false;
-            _tipKey++;
+            _sugerencia = SimulacionBuilder.SugerirPorPresupuesto(_presupuesto ?? 0m, _consumo,
+                referencia.Nombre, referencia.Precio!.Value, _parametros!.GeneracionKwhKwpMes);
         }
         catch (InvalidOperationException ex)
         {
-            _resultado = null;
-            _grafico = null;
-            _hoverAnio = null;
+            _errorPresupuesto = ex.Message;
+        }
+    }
+
+    private void AplicarSugerencia()
+    {
+        if (_sugerencia is not { } sugerencia || _parametros is null)
+            return;
+
+        ElegirInstaladora(_propuesta, _instaladoraPresupuestoId);
+        _propuesta.Produccion = _parametros.GeneracionKwhKwpMes;
+        _propuesta.EsManual = false;
+        _kwpPropuesta = sugerencia.PotenciaKwp;
+        _modoPropuesta = ModoPropuesta.Kwp;
+        _presupuestoAplicado = sugerencia.PresupuestoBs;
+    }
+
+    private static string PorcentajeCobertura(decimal cobertura) =>
+        cobertura >= 1m ? Numero(decimal.Floor(cobertura)) : Numero(cobertura);
+
+    private async Task Simular()
+    {
+        if (_simulando || !_puedeSimular || !HayBase)
+            return;
+
+        _simulando = true;
+        _error = null;
+        _resultado = null;
+        try
+        {
+            if (UsuarioActual.EmpresaActivaId is not int empresaId || !UsuarioActual.PuedeVerEmpresa(empresaId))
+                throw new InvalidOperationException("No tenés una empresa activa válida.");
+            if (_parametros is null || _tarifaConfigurada is not decimal configurada)
+                throw new InvalidOperationException("Faltan parámetros económicos para simular.");
+
+            await _formulario.ValidateAsync();
+            if (!_formulario.IsValid || UsuarioActual.EmpresaActivaId != empresaId)
+                return;
+
+            var builder = new SimulacionBuilder()
+                .ParaEmpresa(new Empresa { Id = empresaId })
+                .ConConsumo(_facturas)
+                .ConParametros(_parametros)
+                .ConTarifa(_origenTarifa, configurada, _tarifaManual)
+                .ConSolarSugerido(_cobertura!.Value, _solar.Datos())
+                .ConHorizonte(_horizonte!.Value);
+            if (_modoPropuesta == ModoPropuesta.KwhMes)
+                builder.ConPropuestaPorKwh(_metaKwhMes!.Value, _propuesta.Datos());
+            else
+                builder.ConPropuesta(_kwpPropuesta!.Value, _propuesta.Datos(), _presupuestoAplicado);
+            MostrarResultado(builder.Construir());
+        }
+        catch (InvalidOperationException ex)
+        {
             _error = ex.Message;
         }
-        catch
+        catch (OverflowException)
         {
-            _resultado = null;
-            _grafico = null;
-            _hoverAnio = null;
-            _error = "No se pudo completar la simulación.";
+            _error = "Los importes ingresados son demasiado grandes para calcular el resultado.";
         }
         finally
         {
@@ -462,14 +759,38 @@
         }
     }
 
+    private void MostrarResultado(Data.Simulacion simulacion)
+    {
+        if (UsuarioActual.EmpresaActivaId != simulacion.EmpresaId || !UsuarioActual.PuedeVerEmpresa(simulacion.EmpresaId))
+            return;
+
+        _resultado = simulacion;
+        _enfocarResultado = true;
+        ConstruirTabla(simulacion);
+        ConstruirGrafico(simulacion);
+        _hoverAnio = null;
+        _ocultarRed = _ocultarSolar = _ocultarMixto = false;
+        _anioFijado = false;
+        _tipKey++;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_enfocarResultado && _resultado is not null)
+        {
+            _enfocarResultado = false;
+            await _panelResultado.FocusAsync();
+        }
+    }
+
     private void ConstruirTabla(Data.Simulacion s)
     {
         _filasResultado = new()
         {
-            new FilaResultado("Red", "—", 0m, s.CostoAnualRedBs, s.CostoAcumRedBs, 0m, "—"),
-            new FilaResultado("Solar", s.KwpSolar.ToString("N1", FacturaReglas.Cultura), s.InversionSolarBs, s.CostoAnualSolarBs, s.CostoAcumSolarBs,
+            new FilaResultado("Solo red", "—", 0m, s.CostoAnualRedBs, s.CostoAcumRedBs, 0m, "—"),
+            new FilaResultado("Solar sugerido", ResumenPotencia(s, solar: true), s.InversionSolarBs, s.CostoAnualSolarBs, s.CostoAcumSolarBs,
                 s.CostoAcumRedBs - s.CostoAcumSolarBs, Recuperacion(s.RecuperacionSolarAnios)),
-            new FilaResultado("Mixto", s.KwpMixto.ToString("N1", FacturaReglas.Cultura), s.InversionMixtoBs, s.CostoAnualMixtoBs, s.CostoAcumMixtoBs,
+            new FilaResultado("Tu propuesta", ResumenPotencia(s, solar: false), s.InversionMixtoBs, s.CostoAnualMixtoBs, s.CostoAcumMixtoBs,
                 s.CostoAcumRedBs - s.CostoAcumMixtoBs, Recuperacion(s.RecuperacionMixtoAnios))
         };
     }
@@ -644,7 +965,7 @@
 
     private async Task Guardar()
     {
-        if (_guardando || !_puedeSimular || _resultado is not { } resultado)
+        if (_guardando || !_puedeSimular || _resultado is not { Id: 0 } resultado)
             return;
 
         _guardando = true;
@@ -652,7 +973,7 @@
         {
             if (UsuarioActual.EmpresaActivaId != resultado.EmpresaId || !UsuarioActual.PuedeVerEmpresa(resultado.EmpresaId))
             {
-                Snackbar.Add("El resultado no pertenece a su empresa activa.", Severity.Error);
+                Snackbar.Add("El resultado no pertenece a tu empresa activa.", Severity.Error);
                 return;
             }
 
@@ -665,35 +986,12 @@
             using var scope = ScopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            var copia = new Data.Simulacion
-            {
-                EmpresaId = resultado.EmpresaId,
-                UsuarioId = usuarioId,
-                Fecha = DateTime.UtcNow,
-                ParametrosVersion = resultado.ParametrosVersion,
-                TarifaUsadaBsKwh = resultado.TarifaUsadaBsKwh,
-                ConsumoMensualKwh = resultado.ConsumoMensualKwh,
-                MesesBase = resultado.MesesBase,
-                KwpSolar = resultado.KwpSolar,
-                KwpMixto = resultado.KwpMixto,
-                HorizonteAnios = resultado.HorizonteAnios,
-                InversionSolarBs = resultado.InversionSolarBs,
-                InversionMixtoBs = resultado.InversionMixtoBs,
-                CostoAnualRedBs = resultado.CostoAnualRedBs,
-                CostoAnualSolarBs = resultado.CostoAnualSolarBs,
-                CostoAnualMixtoBs = resultado.CostoAnualMixtoBs,
-                CostoAcumRedBs = resultado.CostoAcumRedBs,
-                CostoAcumSolarBs = resultado.CostoAcumSolarBs,
-                CostoAcumMixtoBs = resultado.CostoAcumMixtoBs,
-                RecuperacionSolarAnios = resultado.RecuperacionSolarAnios,
-                RecuperacionMixtoAnios = resultado.RecuperacionMixtoAnios,
-                Advertencias = resultado.Advertencias.ToList()
-            };
-
-            db.Simulaciones.Add(copia);
+            resultado.UsuarioId = usuarioId;
+            resultado.Fecha = DateTime.UtcNow;
+            db.Simulaciones.Add(resultado);
             await db.SaveChangesAsync();
+            _guardadas.Insert(0, resultado);
             Snackbar.Add("Simulación guardada.", Severity.Success);
-            await CargarAsync();
         }
         catch
         {
@@ -710,11 +1008,12 @@
         if (_guardandoTarifa)
             return;
 
-        if (_nuevaTarifa < 0.10m || _nuevaTarifa > 5.00m)
-        {
-            Snackbar.Add("La tarifa debe estar entre 0,10 y 5,00 Bs/kWh.", Severity.Error);
+        if (_campoNuevaTarifa is null)
             return;
-        }
+
+        await _campoNuevaTarifa.ValidateAsync();
+        if (_campoNuevaTarifa.HasErrors || _nuevaTarifa is not decimal tarifa)
+            return;
 
         _guardandoTarifa = true;
         try
@@ -734,13 +1033,13 @@
             db.TarifasEmpresa.Add(new TarifaEmpresa
             {
                 EmpresaId = empresaId,
-                TarifaBsKwh = _nuevaTarifa,
+                TarifaBsKwh = tarifa,
                 VigenteDesde = DateTime.UtcNow,
                 CreadoPorId = usuarioId
             });
             await db.SaveChangesAsync();
             Snackbar.Add("Tarifa de la empresa actualizada.", Severity.Success);
-            await CargarAsync();
+            _tarifaPropia = tarifa;
         }
         catch
         {
@@ -753,21 +1052,37 @@
     }
 
     private static string Recuperacion(decimal? anios) =>
-        anios is decimal a ? $"{a.ToString("N1", FacturaReglas.Cultura)} años" : "No se recupera en el horizonte";
+        anios is decimal a ? $"{Numero(a)} años" : "No se recupera en el horizonte";
 
-    private static string FechaLocal(DateTime utc)
+    private string ResumenPotencia(Data.Simulacion simulacion, bool solar)
     {
-        foreach (var id in new[] { "America/La_Paz", "SA Western Standard Time" })
-        {
-            try
-            {
-                var tz = TimeZoneInfo.FindSystemTimeZoneById(id);
-                return TimeZoneInfo.ConvertTimeFromUtc(utc, tz).ToString("dd/MM/yyyy HH:mm");
-            }
-            catch (TimeZoneNotFoundException) { }
-            catch (InvalidTimeZoneException) { }
-        }
-        return utc.ToString("dd/MM/yyyy HH:mm");
+        var kwp = solar ? simulacion.KwpSolar : simulacion.Detalle?.PotenciaPropuestaKwp ?? simulacion.KwpMixto;
+        var datos = solar ? simulacion.Detalle?.Solar : simulacion.Detalle?.Propuesta;
+        var produccion = datos?.ProduccionKwhKwpMes ?? _produccionHistorica.GetValueOrDefault(simulacion.ParametrosVersion);
+        return PotenciaConProduccion(kwp, produccion > 0m ? produccion : null);
+    }
+
+    private static string PotenciaConProduccion(decimal kwp, decimal? produccion) =>
+        produccion is decimal tasa ? $"{Numero(kwp)} kWp · ≈ {Numero(kwp * tasa)} kWh/mes" : $"{Numero(kwp)} kWp";
+
+    private static string Numero(decimal valor) => valor.ToString("#,0.####", FacturaReglas.Cultura);
+
+    private static string Tarifa(decimal? valor) => valor is decimal tarifa ? $"{Numero(tarifa)} Bs/kWh" : "Sin datos";
+
+    private sealed class EntradaSolar
+    {
+        public int InstaladoraId { get; set; }
+        public string Nombre { get; set; } = "Referencia SAGE";
+        public decimal? Precio { get; set; }
+        public decimal? Mantenimiento { get; set; }
+        public bool MantenimientoManual { get; set; }
+        public decimal? MantenimientoPorKwp { get; set; }
+        public decimal? Produccion { get; set; }
+        public decimal? Cotizacion { get; set; }
+        public bool EsManual { get; set; }
+
+        public DatosEscenarioSolar Datos() =>
+            new(Nombre, Precio!.Value, MantenimientoManual ? Mantenimiento : null, Produccion!.Value, EsManual ? Cotizacion : null, MantenimientoPorKwp);
     }
 
     private sealed record FilaResultado(

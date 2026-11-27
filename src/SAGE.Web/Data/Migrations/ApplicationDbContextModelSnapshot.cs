@@ -589,6 +589,35 @@ namespace SAGE.Web.Data.Migrations
                     b.ToTable("Facturas");
                 });
 
+            modelBuilder.Entity("SAGE.Web.Data.Instaladora", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("BsPorKwp")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("MantenimientoBsKwpAnio")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Instaladoras");
+                });
+
             modelBuilder.Entity("SAGE.Web.Data.Medicion", b =>
                 {
                     b.Property<long>("Id")
@@ -756,7 +785,7 @@ namespace SAGE.Web.Data.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
-                    b.Property<decimal>("MantenimientoBsAnio")
+                    b.Property<decimal>("MantenimientoBsKwpAnio")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
@@ -819,6 +848,9 @@ namespace SAGE.Web.Data.Migrations
                     b.Property<decimal>("CostoAnualSolarBs")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Detalle")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("EmpresaId")
                         .HasColumnType("int");

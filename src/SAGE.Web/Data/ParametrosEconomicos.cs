@@ -14,7 +14,7 @@ public class ParametrosEconomicos
 
     public decimal GeneracionKwhKwpMes { get; set; }
 
-    public decimal MantenimientoBsAnio { get; set; }
+    public decimal MantenimientoBsKwpAnio { get; set; }
 
     public DateTime VigenteDesde { get; set; }
 

@@ -3,6 +3,7 @@
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.DependencyInjection
 @using SAGE.Web.Servicios.Seguridad
+@using SAGE.Web.Servicios.Simulacion
 @inject IServiceScopeFactory ScopeFactory
 @inject IUsuarioActual UsuarioActual
 @inject ISnackbar Snackbar
@@ -51,7 +52,7 @@
                 <div class="sage-metrics">
                     <div class="sage-metric">
                         <span class="sage-metric__label">Tarifa</span>
-                        <span class="sage-metric__value">@_vigente.TarifaBsKwh.ToString("N2", FacturaReglas.Cultura)</span>
+                        <span class="sage-metric__value">@_vigente.TarifaBsKwh.ToString("#,0.####", FacturaReglas.Cultura)</span>
                         <span class="sage-metric__hint">Bs/kWh</span>
                     </div>
                     <div class="sage-metric">
@@ -66,8 +67,8 @@
                     </div>
                     <div class="sage-metric">
                         <span class="sage-metric__label">Mantenimiento</span>
-                        <span class="sage-metric__value">@_vigente.MantenimientoBsAnio.ToString("N0", FacturaReglas.Cultura)</span>
-                        <span class="sage-metric__hint">Bs/año</span>
+                        <span class="sage-metric__value">@_vigente.MantenimientoBsKwpAnio.ToString("#,0.####", FacturaReglas.Cultura)</span>
+                        <span class="sage-metric__hint">Bs por kWp al año</span>
                     </div>
                 </div>
             }
@@ -85,24 +86,26 @@
         <div class="page-panel sage-panel-pad">
             <h2 class="home-group__title">Nueva versión</h2>
             <p class="page-meta" style="margin:-0.35rem 0 1rem;">No se editan versiones anteriores: cada guardado crea una nueva.</p>
+            <MudForm @ref="_formulario">
             <MudGrid>
                 <MudItem xs="12" sm="6">
                     <MudNumericField T="decimal" @bind-Value="_tarifa" Label="Tarifa (Bs/kWh)" Variant="Variant.Outlined"
-                                     Min="0.10m" Max="5.00m" Step="0.05m" HelperText="0,10 a 5,00" />
+                                     Culture="FacturaReglas.Cultura" Format="#,0.####" Step="0.05m" Validation="@(new Func<decimal, string?>(v => RangosSimulacion.Tarifa(v)))" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudNumericField T="decimal" @bind-Value="_costoInstalacion" Label="Costo de instalación (Bs/kWp)" Variant="Variant.Outlined"
-                                     Min="1000m" Max="50000m" Step="100m" HelperText="1 000 a 50 000" />
+                                     Culture="FacturaReglas.Cultura" Format="#,0.####" Step="100m" Validation="@(new Func<decimal, string?>(v => RangosSimulacion.Precio(v)))" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudNumericField T="decimal" @bind-Value="_generacion" Label="Generación solar (kWh/kWp/mes)" Variant="Variant.Outlined"
-                                     Min="50m" Max="250m" Step="1m" HelperText="50 a 250" />
+                                     Culture="FacturaReglas.Cultura" Format="#,0.####" Validation="@(new Func<decimal, string?>(v => RangosSimulacion.Produccion(v)))" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudNumericField T="decimal" @bind-Value="_mantenimiento" Label="Mantenimiento (Bs/año)" Variant="Variant.Outlined"
-                                     Min="0m" Max="50000m" Step="50m" HelperText="0 a 50 000" />
+                    <MudNumericField T="decimal" @bind-Value="_mantenimiento" Label="Mantenimiento (Bs por kWp al año)" Variant="Variant.Outlined"
+                                     Culture="FacturaReglas.Cultura" Format="#,0.####" Step="1m" Validation="@(new Func<decimal, string?>(v => RangosSimulacion.MantenimientoPorKwp(v)))" />
                 </MudItem>
             </MudGrid>
+            </MudForm>
 
             @if (!string.IsNullOrWhiteSpace(_error))
             {
@@ -116,6 +119,8 @@
             </div>
         </div>
 
+        <Instaladoras />
+
         <section class="home-group" aria-label="Historial de versiones">
             <h2 class="home-group__title">Historial</h2>
             <div class="page-panel">
@@ -125,7 +130,7 @@
                         <MudTh>Tarifa</MudTh>
                         <MudTh>Instalación</MudTh>
                         <MudTh>Generación</MudTh>
-                        <MudTh>Mantenimiento</MudTh>
+                        <MudTh>Mantenimiento (Bs por kWp al año)</MudTh>
                         <MudTh>Vigente desde</MudTh>
                     </HeaderContent>
                     <RowTemplate>
@@ -136,10 +141,10 @@
                                 <span class="sage-chip sage-chip--ok">Vigente</span>
                             }
                         </MudTd>
-                        <MudTd DataLabel="Tarifa">@context.TarifaBsKwh.ToString("N2", FacturaReglas.Cultura)</MudTd>
-                        <MudTd DataLabel="Instalación">@context.CostoInstalacionBsKwp.ToString("N2", FacturaReglas.Cultura)</MudTd>
-                        <MudTd DataLabel="Generación">@context.GeneracionKwhKwpMes.ToString("N2", FacturaReglas.Cultura)</MudTd>
-                        <MudTd DataLabel="Mantenimiento">@context.MantenimientoBsAnio.ToString("N2", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Tarifa">@context.TarifaBsKwh.ToString("#,0.####", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Instalación">@context.CostoInstalacionBsKwp.ToString("#,0.####", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Generación">@context.GeneracionKwhKwpMes.ToString("#,0.####", FacturaReglas.Cultura)</MudTd>
+                        <MudTd DataLabel="Mantenimiento">@context.MantenimientoBsKwpAnio.ToString("#,0.####", FacturaReglas.Cultura)</MudTd>
                         <MudTd DataLabel="Vigente desde">@FechaLocal(context.VigenteDesde)</MudTd>
                     </RowTemplate>
                     <NoRecordsContent>
@@ -160,11 +165,12 @@
     private bool _cargando = true;
     private bool _guardando;
     private string? _error;
+    private MudForm _formulario = null!;
 
     private decimal _tarifa = 0.90m;
     private decimal _costoInstalacion = 8000m;
     private decimal _generacion = 125m;
-    private decimal _mantenimiento = 600m;
+    private decimal _mantenimiento = 80m;
 
     protected override async Task OnInitializedAsync()
     {
@@ -191,7 +197,7 @@
                 _tarifa = _vigente.TarifaBsKwh;
                 _costoInstalacion = _vigente.CostoInstalacionBsKwp;
                 _generacion = _vigente.GeneracionKwhKwpMes;
-                _mantenimiento = _vigente.MantenimientoBsAnio;
+                _mantenimiento = _vigente.MantenimientoBsKwpAnio;
             }
         }
         finally
@@ -202,31 +208,10 @@
 
     private async Task GuardarNueva()
     {
-        if (_guardando)
+        if (_guardando || !UsuarioActual.EsOperador || UsuarioActual.DebeCambiarContrasena)
             return;
 
         _error = null;
-
-        if (_tarifa < 0.10m || _tarifa > 5.00m)
-        {
-            _error = "La tarifa debe estar entre 0,10 y 5,00 Bs/kWh.";
-            return;
-        }
-        if (_costoInstalacion < 1000m || _costoInstalacion > 50000m)
-        {
-            _error = "El costo de instalación debe estar entre 1 000 y 50 000 Bs/kWp.";
-            return;
-        }
-        if (_generacion < 50m || _generacion > 250m)
-        {
-            _error = "La generación solar debe estar entre 50 y 250 kWh/kWp/mes.";
-            return;
-        }
-        if (_mantenimiento < 0m || _mantenimiento > 50000m)
-        {
-            _error = "El mantenimiento debe estar entre 0 y 50 000 Bs/año.";
-            return;
-        }
 
         if (UsuarioActual.UsuarioId is not string creadoPorId)
         {
@@ -237,6 +222,10 @@
         _guardando = true;
         try
         {
+            await _formulario.ValidateAsync();
+            if (!_formulario.IsValid)
+                return;
+
             using var scope = ScopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
@@ -250,7 +239,7 @@
                 TarifaBsKwh = _tarifa,
                 CostoInstalacionBsKwp = _costoInstalacion,
                 GeneracionKwhKwpMes = _generacion,
-                MantenimientoBsAnio = _mantenimiento,
+                MantenimientoBsKwpAnio = _mantenimiento,
                 VigenteDesde = DateTime.UtcNow,
                 CreadoPorId = creadoPorId
             });
