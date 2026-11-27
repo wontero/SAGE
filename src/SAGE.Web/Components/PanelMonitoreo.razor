@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
+@using MudBlazor.Charts
 @using SAGE.Web.Data
 @using SAGE.Web.Servicios
 @using SAGE.Web.Servicios.EnVivo
@@ -41,54 +42,42 @@
     {
         <MudStack Spacing="3">
 
-            <MudButton Href="/monitoreo"
-                       Variant="Variant.Text"
-                       Color="Color.Primary">
-                Volver al monitoreo
-            </MudButton>
+            <div class="sage-back">
+                <MudButton Href="/monitoreo"
+                           Variant="Variant.Text"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Outlined.ArrowBack">
+                    Volver al monitoreo
+                </MudButton>
+            </div>
 
-            <MudPaper Class="pa-4" Elevation="1">
-
-                <MudText Typo="Typo.h5">
-                    @dispositivo.Nombre
-                </MudText>
-
-                <MudStack Row="true"
-                          Spacing="2"
-                          Wrap="Wrap.Wrap"
-                          Class="mt-2">
-
-                    <MudChip T="string"
+            <header class="page-head" style="margin-bottom:0">
+                <div class="page-head__text">
+                    <p class="page-kicker">Tiempo real</p>
+                    <h1 class="page-title">@dispositivo.Nombre</h1>
+                    <p class="page-meta">
+                        Última conexión:
+                        @Formato.Hace(estado?.TsServidor ?? dispositivo.UltimoContacto)
+                        · Modo
+                        @Formato.Modo(
+                            estado?.Modo ?? dispositivo.ModoActual ?? "",
+                            estado?.FuenteSeleccionada
+                                ?? dispositivo.FuenteSeleccionada ?? "")
+                    </p>
+                </div>
+                <div class="page-actions">
+                    <MudChip T="string" Size="Size.Small"
                              Color="@(EnLinea ? Color.Success : Color.Error)">
-                        @(EnLinea ? "● En línea" : "● Sin conexión")
+                        @(EnLinea ? "En línea" : "Sin conexión")
                     </MudChip>
-
-                    <MudChip T="string"
-                             Color="Color.Info">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
                         @(Fabrica is FabricaDispositivoSimulado || dispositivo.EsSimulado ? "SIMULADO" : "REAL")
                     </MudChip>
-
                     <ChipEscala Factor="@dispositivo.FactorEscala" />
+                </div>
+            </header>
 
-                </MudStack>
-
-                <MudText Class="mt-3">
-                    Última conexión:
-                    @Formato.Hace(
-                        estado?.TsServidor ?? dispositivo.UltimoContacto)
-                </MudText>
-
-                <MudText>
-                    Modo:
-                    @Formato.Modo(
-                        estado?.Modo ?? dispositivo.ModoActual ?? "",
-                        estado?.FuenteSeleccionada
-                            ?? dispositivo.FuenteSeleccionada ?? "")
-                </MudText>
-
-            </MudPaper>
-
-            <MudTabs Elevation="1"
+            <MudTabs Elevation="0"
                      Rounded="true"
                      ApplyEffectsToContainer="true"
                      TabPanelsClass="pt-4">
@@ -98,11 +87,9 @@
 
             <MudStack Spacing="3">
 
-            <MudPaper Class="pa-4" Elevation="1">
+            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
 
-                <MudText Typo="Typo.h6">
-                    Estado de alimentación
-                </MudText>
+                <h2 class="sage-section-title">Estado de alimentación</h2>
 
                 <MudStack Row="true"
                           Spacing="2"
@@ -134,11 +121,9 @@
             @* S23-M9: Control de fuente (patrón Command). Solo Admin y Técnico. *@
             @if (PuedeControlar)
             {
-                <MudPaper Class="pa-4" Elevation="1">
+                <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
 
-                    <MudText Typo="Typo.h6">
-                        Control de fuente
-                    </MudText>
+                    <h2 class="sage-section-title">Control de fuente</h2>
 
                     <MudStack Row="true"
                               Spacing="2"
@@ -182,11 +167,9 @@
 
             @if (ordenes.Count > 0)
             {
-                <MudPaper Class="pa-4" Elevation="1">
+                <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
 
-                    <MudText Typo="Typo.h6">
-                        Últimas 10 órdenes
-                    </MudText>
+                    <h2 class="sage-section-title">Últimas 10 órdenes</h2>
 
                     <MudTable T="Orden"
                               Items="@ordenes"
@@ -235,97 +218,67 @@
                 </MudPaper>
             }
 
-            <MudGrid Spacing="3">
+            <div class="sage-branch-grid">
 
-                <MudItem xs="12" md="6">
+                <section class="sage-branch sage-branch--solar" aria-label="Energía solar">
+                    <h3 class="sage-branch__title">Energía solar</h3>
+                    <div class="home-list">
+                        <div class="home-row">
+                            <span class="home-row__label">Tensión</span>
+                            <span class="home-row__value">@Formato.Tension(estado?.VSol ?? 0m)</span>
+                        </div>
+                        <div class="home-row">
+                            <span class="home-row__label">Corriente</span>
+                            <span class="home-row__value">@Formato.Corriente(estado?.ISolMa ?? 0m)</span>
+                        </div>
+                        <div class="home-row home-row--hero">
+                            <span class="home-row__label">Potencia</span>
+                            <span class="home-row__value home-row__value--emphasis">
+                                @Formato.Potencia(estado?.PSolMw ?? 0m, dispositivo.FactorEscala)
+                            </span>
+                        </div>
+                        <div class="home-row">
+                            <span class="home-row__label">Energía acum.</span>
+                            <span class="home-row__value">
+                                @Formato.Energia(estado?.WhSolAcum ?? 0m, dispositivo.FactorEscala)
+                            </span>
+                        </div>
+                    </div>
+                    <div style="margin-top:0.65rem"><ChipEscala Factor="@dispositivo.FactorEscala" /></div>
+                </section>
 
-                    <MudPaper Class="pa-4" Elevation="1">
+                <section class="sage-branch sage-branch--red" aria-label="Energía de red">
+                    <h3 class="sage-branch__title">Energía de red</h3>
+                    <div class="home-list">
+                        <div class="home-row">
+                            <span class="home-row__label">Tensión</span>
+                            <span class="home-row__value">@Formato.Tension(estado?.VRed ?? 0m)</span>
+                        </div>
+                        <div class="home-row">
+                            <span class="home-row__label">Corriente</span>
+                            <span class="home-row__value">@Formato.Corriente(estado?.IRedMa ?? 0m)</span>
+                        </div>
+                        <div class="home-row home-row--hero">
+                            <span class="home-row__label">Potencia</span>
+                            <span class="home-row__value home-row__value--emphasis">
+                                @Formato.Potencia(estado?.PRedMw ?? 0m, dispositivo.FactorEscala)
+                            </span>
+                        </div>
+                        <div class="home-row">
+                            <span class="home-row__label">Energía acum.</span>
+                            <span class="home-row__value">
+                                @Formato.Energia(estado?.WhRedAcum ?? 0m, dispositivo.FactorEscala)
+                            </span>
+                        </div>
+                    </div>
+                    <div style="margin-top:0.65rem"><ChipEscala Factor="@dispositivo.FactorEscala" /></div>
+                </section>
 
-                        <MudText Typo="Typo.h6"
-                                 Color="Color.Success">
-                            Energía solar
-                        </MudText>
+            </div>
 
-                        <MudDivider Class="my-3" />
+            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
 
-                        <MudText>
-                            Tensión:
-                            @Formato.Tension(estado?.VSol ?? 0m)
-                        </MudText>
-
-                        <MudText>
-                            Corriente:
-                            @Formato.Corriente(estado?.ISolMa ?? 0m)
-                        </MudText>
-
-                        <MudText>
-                            Potencia:
-                            @Formato.Potencia(
-                                estado?.PSolMw ?? 0m,
-                                dispositivo.FactorEscala)
-                        </MudText>
-
-                        <MudText>
-                            Energía acumulada:
-                            @Formato.Energia(
-                                estado?.WhSolAcum ?? 0m,
-                                dispositivo.FactorEscala)
-                        </MudText>
-
-                        <ChipEscala Factor="@dispositivo.FactorEscala" />
-
-                    </MudPaper>
-
-                </MudItem>
-
-                <MudItem xs="12" md="6">
-
-                    <MudPaper Class="pa-4" Elevation="1">
-
-                        <MudText Typo="Typo.h6"
-                                 Color="Color.Primary">
-                            Energía de red
-                        </MudText>
-
-                        <MudDivider Class="my-3" />
-
-                        <MudText>
-                            Tensión:
-                            @Formato.Tension(estado?.VRed ?? 0m)
-                        </MudText>
-
-                        <MudText>
-                            Corriente:
-                            @Formato.Corriente(estado?.IRedMa ?? 0m)
-                        </MudText>
-
-                        <MudText>
-                            Potencia:
-                            @Formato.Potencia(
-                                estado?.PRedMw ?? 0m,
-                                dispositivo.FactorEscala)
-                        </MudText>
-
-                        <MudText>
-                            Energía acumulada:
-                            @Formato.Energia(
-                                estado?.WhRedAcum ?? 0m,
-                                dispositivo.FactorEscala)
-                        </MudText>
-
-                        <ChipEscala Factor="@dispositivo.FactorEscala" />
-
-                    </MudPaper>
-
-                </MudItem>
-
-            </MudGrid>
-
-            <MudPaper Class="pa-4" Elevation="1">
-
-                <MudText Typo="Typo.h6">
-                    Potencia en tiempo real
-                </MudText>
+                <h2 class="sage-section-title">Potencia en tiempo real</h2>
                 <ChipEscala Factor="@dispositivo.FactorEscala" />
 
                 <MudText Typo="Typo.caption">
@@ -342,20 +295,18 @@
                 else
                 {
                     <MudChart T="double"
-                              ChartType="ChartType.Line"
+                              ChartType="ChartType.Timeseries"
                               ChartSeries="@series"
-                              ChartLabels="@etiquetas"
+                              ChartOptions="@opcionesGrafico"
                               Width="100%"
                               Height="300px" />
                 }
 
             </MudPaper>
 
-            <MudPaper Class="pa-4" Elevation="1">
+            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
 
-                <MudText Typo="Typo.h6">
-                    Últimos 10 eventos
-                </MudText>
+                <h2 class="sage-section-title">Últimos 10 eventos</h2>
 
                 @if (eventos.Count == 0)
                 {
@@ -417,16 +368,14 @@
             <MudTabPanel Text="Reglas"
                          Icon="@Icons.Material.Outlined.Rule">
 
-                <MudPaper Class="pa-4" Elevation="1">
+                <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
 
                     <MudStack Row="true"
                               AlignItems="AlignItems.Center"
                               Spacing="2"
                               Style="flex-wrap:wrap">
 
-                        <MudText Typo="Typo.h6">
-                            Reglas de conmutación
-                        </MudText>
+                        <h2 class="sage-section-title" style="margin:0">Reglas de conmutación</h2>
 
                         <MudChip T="string"
                                  Color="@(ParametrosAplicados ? Color.Success : Color.Warning)"
@@ -585,7 +534,7 @@
 
     private List<ChartSeries<double>> series = new();
 
-    private string[] etiquetas = Array.Empty<string>();
+    private TimeSeriesChartOptions opcionesGrafico = new();
 
     private bool cargando = true;
 
@@ -1063,32 +1012,44 @@
         }
 
         var factor = dispositivo.FactorEscala;
+        var periodo = puntos.Count >= 2
+            ? puntos[^1].Fecha - puntos[0].Fecha
+            : TimeSpan.FromMinutes(5);
+        if (periodo < TimeSpan.FromMinutes(1))
+            periodo = TimeSpan.FromMinutes(1);
 
-        series = new List<ChartSeries<double>>
+        // Eje de tiempo real (como Historial): espaciado fijo, sin etiquetas amontonadas.
+        opcionesGrafico = new TimeSeriesChartOptions
         {
-            new ChartSeries<double>
-            {
-                Name = "Solar (W)",
-                Data = puntos
-                    .Select(p =>
-                        (double)(p.SolarMw * factor / 1000m))
-                    .ToArray()
-            },
-
-            new ChartSeries<double>
-            {
-                Name = "Red (W)",
-                Data = puntos
-                    .Select(p =>
-                        (double)(p.RedMw * factor / 1000m))
-                    .ToArray()
-            }
+            TimeLabelFormat = "HH:mm",
+            TimeLabelSpacing = TimeSpan.FromTicks(Math.Max(TimeSpan.TicksPerMinute, periodo.Ticks / 5)),
+            TooltipTimeLabelFormat = "HH:mm:ss",
+            ShowDataMarkers = false
         };
 
-        etiquetas = puntos
-            .Select(p =>
-                Formato.HoraLocal(p.Fecha).Substring(11))
-            .ToArray();
+        series = puntos.Count == 0
+            ? new List<ChartSeries<double>>()
+            : new List<ChartSeries<double>>
+            {
+                new()
+                {
+                    Name = "Solar (W)",
+                    Data = puntos
+                        .Select(p => new TimeValue<double>(
+                            Formato.ALocal(p.Fecha),
+                            (double)(p.SolarMw * factor / 1000m)))
+                        .ToArray()
+                },
+                new()
+                {
+                    Name = "Red (W)",
+                    Data = puntos
+                        .Select(p => new TimeValue<double>(
+                            Formato.ALocal(p.Fecha),
+                            (double)(p.RedMw * factor / 1000m)))
+                        .ToArray()
+                }
+            };
     }
 
     private async Task ActualizarTiempoAsync()

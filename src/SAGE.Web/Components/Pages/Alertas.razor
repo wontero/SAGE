@@ -31,11 +31,10 @@
 
     @if (cargando)
     {
-        <MudProgressLinear Indeterminate="true"
-                           Color="Color.Primary" />
-        <MudText Class="mt-3">
-            Cargando alertas...
-        </MudText>
+        <div class="page-panel sage-panel-pad">
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            <p class="page-meta" style="margin-top:0.75rem">Cargando alertas…</p>
+        </div>
     }
     else if (error is not null)
     {
@@ -45,54 +44,31 @@
     }
     else
     {
-        <MudGrid Class="mb-4">
+        <div class="sage-metrics" aria-label="Resumen de alertas">
+            <div class="sage-metric">
+                <span class="sage-metric__label">Total</span>
+                <span class="sage-metric__value">@totalAlertas</span>
+            </div>
+            <div class="sage-metric">
+                <span class="sage-metric__label">Abiertas</span>
+                <span class="sage-metric__value sage-metric__value--danger">@alertasAbiertas</span>
+            </div>
+            <div class="sage-metric">
+                <span class="sage-metric__label">Resueltas</span>
+                <span class="sage-metric__value sage-metric__value--ok">@alertasResueltas</span>
+            </div>
+        </div>
 
-            <MudItem xs="12" sm="4">
-                <MudPaper Class="pa-4" Elevation="0">
-                    <MudText Typo="Typo.subtitle2">
-                        Total de alertas
-                    </MudText>
-                    <MudText Typo="Typo.h4">
-                        @totalAlertas
-                    </MudText>
-                </MudPaper>
-            </MudItem>
+        <div class="page-actions" style="margin-bottom:1rem">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="CargarAlertasAsync">
+                Actualizar alertas
+            </MudButton>
+        </div>
 
-            <MudItem xs="12" sm="4">
-                <MudPaper Class="pa-4" Elevation="0">
-                    <MudText Typo="Typo.subtitle2">
-                        Alertas abiertas
-                    </MudText>
-                    <MudText Typo="Typo.h4"
-                             Color="Color.Error">
-                        @alertasAbiertas
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-
-            <MudItem xs="12" sm="4">
-                <MudPaper Class="pa-4" Elevation="0">
-                    <MudText Typo="Typo.subtitle2">
-                        Alertas resueltas
-                    </MudText>
-                    <MudText Typo="Typo.h4"
-                             Color="Color.Success">
-                        @alertasResueltas
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-
-        </MudGrid>
-
-        <MudButton Variant="Variant.Outlined"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.Refresh"
-                   OnClick="CargarAlertasAsync"
-                   Class="mb-4">
-            Actualizar alertas
-        </MudButton>
-
-        <MudPaper Class="pa-4" Elevation="0">
+        <div class="page-panel sage-panel-pad">
 
             <MudTabs Rounded="true"
                      Color="Color.Primary"
@@ -230,7 +206,7 @@
 
             </MudTabs>
 
-        </MudPaper>
+        </div>
     }
 
 </div>

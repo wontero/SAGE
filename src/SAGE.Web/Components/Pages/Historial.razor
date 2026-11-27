@@ -27,11 +27,15 @@
 <div class="page">
     <header class="page-head">
         <div class="page-head__text">
+            <p class="page-kicker">Reportes</p>
             <h1 class="page-title">Historial</h1>
-            @if (Simulado)
-            {
-                <MudChip T="string" Color="Color.Info">SIMULADO</MudChip>
-            }
+            <p class="page-meta">
+                Energía y eventos por periodo
+                @if (Simulado)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">SIMULADO</MudChip>
+                }
+            </p>
         </div>
     </header>
 
@@ -42,10 +46,11 @@
 
     @if (dispositivos.Count > 0)
     {
-        <MudPaper Class="pa-4 mb-4">
+        <div class="page-panel sage-panel-pad sage-filters">
+            <h2 class="sage-section-title">Consulta</h2>
             <MudGrid Spacing="3">
                 <MudItem xs="12" sm="6">
-                    <MudSelect T="int" Label="Dispositivo" @bind-Value="dispositivoId">
+                    <MudSelect T="int" Label="Dispositivo" Variant="Variant.Outlined" @bind-Value="dispositivoId">
                         @foreach (var dispositivo in dispositivos)
                         {
                             <MudSelectItem Value="@dispositivo.Id">@dispositivo.Nombre</MudSelectItem>
@@ -53,7 +58,7 @@
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudSelect T="Periodo" Label="Periodo" @bind-Value="periodo">
+                    <MudSelect T="Periodo" Label="Periodo" Variant="Variant.Outlined" @bind-Value="periodo">
                         <MudSelectItem Value="Periodo.UltimaHora">Última hora</MudSelectItem>
                         <MudSelectItem Value="Periodo.Hoy">Hoy</MudSelectItem>
                         <MudSelectItem Value="Periodo.UltimosSieteDias">Últimos 7 días</MudSelectItem>
@@ -63,85 +68,87 @@
                 @if (periodo == Periodo.Personalizado)
                 {
                     <MudItem xs="12" md="6">
-                        <MudDateRangePicker Label="Fechas (Bolivia)" @bind-DateRange="fechas" DateFormat="dd/MM/yyyy" />
+                        <MudDateRangePicker Label="Fechas (Bolivia)" Variant="Variant.Outlined" @bind-DateRange="fechas" DateFormat="dd/MM/yyyy" />
                     </MudItem>
                     <MudItem xs="6" md="3">
-                        <MudTimePicker Label="Hora de inicio" @bind-Time="horaInicio" />
+                        <MudTimePicker Label="Hora de inicio" Variant="Variant.Outlined" @bind-Time="horaInicio" />
                     </MudItem>
                     <MudItem xs="6" md="3">
-                        <MudTimePicker Label="Hora de fin" @bind-Time="horaFin" />
+                        <MudTimePicker Label="Hora de fin" Variant="Variant.Outlined" @bind-Time="horaFin" />
                     </MudItem>
                 }
             </MudGrid>
-            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary"
-                       OnClick="ConsultarAsync" Disabled="@(cargando || exportando)">Consultar</MudButton>
-        </MudPaper>
+            <div class="page-actions" style="margin-top:0.85rem">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="ConsultarAsync" Disabled="@(cargando || exportando)">Consultar</MudButton>
+            </div>
+        </div>
     }
 
     @if (cargando)
     {
-        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <div class="page-panel sage-panel-pad">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
     }
     else if (consulta is { } resultado)
     {
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mb-4">
-            <MudText Typo="Typo.subtitle1">
-                @resultado.Dispositivo.Nombre · @Formato.HoraLocal(resultado.Desde) a @Formato.HoraLocal(resultado.Hasta) (Bolivia)
-            </MudText>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Download"
-                       OnClick="ExportarAsync" Disabled="@exportando">@(exportando ? "Exportando…" : "Exportar a Excel")</MudButton>
-        </MudStack>
+        <header class="page-head" style="margin-bottom:1rem">
+            <div class="page-head__text">
+                <p class="page-meta" style="margin:0">
+                    @resultado.Dispositivo.Nombre · @Formato.HoraLocal(resultado.Desde) a @Formato.HoraLocal(resultado.Hasta) (Bolivia)
+                </p>
+            </div>
+            <div class="page-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Download"
+                           OnClick="ExportarAsync" Disabled="@exportando">@(exportando ? "Exportando…" : "Exportar a Excel")</MudButton>
+            </div>
+        </header>
 
-        <MudGrid Spacing="3" Class="mb-4">
-            <MudItem xs="12" sm="6" md="4">
-                <MudPaper Class="pa-4">
-                    <MudText>Energía solar</MudText>
-                    <MudText Typo="Typo.h6">@Formato.Energia(resultado.Energia.WhSolar, resultado.Dispositivo.FactorEscala)</MudText>
-                    <ChipEscala Factor="@resultado.Dispositivo.FactorEscala" />
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="4">
-                <MudPaper Class="pa-4">
-                    <MudText>Energía red</MudText>
-                    <MudText Typo="Typo.h6">@Formato.Energia(resultado.Energia.WhRed, resultado.Dispositivo.FactorEscala)</MudText>
-                    <ChipEscala Factor="@resultado.Dispositivo.FactorEscala" />
-                </MudPaper>
-            </MudItem>
+        <div class="sage-metrics" aria-label="Energía del periodo">
+            <div class="sage-metric">
+                <span class="sage-metric__label">Energía solar</span>
+                <span class="sage-metric__value">@Formato.Energia(resultado.Energia.WhSolar, resultado.Dispositivo.FactorEscala)</span>
+                <span class="sage-metric__hint"><ChipEscala Factor="@resultado.Dispositivo.FactorEscala" /></span>
+            </div>
+            <div class="sage-metric">
+                <span class="sage-metric__label">Energía red</span>
+                <span class="sage-metric__value">@Formato.Energia(resultado.Energia.WhRed, resultado.Dispositivo.FactorEscala)</span>
+                <span class="sage-metric__hint"><ChipEscala Factor="@resultado.Dispositivo.FactorEscala" /></span>
+            </div>
             @foreach (var (titulo, valor) in Indicadores(resultado.Energia))
             {
-                <MudItem xs="12" sm="6" md="4">
-                    <MudPaper Class="pa-4">
-                        <MudText>@titulo</MudText>
-                        <MudText Typo="Typo.h6">@valor</MudText>
-                    </MudPaper>
-                </MudItem>
+                <div class="sage-metric">
+                    <span class="sage-metric__label">@titulo</span>
+                    <span class="sage-metric__value" style="font-size:1.2rem">@valor</span>
+                </div>
             }
-        </MudGrid>
+        </div>
 
-        <MudPaper Class="pa-4 mb-4">
-            <MudStack Row="true" AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h6">Potencia solar y red (W)</MudText>
+        <div class="page-panel sage-panel-pad">
+            <div class="sage-chips" style="margin-bottom:0.75rem;align-items:center">
+                <h2 class="sage-section-title" style="margin:0">Potencia solar y red (W)</h2>
                 <ChipEscala Factor="@resultado.Dispositivo.FactorEscala" />
-            </MudStack>
+            </div>
             @if (series.Count == 0)
             {
-                <MudText>No hay mediciones en este periodo.</MudText>
+                <p class="page-meta">No hay mediciones en este periodo.</p>
             }
             else
             {
                 <MudChart T="double" ChartType="ChartType.Timeseries" ChartSeries="@series" ChartOptions="@opciones"
                           Width="100%" Height="300px" />
             }
-        </MudPaper>
+        </div>
 
         <ComparacionPorFuente Energia="@resultado.Energia" Factor="@resultado.Dispositivo.FactorEscala"
                              ConmutacionesSolar="@(resultado.Eventos.Count(e => e.Tipo == "conmutacion" && e.A == "SOLAR"))"
                              ConmutacionesRed="@(resultado.Eventos.Count(e => e.Tipo == "conmutacion" && e.A == "CARGADOR"))"
                              Simulado="@Simulado" />
 
-        <MudPaper Class="pa-4">
-            <MudText Typo="Typo.h6">Eventos del periodo</MudText>
-            <MudTable T="Evento" Items="@resultado.Eventos" Dense="true" Hover="true" Breakpoint="Breakpoint.Md">
+        <div class="page-panel sage-panel-pad">
+            <h2 class="sage-section-title">Eventos del periodo</h2>
+            <MudTable T="Evento" Items="@resultado.Eventos" Dense="true" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0">
                 <HeaderContent>
                     <MudTh>Hora (Bolivia)</MudTh>
                     <MudTh>Tipo</MudTh>
@@ -163,7 +170,7 @@
                 <NoRecordsContent>No hay eventos en este periodo.</NoRecordsContent>
                 <PagerContent><MudTablePager RowsPerPageString="Filas por página" /></PagerContent>
             </MudTable>
-        </MudPaper>
+        </div>
     }
     else if (error is null)
     {

@@ -48,55 +48,26 @@
     }
     else if (_esOperador)
     {
-        <MudGrid Spacing="3">
+        <div class="sage-metrics" aria-label="Resumen del operador">
+            <div class="sage-metric">
+                <span class="sage-metric__label">Empresas activas</span>
+                <span class="sage-metric__value">@_empresasActivas</span>
+            </div>
+            <div class="sage-metric">
+                <span class="sage-metric__label">Empresas inactivas</span>
+                <span class="sage-metric__value">@_empresasInactivas</span>
+            </div>
+            <div class="sage-metric">
+                <span class="sage-metric__label">Administradores</span>
+                <span class="sage-metric__value">@_administradores</span>
+            </div>
+            <div class="sage-metric">
+                <span class="sage-metric__label">Usuarios en total</span>
+                <span class="sage-metric__value">@_usuarios</span>
+            </div>
+        </div>
 
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.subtitle2">
-                        Empresas activas
-                    </MudText>
-                    <MudText Typo="Typo.h4">
-                        @_empresasActivas
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.subtitle2">
-                        Empresas inactivas
-                    </MudText>
-                    <MudText Typo="Typo.h4">
-                        @_empresasInactivas
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.subtitle2">
-                        Administradores
-                    </MudText>
-                    <MudText Typo="Typo.h4">
-                        @_administradores
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.subtitle2">
-                        Usuarios en total
-                    </MudText>
-                    <MudText Typo="Typo.h4">
-                        @_usuarios
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-
-        </MudGrid>
-
-        <MudPaper Class="pa-4 mt-4">
+        <MudPaper Class="page-panel sage-panel-pad" Elevation="0" style="margin-top:1rem">
 
             <MudText Typo="Typo.h6">
                 Empresas y usuarios por rol
@@ -142,7 +113,7 @@
                     <MudGrid Spacing="3" Class="mt-2">
 
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-4">
+                            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
                                 <MudText Typo="Typo.subtitle2">
                                     Dispositivos en línea
                                 </MudText>
@@ -154,7 +125,7 @@
                         </MudItem>
 
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-4">
+                            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
                                 <MudText Typo="Typo.subtitle2">
                                     Potencia solar ahora
                                 </MudText>
@@ -169,7 +140,7 @@
                         </MudItem>
 
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-4">
+                            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
                                 <MudText Typo="Typo.subtitle2">
                                     Potencia de red ahora
                                 </MudText>
@@ -184,7 +155,7 @@
                         </MudItem>
 
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-4">
+                            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
                                 <MudText Typo="Typo.subtitle2">
                                     Alertas abiertas
                                 </MudText>
@@ -195,7 +166,7 @@
                         </MudItem>
 
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-4">
+                            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
                                 <MudText Typo="Typo.subtitle2">
                                     Consumo facturado, 12 meses
                                 </MudText>
@@ -206,7 +177,7 @@
                         </MudItem>
 
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-4">
+                            <MudPaper Class="page-panel sage-panel-pad" Elevation="0">
                                 <MudText Typo="Typo.subtitle2">
                                     Monto facturado, 12 meses
                                 </MudText>
@@ -218,7 +189,7 @@
 
                     </MudGrid>
 
-                    <MudPaper Class="pa-4 mt-4">
+                    <MudPaper Class="page-panel sage-panel-pad" Elevation="0" style="margin-top:1rem">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                             <MudText Typo="Typo.h6">Energía hoy</MudText>
                             @if (EnergiaSimulada)
@@ -234,7 +205,7 @@
                         <MudText>Red · @Formato.Energia(_empresaActiva.WhRedHoy)</MudText>
                     </MudPaper>
 
-                    <MudPaper Class="pa-4 mt-4">
+                    <MudPaper Class="page-panel sage-panel-pad" Elevation="0" style="margin-top:1rem">
 
                         <MudText Typo="Typo.h6">
                             Última medición
@@ -452,7 +423,7 @@
 
                     </MudPaper>
 
-                    <MudPaper Class="pa-4 mt-4">
+                    <MudPaper Class="page-panel sage-panel-pad" Elevation="0" style="margin-top:1rem">
 
                         <MudText Typo="Typo.h6">
                             Potencia actual por empresa

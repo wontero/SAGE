@@ -32,8 +32,9 @@
 
     @if (cargando)
     {
-        <MudProgressCircular Indeterminate="true"
-                             Color="Color.Primary" />
+        <div class="page-panel sage-panel-pad">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
     }
     else if (error is not null)
     {
@@ -49,7 +50,7 @@
     }
     else
     {
-        <MudGrid Spacing="3">
+        <div class="sage-device-grid">
 
             @foreach (var dispositivo in dispositivos)
             {
@@ -64,51 +65,38 @@
                            dispositivo.UltimoContacto.Value
                            <= TimeSpan.FromSeconds(30));
 
-                <MudItem xs="12" sm="6" lg="4">
+                <article class="sage-device-card">
 
-                    <MudPaper Class="pa-4" Elevation="1">
+                    <div>
+                        <h2 class="sage-device-card__title">@dispositivo.Nombre</h2>
+                        <p class="sage-device-card__meta">
+                            Última conexión:
+                            @Formato.Hace(
+                                estado?.TsServidor
+                                ?? dispositivo.UltimoContacto)
+                        </p>
+                    </div>
 
-                        <MudStack Spacing="2">
+                    <div class="sage-device-card__chips">
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Color="@(simulado ? Color.Info : Color.Default)">
+                            @(simulado ? "SIMULADO" : "REAL")
+                        </MudChip>
 
-                            <MudText Typo="Typo.h6">
-                                @dispositivo.Nombre
-                            </MudText>
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Color="@(enLinea ? Color.Success : Color.Error)">
+                            @(enLinea ? "En línea" : "Sin conexión")
+                        </MudChip>
 
-                            <MudStack Row="true" Spacing="1">
+                        <ChipEscala Factor="@dispositivo.FactorEscala" />
+                    </div>
 
-                                <MudChip T="string"
-                                         Size="Size.Small"
-                                         Color="@(simulado
-                                                                                 ? Color.Info
-                                                                                 : Color.Default)">
-                                    @(simulado
-                                        ? "SIMULADO"
-                                        : "REAL")
-                                </MudChip>
-
-                                <MudChip T="string"
-                                         Size="Size.Small"
-                                         Color="@(enLinea
-                                                                                 ? Color.Success
-                                                                                 : Color.Error)">
-                                    @(enLinea
-                                        ? "● En línea"
-                                        : "● Sin conexión")
-                                </MudChip>
-
-                            </MudStack>
-
-                            <MudText Typo="Typo.body2">
-                                Última conexión:
-                                @Formato.Hace(
-                                    estado?.TsServidor
-                                    ?? dispositivo.UltimoContacto)
-                            </MudText>
-
-                            <MudDivider />
-
-                            <MudText Typo="Typo.body2">
-                                <b>Modo:</b>
+                    <div class="home-list">
+                        <div class="home-row">
+                            <span class="home-row__label">Modo</span>
+                            <span class="home-row__value">
                                 @Formato.Modo(
                                     estado?.Modo
                                         ?? dispositivo.ModoActual
@@ -116,63 +104,56 @@
                                     estado?.FuenteSeleccionada
                                         ?? dispositivo.FuenteSeleccionada
                                         ?? "")
-                            </MudText>
-
-                            <MudText Typo="Typo.body2">
-                                <b>Fuente seleccionada:</b>
+                            </span>
+                        </div>
+                        <div class="home-row">
+                            <span class="home-row__label">Fuente</span>
+                            <span class="home-row__value">
                                 @Formato.Fuente(
                                     estado?.FuenteSeleccionada
                                         ?? dispositivo.FuenteSeleccionada
                                         ?? "")
-                            </MudText>
-
-                            <MudDivider />
-
-                            <MudText Typo="Typo.subtitle2">
-                                Potencia solar
-                            </MudText>
-
-                            <MudText Typo="Typo.h5"
-                                     Color="Color.Success">
+                            </span>
+                        </div>
+                        <div class="home-row home-row--hero">
+                            <span class="home-row__label">
+                                <span class="home-swatch home-swatch--solar"></span>
+                                Solar
+                            </span>
+                            <span class="home-row__value home-row__value--emphasis">
                                 @(estado is null
                                     ? "Sin datos"
                                     : Formato.Potencia(
                                         estado.PSolMw,
                                         dispositivo.FactorEscala))
-                            </MudText>
-
-                            <MudText Typo="Typo.subtitle2">
-                                Potencia de red
-                            </MudText>
-
-                            <MudText Typo="Typo.h5"
-                                     Color="Color.Primary">
+                            </span>
+                        </div>
+                        <div class="home-row">
+                            <span class="home-row__label">
+                                <span class="home-swatch home-swatch--red"></span>
+                                Red
+                            </span>
+                            <span class="home-row__value home-row__value--emphasis">
                                 @(estado is null
                                     ? "Sin datos"
                                     : Formato.Potencia(
                                         estado.PRedMw,
                                         dispositivo.FactorEscala))
-                            </MudText>
+                            </span>
+                        </div>
+                    </div>
 
-                            <ChipEscala Factor="@dispositivo.FactorEscala" />
+                    <MudButton Href="@($"/monitoreo/{dispositivo.Id}")"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true">
+                        Ver monitoreo
+                    </MudButton>
 
-                            <MudDivider />
-
-                            <MudButton Href="@($"/monitoreo/{dispositivo.Id}")"
-                                       Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       FullWidth="true">
-                                Ver monitoreo
-                            </MudButton>
-
-                        </MudStack>
-
-                    </MudPaper>
-
-                </MudItem>
+                </article>
             }
 
-        </MudGrid>
+        </div>
     }
 
 </div>
