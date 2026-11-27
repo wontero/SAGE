@@ -1,11 +1,11 @@
 @using SAGE.Web.Servicios
 @using SAGE.Web.Servicios.Energia
 
-<MudPaper Class="pa-4 mb-4">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-        <MudText Typo="Typo.h6">Comparación por fuente (@Etiqueta)</MudText>
-        <MudChip T="string" Color="Color.Info">@Etiqueta</MudChip>
-    </MudStack>
+<section class="page-panel sage-panel-pad" aria-label="Comparación por fuente">
+    <div class="sage-chips" style="margin-bottom:0.85rem;align-items:center">
+        <h2 class="sage-section-title" style="margin:0">Comparación por fuente</h2>
+        <MudChip T="string" Size="Size.Small" Color="Color.Info">@Etiqueta</MudChip>
+    </div>
 
     <MudTable T="Fila" Items="@filas" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0">
         <HeaderContent>
@@ -29,13 +29,13 @@
         </RowTemplate>
     </MudTable>
 
-    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3">
-        <MudText Typo="Typo.subtitle2">Energía escalada (@unidad)</MudText>
+    <div class="sage-chips" style="margin:1rem 0 0.5rem;align-items:center">
+        <p class="sage-section-title" style="margin:0;font-size:0.92rem">Energía escalada (@unidad)</p>
         <ChipEscala Factor="@Factor" />
-    </MudStack>
+    </div>
     <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="@series"
               ChartLabels="@Fuentes" Width="100%" Height="220px" />
-</MudPaper>
+</section>
 
 @code {
     [Parameter, EditorRequired] public EnergiaPorFuente Energia { get; set; } = default!;

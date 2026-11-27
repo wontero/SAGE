@@ -20,16 +20,20 @@
 
 <div class="page">
 
-    <MudButton Href="/ensayos"
-               Variant="Variant.Text"
-               Color="Color.Primary"
-               StartIcon="@Icons.Material.Outlined.ArrowBack">
-        Volver a ensayos
-    </MudButton>
+    <div class="sage-back">
+        <MudButton Href="/ensayos"
+                   Variant="Variant.Text"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Outlined.ArrowBack">
+            Volver a ensayos
+        </MudButton>
+    </div>
 
     @if (_cargando)
     {
-        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <div class="page-panel sage-panel-pad">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
     }
     else if (_ensayo is null)
     {
@@ -37,45 +41,54 @@
     }
     else
     {
-        <MudStack Spacing="3" Class="mt-2">
+        <MudStack Spacing="3">
 
-            <MudPaper Class="pa-4" Elevation="1">
-
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="flex-wrap:wrap">
-                    <MudText Typo="Typo.h5">Ensayo en @_ensayo.Dispositivo.Nombre</MudText>
-
+            <header class="page-head" style="margin-bottom:0">
+                <div class="page-head__text">
+                    <p class="page-kicker">Pruebas</p>
+                    <h1 class="page-title">Ensayo en @_ensayo.Dispositivo.Nombre</h1>
+                    <p class="page-meta">@_ensayo.CargaDescripcion</p>
+                </div>
+                <div class="page-actions">
                     @if (_ensayo.Fin is null)
                     {
-                        <MudChip T="string" Color="Color.Info" Variant="Variant.Filled">En curso</MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">En curso</MudChip>
                     }
-
                     <ChipEscala Factor="@_ensayo.Dispositivo.FactorEscala" />
-                </MudStack>
+                </div>
+            </header>
 
-                <MudGrid Spacing="2" Class="mt-2">
-                    <MudItem xs="12" sm="6">
-                        <MudText><b>Inicio:</b> @Formato.HoraLocal(_ensayo.Inicio)</MudText>
-                        <MudText>
-                            <b>Fin:</b>
-                            @(_ensayo.Fin is DateTime fin ? Formato.HoraLocal(fin) : "En curso")
-                        </MudText>
-                        <MudText>
-                            <b>Duración:</b>
-                            @Formato.Duracion((_ensayo.Fin ?? DateTime.UtcNow) - _ensayo.Inicio)
-                        </MudText>
-                        <MudText><b>Creado por:</b> @(_ensayo.CreadoPor?.NombreCompleto ?? "—")</MudText>
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudText><b>Carga:</b> @_ensayo.CargaDescripcion</MudText>
-                        <MudText><b>Condiciones:</b> @_ensayo.Condiciones</MudText>
-                        @if (!string.IsNullOrWhiteSpace(_ensayo.Notas))
-                        {
-                            <MudText><b>Notas:</b> @_ensayo.Notas</MudText>
-                        }
-                    </MudItem>
-                </MudGrid>
-
-            </MudPaper>
+            <div class="page-panel sage-panel-pad">
+                <div class="home-list">
+                    <div class="home-row">
+                        <span class="home-row__label">Inicio</span>
+                        <span class="home-row__value">@Formato.HoraLocal(_ensayo.Inicio)</span>
+                    </div>
+                    <div class="home-row">
+                        <span class="home-row__label">Fin</span>
+                        <span class="home-row__value">@(_ensayo.Fin is DateTime fin ? Formato.HoraLocal(fin) : "En curso")</span>
+                    </div>
+                    <div class="home-row">
+                        <span class="home-row__label">Duración</span>
+                        <span class="home-row__value">@Formato.Duracion((_ensayo.Fin ?? DateTime.UtcNow) - _ensayo.Inicio)</span>
+                    </div>
+                    <div class="home-row">
+                        <span class="home-row__label">Creado por</span>
+                        <span class="home-row__value">@(_ensayo.CreadoPor?.NombreCompleto ?? "—")</span>
+                    </div>
+                    <div class="home-row">
+                        <span class="home-row__label">Condiciones</span>
+                        <span class="home-row__value">@_ensayo.Condiciones</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_ensayo.Notas))
+                    {
+                        <div class="home-row">
+                            <span class="home-row__label">Notas</span>
+                            <span class="home-row__value">@_ensayo.Notas</span>
+                        </div>
+                    }
+                </div>
+            </div>
 
             @if (_energia is not null)
             {
@@ -83,13 +96,13 @@
                                      ConmutacionesSolar="@_conmutacionesSolar" ConmutacionesRed="@_conmutacionesRed" />
             }
 
-            <MudPaper Class="pa-4" Elevation="1">
+            <div class="page-panel sage-panel-pad">
 
-                <MudText Typo="Typo.h6">Mediciones del intervalo</MudText>
-                <MudText Typo="Typo.body2" Class="mb-2">
+                <h2 class="sage-section-title">Mediciones del intervalo</h2>
+                <p class="page-meta" style="margin:0 0 0.75rem">
                     Total: <b>@_total</b> mediciones
                     @(_ensayo.Fin is null ? "(hasta ahora)" : "")
-                </MudText>
+                </p>
 
                 <MudTable T="Medicion"
                           @ref="_tabla"
@@ -136,7 +149,7 @@
 
                 </MudTable>
 
-            </MudPaper>
+            </div>
 
         </MudStack>
     }

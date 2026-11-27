@@ -43,10 +43,11 @@
     }
     else
     {
-        <MudPaper Class="pa-4 mb-4">
+        <div class="page-panel sage-panel-pad sage-filters">
+            <h2 class="sage-section-title">Filtros</h2>
             <MudGrid>
                 <MudItem xs="12" sm="4">
-                    <MudSelect T="int?" Label="Dispositivo" @bind-Value="dispositivoId" Clearable="true">
+                    <MudSelect T="int?" Label="Dispositivo" Variant="Variant.Outlined" @bind-Value="dispositivoId" Clearable="true">
                         @foreach (var dispositivo in dispositivos)
                         {
                             <MudSelectItem T="int?" Value="@((int?)dispositivo.Id)">@dispositivo.Nombre</MudSelectItem>
@@ -54,7 +55,7 @@
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="4">
-                    <MudSelect T="string" Label="Tipo" @bind-Value="tipo" Clearable="true">
+                    <MudSelect T="string" Label="Tipo" Variant="Variant.Outlined" @bind-Value="tipo" Clearable="true">
                         @foreach (var valor in new[] { "conmutacion", "estado", "alerta", "reinicio" })
                         {
                             <MudSelectItem T="string" Value="@valor">@TextosEventos.Tipo(valor)</MudSelectItem>
@@ -62,11 +63,13 @@
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="4">
-                    <MudDateRangePicker Label="Fechas (Bolivia)" @bind-DateRange="fechas" DateFormat="dd/MM/yyyy" Clearable="true" />
+                    <MudDateRangePicker Label="Fechas (Bolivia)" Variant="Variant.Outlined" @bind-DateRange="fechas" DateFormat="dd/MM/yyyy" Clearable="true" />
                 </MudItem>
             </MudGrid>
-            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="FiltrarAsync">Filtrar</MudButton>
-        </MudPaper>
+            <div class="page-actions" style="margin-top:0.85rem">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="FiltrarAsync">Filtrar</MudButton>
+            </div>
+        </div>
         <div class="page-panel">
             <MudTable T="Evento" @ref="tabla" ServerData="CargarEventosAsync" Dense="true" Hover="true"
                       Breakpoint="Breakpoint.Md" Elevation="0" RowsPerPage="50">
